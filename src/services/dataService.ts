@@ -5,6 +5,8 @@ import {
   CategoryTag,
   AuditLog,
   NewsEvent,
+  NewsStatus,
+  NewsCategory,
   SKUGroup,
   FontSizePref,
   UserRole,
@@ -120,6 +122,18 @@ class DataService {
           this.farms.push(initFarm);
         }
       }
+
+      // Ensure all news have status field properly initialized and new sample events exist
+      for (const initN of INITIAL_NEWS) {
+        const existing = this.news.find((n) => n.id === initN.id);
+        if (!existing) {
+          this.news.push(initN);
+        }
+      }
+      this.news = this.news.map((item) => ({
+        ...item,
+        status: item.status || 'published',
+      }));
 
       // Background Firestore Sync
       setTimeout(() => {
@@ -865,27 +879,107 @@ class DataService {
 
   // ==================== NEWS & EVENTS ====================
 
-  getNews(): NewsEvent[] {
-    return this.news;
+  getNews(includeHidden: boolean = false): NewsEvent[] {
+    if (includeHidden) {
+      return this.news;
+    }
+    return this.news.filter((n) => n.status !== 'hidden');
+  }
+
+  getNewsById(id: string): NewsEvent | undefined {
+    return this.news.find((n) => n.id === id);
   }
 
   addNews(event: Omit<NewsEvent, 'id'>): NewsEvent {
+    const actor = this.getCurrentUser();
     const newItem: NewsEvent = {
       ...event,
       id: `news-${Date.now()}`,
+      status: event.status || 'published',
+      createdAt: event.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     this.news.unshift(newItem);
     this.save();
     this.firestoreSet('news', newItem.id, newItem);
+
+    this.auditLogs.unshift({
+      id: `log-${Date.now()}`,
+      action: 'create_news',
+      performedByAdminId: actor ? actor.id : 'admin-001',
+      performedByAdminName: actor ? actor.fullName : 'แอดมินเครือข่าย',
+      targetMemberId: 'network-broadcast',
+      targetMemberName: 'เครือข่ายกสิกรรมธรรมชาตินครสวรรค์',
+      targetFarmName: newItem.location,
+      details: `ลงประกาศกิจกรรมใหม่: "${newItem.title}" (${newItem.category}) สถานะ: ${newItem.status === 'hidden' ? 'ซ่อนไว้' : 'เผยแพร่อยู่'}`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    });
+    this.save();
+
     return newItem;
+  }
+
+  updateNews(id: string, updates: Partial<Omit<NewsEvent, 'id'>>): NewsEvent | null {
+    const idx = this.news.findIndex((n) => n.id === id);
+    if (idx === -1) return null;
+
+    const actor = this.getCurrentUser();
+    const existing = this.news[idx];
+    const updatedItem: NewsEvent = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.news[idx] = updatedItem;
+    this.save();
+    this.firestoreUpdate('news', id, updatedItem);
+
+    this.auditLogs.unshift({
+      id: `log-${Date.now()}`,
+      action: 'update_news',
+      performedByAdminId: actor ? actor.id : 'admin-001',
+      performedByAdminName: actor ? actor.fullName : 'แอดมินเครือข่าย',
+      targetMemberId: 'network-broadcast',
+      targetMemberName: 'เครือข่ายกสิกรรมธรรมชาตินครสวรรค์',
+      targetFarmName: updatedItem.location,
+      details: `แก้ไขข้อมูลประกาศกิจกรรม: "${updatedItem.title}" สถานะ: ${updatedItem.status === 'hidden' ? 'ซ่อนไว้' : 'เผยแพร่อยู่'}`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    });
+    this.save();
+
+    return updatedItem;
+  }
+
+  toggleNewsStatus(id: string): NewsEvent | null {
+    const item = this.news.find((n) => n.id === id);
+    if (!item) return null;
+    const newStatus: NewsStatus = item.status === 'hidden' ? 'published' : 'hidden';
+    return this.updateNews(id, { status: newStatus });
   }
 
   deleteNews(id: string): boolean {
     const idx = this.news.findIndex((n) => n.id === id);
     if (idx === -1) return false;
+    const deleted = this.news[idx];
+    const actor = this.getCurrentUser();
+
     this.news.splice(idx, 1);
     this.save();
     this.firestoreDelete('news', id);
+
+    this.auditLogs.unshift({
+      id: `log-${Date.now()}`,
+      action: 'delete_news',
+      performedByAdminId: actor ? actor.id : 'admin-001',
+      performedByAdminName: actor ? actor.fullName : 'แอดมินเครือข่าย',
+      targetMemberId: 'network-broadcast',
+      targetMemberName: 'เครือข่ายกสิกรรมธรรมชาตินครสวรรค์',
+      targetFarmName: deleted.location,
+      details: `ลบประกาศกิจกรรม: "${deleted.title}" ออกจากระบบ`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    });
+    this.save();
+
     return true;
   }
 

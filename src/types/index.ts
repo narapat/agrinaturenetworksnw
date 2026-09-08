@@ -123,7 +123,7 @@ export interface CategoryTag {
 
 export interface AuditLog {
   id: string;
-  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin';
+  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin' | 'create_news' | 'update_news' | 'delete_news';
   performedByAdminId: string;
   performedByAdminName: string;
   targetMemberId: string;
@@ -132,6 +132,9 @@ export interface AuditLog {
   details: string;
   timestamp: string;
 }
+
+export type NewsCategory = 'เอามื้อสามัคคี' | 'อบรมวิชาการ' | 'ตลาดนัดกสิกรรม' | 'ประกาศเครือข่าย';
+export type NewsStatus = 'published' | 'hidden';
 
 export interface NewsEvent {
   id: string;
@@ -142,8 +145,11 @@ export interface NewsEvent {
   district: string;
   content: string;
   coverImage: string;
-  category: 'เอามื้อสามัคคี' | 'อบรมวิชาการ' | 'ตลาดนัดกสิกรรม' | 'ประกาศเครือข่าย';
+  category: NewsCategory;
   author: string;
+  status?: NewsStatus; // 'published' = แสดงผลสาธารณะ, 'hidden' = ซ่อนไว้
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export const hasAdminRole = (user: MemberProfile | null | undefined): boolean => {

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { MemberProfile, CategoryTag, AuditLog, Product, ProductCategory, NewsEvent, hasAdminRole } from '@/types';
+import { MemberProfile, CategoryTag, AuditLog, Product, ProductCategory, NewsEvent, NewsCategory, NewsStatus, hasAdminRole } from '@/types';
+import { compressImage } from '@/utils/imageOptimizer';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -25,7 +26,13 @@ import {
   Trash2,
   CalendarPlus,
   UserPlus,
-  UserMinus
+  UserMinus,
+  Edit3,
+  Upload,
+  Image as ImageIcon,
+  EyeOff,
+  CheckCircle2,
+  Filter
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -45,15 +52,24 @@ export default function AdminPage() {
   const [roleFeedback, setRoleFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // News Tab State
-  const [showAddNews, setShowAddNews] = useState(false);
+  const [showNewsModal, setShowNewsModal] = useState(false);
+  const [editingNewsId, setEditingNewsId] = useState<string | null>(null);
   const [newsTitle, setNewsTitle] = useState('');
-  const [newsCategory, setNewsCategory] = useState<'เอามื้อสามัคคี' | 'อบรมวิชาการ' | 'ตลาดนัดกสิกรรม' | 'ประกาศเครือข่าย'>('เอามื้อสามัคคี');
+  const [newsCategory, setNewsCategory] = useState<NewsCategory>('เอามื้อสามัคคี');
   const [newsDate, setNewsDate] = useState('');
   const [newsTime, setNewsTime] = useState('08:30 - 15:30 น.');
   const [newsLocation, setNewsLocation] = useState('');
   const [newsDistrict, setNewsDistrict] = useState('เมืองนครสวรรค์');
   const [newsContent, setNewsContent] = useState('');
   const [newsCoverImage, setNewsCoverImage] = useState('');
+  const [newsStatus, setNewsStatus] = useState<NewsStatus>('published');
+  const [newsAuthor, setNewsAuthor] = useState('');
+  const [imageUploadMode, setImageUploadMode] = useState<'upload' | 'url'>('upload');
+  const [isCompressingImage, setIsCompressingImage] = useState(false);
+  const [imageCompressInfo, setImageCompressInfo] = useState<string | null>(null);
+  const [newsSearch, setNewsSearch] = useState('');
+  const [newsFilter, setNewsFilter] = useState<'all' | 'published' | 'hidden'>('all');
+  const [newsFeedback, setNewsFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Assisted Entry Modal State
   const [selectedAssistMember, setSelectedAssistMember] = useState<MemberProfile | null>(null);
@@ -86,7 +102,7 @@ export default function AdminPage() {
     setAllMembers(dataService.getAllMembers());
     setCategories(dataService.getCategories());
     setAuditLogs(dataService.getAuditLogs());
-    setNewsList(dataService.getNews());
+    setNewsList(dataService.getNews(true));
   };
 
   const handleApprove = (memberId: string) => {
@@ -190,40 +206,151 @@ export default function AdminPage() {
     }
   };
 
-  const handleAddNews = (e: React.FormEvent) => {
+  const handleOpenAddNews = () => {
+    setEditingNewsId(null);
+    setNewsTitle('');
+    setNewsCategory('เอามื้อสามัคคี');
+    setNewsDate(new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }));
+    setNewsTime('08:30 - 15:30 น.');
+    setNewsLocation('ศูนย์กสิกรรมธรรมชาตินครสวรรค์');
+    setNewsDistrict('เมืองนครสวรรค์');
+    setNewsContent('');
+    setNewsCoverImage('');
+    setNewsStatus('published');
+    setNewsAuthor(currentUser?.fullName || 'แอดมินเครือข่าย');
+    setImageCompressInfo(null);
+    setImageUploadMode('upload');
+    setShowNewsModal(true);
+  };
+
+  const handleOpenEditNews = (item: NewsEvent) => {
+    setEditingNewsId(item.id);
+    setNewsTitle(item.title);
+    setNewsCategory(item.category);
+    setNewsDate(item.date);
+    setNewsTime(item.time || '08:30 - 15:30 น.');
+    setNewsLocation(item.location);
+    setNewsDistrict(item.district);
+    setNewsContent(item.content);
+    setNewsCoverImage(item.coverImage);
+    setNewsStatus(item.status || 'published');
+    setNewsAuthor(item.author || currentUser?.fullName || 'แอดมินเครือข่าย');
+    setImageCompressInfo(null);
+    setImageUploadMode(item.coverImage?.startsWith('data:') ? 'upload' : 'url');
+    setShowNewsModal(true);
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCompressingImage(true);
+    setImageCompressInfo(null);
+    try {
+      const res = await compressImage(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 });
+      setNewsCoverImage(res.dataUrl);
+      const origKb = Math.round(res.originalSize / 1024);
+      const compKb = Math.round(res.compressedSize / 1024);
+      const savedPct = Math.round(((res.originalSize - res.compressedSize) / res.originalSize) * 100);
+      setImageCompressInfo(`✨ อัปโหลดและย่อภาพสำเร็จ: ${origKb} KB ➔ ${compKb} KB (ประหยัด ${savedPct}%)`);
+    } catch (err) {
+      console.error('Image compression error', err);
+      alert('ไม่สามารถประมวลผลไฟล์ภาพได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsCompressingImage(false);
+    }
+  };
+
+  const handleSaveNews = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsTitle.trim() || !newsContent.trim()) return;
 
-    dataService.addNews({
-      title: newsTitle.trim(),
-      category: newsCategory,
-      date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-      time: newsTime.trim() || '08:30 - 15:30 น.',
-      location: newsLocation.trim() || 'ศูนย์กสิกรรมธรรมชาตินครสวรรค์',
-      district: newsDistrict,
-      content: newsContent.trim(),
-      coverImage: newsCoverImage.trim() || 'https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=800&h=500&fit=crop',
-      author: currentUser?.fullName || 'แอดมินเครือข่าย',
-    });
+    let finalImage = newsCoverImage.trim();
+    if (!finalImage) {
+      if (newsCategory === 'เอามื้อสามัคคี') {
+        finalImage = 'https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=800&h=500&fit=crop';
+      } else if (newsCategory === 'อบรมวิชาการ') {
+        finalImage = 'https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&h=500&fit=crop';
+      } else if (newsCategory === 'ตลาดนัดกสิกรรม') {
+        finalImage = 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=500&fit=crop';
+      } else {
+        finalImage = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop';
+      }
+    }
 
-    setShowAddNews(false);
-    setNewsTitle('');
-    setNewsDate('');
-    setNewsTime('08:30 - 15:30 น.');
-    setNewsLocation('');
-    setNewsContent('');
-    setNewsCoverImage('');
+    if (editingNewsId) {
+      dataService.updateNews(editingNewsId, {
+        title: newsTitle.trim(),
+        category: newsCategory,
+        date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+        time: newsTime.trim(),
+        location: newsLocation.trim(),
+        district: newsDistrict,
+        content: newsContent.trim(),
+        coverImage: finalImage,
+        status: newsStatus,
+        author: newsAuthor.trim() || currentUser?.fullName || 'แอดมินเครือข่าย',
+      });
+      setNewsFeedback({ type: 'success', text: `บันทึกการแก้ไขประกาศ "${newsTitle.trim()}" เรียบร้อยแล้ว` });
+    } else {
+      dataService.addNews({
+        title: newsTitle.trim(),
+        category: newsCategory,
+        date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+        time: newsTime.trim(),
+        location: newsLocation.trim(),
+        district: newsDistrict,
+        content: newsContent.trim(),
+        coverImage: finalImage,
+        status: newsStatus,
+        author: newsAuthor.trim() || currentUser?.fullName || 'แอดมินเครือข่าย',
+      });
+      setNewsFeedback({ type: 'success', text: `ลงประกาศกิจกรรม "${newsTitle.trim()}" สำเร็จแล้ว` });
+    }
+
+    setShowNewsModal(false);
     loadData();
+    setTimeout(() => setNewsFeedback(null), 4000);
   };
 
-  const handleDeleteNews = (newsId: string) => {
-    if (window.confirm('คุณต้องการลบประกาศกิจกรรมนี้ออกจากระบบใช่หรือไม่?')) {
-      dataService.deleteNews(newsId);
+  const handleToggleNewsStatus = (item: NewsEvent) => {
+    const updated = dataService.toggleNewsStatus(item.id);
+    if (updated) {
       loadData();
+      const statusText = updated.status === 'hidden'
+        ? `ซ่อนประกาศ "${item.title}" เรียบร้อยแล้ว (ไม่แสดงบนหน้าสาธารณะ)`
+        : `เปิดแสดงประกาศ "${item.title}" สู่หน้าสาธารณะเรียบร้อยแล้ว`;
+      setNewsFeedback({ type: 'success', text: statusText });
+      setTimeout(() => setNewsFeedback(null), 3500);
+    }
+  };
+
+  const handleDeleteNews = (item: NewsEvent) => {
+    if (window.confirm(`คุณต้องการลบประกาศ "${item.title}" ออกจากระบบใช่หรือไม่?`)) {
+      dataService.deleteNews(item.id);
+      loadData();
+      setNewsFeedback({ type: 'success', text: `ลบประกาศ "${item.title}" เรียบร้อยแล้ว` });
+      setTimeout(() => setNewsFeedback(null), 3500);
     }
   };
 
   const assistQueue = allMembers.filter((m) => m.delegationStatus === 'requested');
+
+  const filteredNewsList = newsList.filter((item) => {
+    if (newsFilter === 'published' && item.status === 'hidden') return false;
+    if (newsFilter === 'hidden' && item.status !== 'hidden') return false;
+    if (newsSearch.trim()) {
+      const q = newsSearch.toLowerCase();
+      const matches =
+        item.title.toLowerCase().includes(q) ||
+        item.location.toLowerCase().includes(q) ||
+        item.district.toLowerCase().includes(q) ||
+        item.category.toLowerCase().includes(q) ||
+        item.content.toLowerCase().includes(q);
+      if (!matches) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
@@ -631,29 +758,53 @@ export default function AdminPage() {
       {/* ================= TAB 3: NEWS & ACTIVITIES (ลงประกาศกิจกรรม) ================= */}
       {activeTab === 'news' && (
         <div className="space-y-4">
-          <div className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Feedback Toast */}
+          {newsFeedback && (
+            <div
+              className={`p-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 animate-in fade-in duration-200 ${
+                newsFeedback.type === 'success'
+                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                  : 'bg-red-50 text-red-800 border border-red-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{newsFeedback.text}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewsFeedback(null)}
+                className="text-stone-400 hover:text-stone-700 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Header Card */}
+          <div className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-brand-600" />
                 <span>กระดานประกาศกิจกรรม & เอามื้อสามัคคี</span>
               </h3>
               <p className="text-xs text-stone-500 mt-1">
-                แอดมินสามารถลงประกาศกิจกรรมอบรม งานลงแขกเอามื้อ และตลาดนัดสีเขียวเพื่อสื่อสารกับพี่น้องเครือข่าย
+                ลงประกาศกิจกรรม งานลงแขกเอามื้อ อบรมวิชาการ สามารถอัปโหลดรูปภาพได้เอง แก้ไขข้อมูล และเลือกซ่อน/แสดงผลบนหน้าเว็บได้
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Link
                 href="/news"
                 target="_blank"
-                className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold text-stone-700 hover:bg-stone-50 flex items-center gap-1"
+                className="px-3.5 py-2 rounded-xl border border-stone-200 text-xs font-bold text-stone-700 hover:bg-stone-50 flex items-center gap-1.5 transition-colors shadow-2xs"
               >
                 <Eye className="w-3.5 h-3.5 text-stone-400" />
                 <span>ดูหน้าสาธารณะ (/news)</span>
               </Link>
               <button
                 type="button"
-                onClick={() => setShowAddNews(true)}
+                onClick={handleOpenAddNews}
                 className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
               >
                 <CalendarPlus className="w-4 h-4" />
@@ -662,25 +813,97 @@ export default function AdminPage() {
             </div>
           </div>
 
-          {/* Form Modal: Add New News/Activity */}
-          {showAddNews && (
+          {/* Search & Filter Toolbar */}
+          <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input
+                type="text"
+                value={newsSearch}
+                onChange={(e) => setNewsSearch(e.target.value)}
+                placeholder="ค้นหาประกาศ (ชื่อกิจกรรม, สถานที่, อำเภอ, หมวดหมู่)..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl border border-stone-200 text-xs text-stone-800 placeholder-stone-400 focus:outline-hidden focus:ring-2 focus:ring-brand-500"
+              />
+              {newsSearch && (
+                <button
+                  type="button"
+                  onClick={() => setNewsSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-stone-400 hover:text-stone-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0 bg-stone-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setNewsFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  newsFilter === 'all'
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                ทั้งหมด ({newsList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewsFilter('published')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  newsFilter === 'published'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-emerald-700 hover:text-emerald-900'
+                }`}
+              >
+                <span>🟢 กำลังแสดง</span>
+                <span>({newsList.filter((n) => n.status !== 'hidden').length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setNewsFilter('hidden')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  newsFilter === 'hidden'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-amber-700 hover:text-amber-900'
+                }`}
+              >
+                <span>🟡 ซ่อนไว้</span>
+                <span>({newsList.filter((n) => n.status === 'hidden').length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Form Modal: Add or Edit News/Activity */}
+          {showNewsModal && (
             <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in zoom-in-95">
-                <div className="flex items-center justify-between border-b pb-3">
+              <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto animate-in zoom-in-95">
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-stone-200 pb-3">
                   <h3 className="font-bold text-base text-stone-900 flex items-center gap-2">
-                    <CalendarPlus className="w-5 h-5 text-brand-600" />
-                    <span>ลงประกาศกิจกรรมเครือข่ายใหม่</span>
+                    {editingNewsId ? (
+                      <>
+                        <Edit3 className="w-5 h-5 text-blue-600" />
+                        <span>แก้ไขประกาศกิจกรรม & ข่าวสาร</span>
+                      </>
+                    ) : (
+                      <>
+                        <CalendarPlus className="w-5 h-5 text-brand-600" />
+                        <span>ลงประกาศกิจกรรมเครือข่ายใหม่</span>
+                      </>
+                    )}
                   </h3>
                   <button
                     type="button"
-                    onClick={() => setShowAddNews(false)}
-                    className="p-1 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+                    onClick={() => setShowNewsModal(false)}
+                    className="p-1 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <form onSubmit={handleAddNews} className="space-y-3 text-xs sm:text-sm">
+                <form onSubmit={handleSaveNews} className="space-y-4 text-xs sm:text-sm">
+                  {/* Title */}
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">
                       หัวข้อกิจกรรม / ข่าวสาร *
@@ -691,11 +914,12 @@ export default function AdminPage() {
                       placeholder="เช่น กิจกรรมเอามื้อสามัคคี ขุดคลองไส้ไก่ ณ ไร่สุขใจ..."
                       value={newsTitle}
                       onChange={(e) => setNewsTitle(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Category & District */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-stone-700 mb-1">
                         หมวดหมู่กิจกรรม *
@@ -703,7 +927,7 @@ export default function AdminPage() {
                       <select
                         value={newsCategory}
                         onChange={(e) => setNewsCategory(e.target.value as any)}
-                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                       >
                         <option value="เอามื้อสามัคคี">🤝 เอามื้อสามัคคี</option>
                         <option value="อบรมวิชาการ">📚 อบรมวิชาการ</option>
@@ -719,7 +943,7 @@ export default function AdminPage() {
                       <select
                         value={newsDistrict}
                         onChange={(e) => setNewsDistrict(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                       >
                         {['เมืองนครสวรรค์', 'เก้าเลี้ยว', 'โกรกพระ', 'ชุมแสง', 'หนองบัว', 'บรรพตพิสัย', 'พยุหะคีรี', 'ลาดยาว', 'ตาคลี', 'ท่าตะโก', 'ไพศาลี', 'ตากฟ้า', 'แม่วงก์', 'แม่เปิน', 'ชุมตาบง'].map((d) => (
                           <option key={d} value={d}>{d}</option>
@@ -728,7 +952,8 @@ export default function AdminPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  {/* Date & Time */}
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-stone-700 mb-1">
                         วันที่จัดกิจกรรม *
@@ -738,7 +963,7 @@ export default function AdminPage() {
                         placeholder="เช่น 25 มีนาคม 2569"
                         value={newsDate}
                         onChange={(e) => setNewsDate(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                       />
                     </div>
 
@@ -751,11 +976,12 @@ export default function AdminPage() {
                         placeholder="เช่น 08:30 - 15:30 น."
                         value={newsTime}
                         onChange={(e) => setNewsTime(e.target.value)}
-                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                       />
                     </div>
                   </div>
 
+                  {/* Location */}
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">
                       สถานที่จัดกิจกรรม *
@@ -765,10 +991,11 @@ export default function AdminPage() {
                       placeholder="เช่น ศูนย์กสิกรรมธรรมชาติต้นแบบ สวนสราญรมย์ ต.หนองกรด"
                       value={newsLocation}
                       onChange={(e) => setNewsLocation(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                     />
                   </div>
 
+                  {/* Content */}
                   <div>
                     <label className="block text-xs font-bold text-stone-700 mb-1">
                       รายละเอียดกิจกรรม *
@@ -779,36 +1006,191 @@ export default function AdminPage() {
                       placeholder="ระบุกำหนดการ สิ่งที่ต้องเตรียมมา และเบอร์ติดต่อ..."
                       value={newsContent}
                       onChange={(e) => setNewsContent(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
                     />
                   </div>
 
+                  {/* Cover Photo Upload / URL */}
+                  <div className="space-y-2 border border-stone-200 p-3.5 rounded-2xl bg-stone-50/70">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-brand-600" />
+                        <span>รูปภาพหน้าปกกิจกรรม</span>
+                      </label>
+                      <div className="flex items-center gap-1 bg-stone-200/80 p-0.5 rounded-lg text-[11px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setImageUploadMode('upload')}
+                          className={`px-2.5 py-1 rounded-md transition-all ${
+                            imageUploadMode === 'upload'
+                              ? 'bg-white text-stone-900 shadow-2xs'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          📷 อัปโหลดรูปเอง
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setImageUploadMode('url')}
+                          className={`px-2.5 py-1 rounded-md transition-all ${
+                            imageUploadMode === 'url'
+                              ? 'bg-white text-stone-900 shadow-2xs'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          🔗 ระบุลิงก์ URL
+                        </button>
+                      </div>
+                    </div>
+
+                    {imageUploadMode === 'upload' ? (
+                      <div>
+                        <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-stone-300 hover:border-brand-500 rounded-2xl bg-white cursor-pointer transition-all group">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileChange}
+                            className="hidden"
+                          />
+                          <Upload className="w-6 h-6 text-stone-400 group-hover:text-brand-600 mb-1 transition-colors" />
+                          <span className="text-xs font-bold text-stone-700 group-hover:text-brand-700">
+                            {isCompressingImage ? 'กำลังย่อขนาดภาพ...' : 'คลิกเพื่อเลือกภาพถ่ายจากเครื่อง / ถ่ายภาพ'}
+                          </span>
+                          <span className="text-[10px] text-stone-400 mt-0.5">
+                            ระบบจะย่อขนาดให้อัตโนมัติ (ภาพคมชัด โหลดเร็ว เหมาะกับมือถือและ LINE LIFF)
+                          </span>
+                        </label>
+                        {imageCompressInfo && (
+                          <div className="mt-2 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>{imageCompressInfo}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="https://images.unsplash.com/photo-..."
+                          value={newsCoverImage}
+                          onChange={(e) => setNewsCoverImage(e.target.value)}
+                          className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm bg-white focus:ring-2 focus:ring-brand-500 focus:outline-hidden"
+                        />
+                        <span className="text-[10px] text-stone-400 mt-1 block">
+                          หากเว้นว่าง ระบบจะเลือกรูปภาพธรรมชาติมาตรฐานตามหมวดหมู่ให้อัตโนมัติ
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Image Preview */}
+                    {newsCoverImage && (
+                      <div className="relative rounded-xl overflow-hidden border border-stone-200 aspect-16/9 bg-stone-100 mt-2">
+                        <img
+                          src={newsCoverImage}
+                          alt="พรีวิวรูปภาพหน้าปก"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute top-2 right-2 flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewsCoverImage('');
+                              setImageCompressInfo(null);
+                            }}
+                            className="px-2 py-1 bg-red-600/90 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold shadow-sm transition-colors"
+                          >
+                            ลบรูป
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Visibility Status Selector */}
                   <div>
-                    <label className="block text-xs font-bold text-stone-700 mb-1">
-                      ลิงก์ภาพหน้าปก (URL)
+                    <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                      สถานะการแสดงผล (Visibility) *
                     </label>
-                    <input
-                      type="text"
-                      placeholder="https://images.unsplash.com/..."
-                      value={newsCoverImage}
-                      onChange={(e) => setNewsCoverImage(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
-                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <label
+                        className={`p-3 rounded-2xl border cursor-pointer flex items-start gap-2.5 transition-all ${
+                          newsStatus === 'published'
+                            ? 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="newsStatus"
+                          value="published"
+                          checked={newsStatus === 'published'}
+                          onChange={() => setNewsStatus('published')}
+                          className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>🟢 เผยแพร่สาธารณะ</span>
+                          </div>
+                          <p className="text-[11px] text-emerald-700 mt-0.5 leading-snug">
+                            แสดงในหน้าข่าวสาร (/news) สมาชิกและประชาชนทั่วไปเข้าดูได้ทันที
+                          </p>
+                        </div>
+                      </label>
+
+                      <label
+                        className={`p-3 rounded-2xl border cursor-pointer flex items-start gap-2.5 transition-all ${
+                          newsStatus === 'hidden'
+                            ? 'border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20'
+                            : 'border-stone-200 bg-white hover:bg-stone-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="newsStatus"
+                          value="hidden"
+                          checked={newsStatus === 'hidden'}
+                          onChange={() => setNewsStatus('hidden')}
+                          className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                            <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                            <span>🟡 ซ่อนไว้ (ยังไม่แสดง)</span>
+                          </div>
+                          <p className="text-[11px] text-amber-700 mt-0.5 leading-snug">
+                            ไม่แสดงบนหน้าเว็บสาธารณะ เก็บเป็นฉบับร่าง หรือซ่อนเมื่อผ่านไปแล้ว
+                          </p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2 pt-2">
+                  {/* Buttons */}
+                  <div className="flex gap-2 pt-2 border-t border-stone-200">
                     <button
                       type="button"
-                      onClick={() => setShowAddNews(false)}
-                      className="flex-1 py-2.5 rounded-xl border text-stone-600 font-bold text-xs"
+                      onClick={() => setShowNewsModal(false)}
+                      className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50 transition-colors"
                     >
                       ยกเลิก
                     </button>
                     <button
                       type="submit"
-                      className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-md"
+                      disabled={isCompressingImage}
+                      className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
                     >
-                      บันทึกประกาศกิจกรรม
+                      {editingNewsId ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>บันทึกการแก้ไข</span>
+                        </>
+                      ) : (
+                        <>
+                          <CalendarPlus className="w-4 h-4" />
+                          <span>บันทึกประกาศกิจกรรม</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -818,45 +1200,116 @@ export default function AdminPage() {
 
           {/* News Cards Grid */}
           <div className="space-y-3">
-            {newsList.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white p-4 sm:p-5 rounded-3xl border border-stone-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-              >
-                <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-                  <div className="w-20 h-16 rounded-2xl bg-stone-100 overflow-hidden shrink-0 border">
-                    <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 text-[10px] font-bold">
-                        {item.category}
-                      </span>
-                      <span className="text-[11px] text-stone-500 font-medium">
-                        📅 {item.date} {item.time && `(${item.time})`}
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-stone-900 text-sm truncate">
-                      {item.title}
-                    </h4>
-                    <p className="text-xs text-stone-500 truncate mt-0.5">
-                      📍 {item.location} ({item.district})
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteNews(item.id)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 flex items-center gap-1 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>ลบประกาศ</span>
-                  </button>
-                </div>
+            {filteredNewsList.length === 0 ? (
+              <div className="bg-white p-12 rounded-3xl border border-stone-200 text-center text-stone-500 space-y-2">
+                <Calendar className="w-10 h-10 text-stone-300 mx-auto" />
+                <p className="font-bold text-stone-700">ไม่พบประกาศกิจกรรมที่ตรงกับเงื่อนไข</p>
+                <p className="text-xs text-stone-400">ลองเปลี่ยนคำค้นหา หรือกดปุ่ม "+ ลงประกาศกิจกรรมใหม่"</p>
               </div>
-            ))}
+            ) : (
+              filteredNewsList.map((item) => {
+                const isHidden = item.status === 'hidden';
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-4 sm:p-5 rounded-3xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+                      isHidden
+                        ? 'bg-amber-50/30 border-dashed border-amber-300 shadow-2xs'
+                        : 'bg-white border-stone-200 shadow-xs hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+                      <div className="w-24 h-18 rounded-2xl bg-stone-100 overflow-hidden shrink-0 border border-stone-200 relative">
+                        <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover" />
+                        {isHidden && (
+                          <div className="absolute inset-0 bg-stone-900/40 flex items-center justify-center backdrop-blur-2xs">
+                            <span className="text-[10px] font-black text-amber-200 bg-stone-900/80 px-1.5 py-0.5 rounded-md flex items-center gap-0.5">
+                              <EyeOff className="w-2.5 h-2.5" />
+                              <span>ซ่อนอยู่</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 text-[10px] font-bold">
+                            {item.category}
+                          </span>
+                          {isHidden ? (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold border border-amber-200 flex items-center gap-1">
+                              <EyeOff className="w-3 h-3 text-amber-600" />
+                              <span>ซ่อนไว้ (ฉบับร่าง)</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200 flex items-center gap-1">
+                              <Eye className="w-3 h-3 text-emerald-600" />
+                              <span>เผยแพร่อยู่</span>
+                            </span>
+                          )}
+                          <span className="text-[11px] text-stone-500 font-medium">
+                            📅 {item.date} {item.time && `(${item.time})`}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-stone-900 text-sm truncate">
+                          {item.title}
+                        </h4>
+                        <p className="text-xs text-stone-500 truncate">
+                          📍 {item.location} ({item.district})
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      {/* Toggle Visibility Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleNewsStatus(item)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 transition-all ${
+                          isHidden
+                            ? 'text-emerald-700 hover:bg-emerald-50 border-emerald-300 bg-emerald-50/40'
+                            : 'text-amber-700 hover:bg-amber-50 border-amber-300 bg-amber-50/40'
+                        }`}
+                        title={isHidden ? 'เปิดแสดงบนหน้าเว็บสาธารณะ' : 'ซ่อนไม่ให้แสดงบนหน้าเว็บสาธารณะ'}
+                      >
+                        {isHidden ? (
+                          <>
+                            <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>เปิดแสดง</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5 text-amber-600" />
+                            <span>ซ่อนประกาศ</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Edit Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditNews(item)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-blue-700 hover:bg-blue-50 border border-blue-200 bg-white flex items-center gap-1 transition-colors"
+                        title="แก้ไขรายละเอียดประกาศ"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-blue-600" />
+                        <span>แก้ไข</span>
+                      </button>
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteNews(item)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 bg-white flex items-center gap-1 transition-colors"
+                        title="ลบประกาศออกจากระบบ"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <span>ลบ</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}

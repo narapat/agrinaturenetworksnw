@@ -807,6 +807,7 @@ export const INITIAL_NEWS: NewsEvent[] = [
     coverImage: 'https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?w=800&h=500&fit=crop',
     category: 'เอามื้อสามัคคี',
     author: 'แอดมินเครือข่ายนครสวรรค์',
+    status: 'published',
   },
   {
     id: 'news-002',
@@ -819,6 +820,7 @@ export const INITIAL_NEWS: NewsEvent[] = [
     coverImage: 'https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&h=500&fit=crop',
     category: 'อบรมวิชาการ',
     author: 'ป้าปราณี ไร่สุขใจ',
+    status: 'published',
   },
   {
     id: 'news-003',
@@ -831,6 +833,20 @@ export const INITIAL_NEWS: NewsEvent[] = [
     coverImage: 'https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=800&h=500&fit=crop',
     category: 'ตลาดนัดกสิกรรม',
     author: 'ฝ่ายประชาสัมพันธ์เครือข่าย',
+    status: 'published',
+  },
+  {
+    id: 'news-004',
+    title: '(ร่างเตรียมการ) การประชุมสัญจรเครือข่ายกสิกรรมธรรมชาติ ภาคเหนือตอนล่าง ประจำปี 2569',
+    date: '10 เมษายน 2026',
+    time: '09:00 - 16:30 น.',
+    location: 'ศูนย์เรียนรู้กสิกรรมธรรมชาติ อ.พยุหะคีรี',
+    district: 'พยุหะคีรี',
+    content: 'กำหนดการประชุมวางแผนยุทธศาสตร์ความมั่นคงทางอาหาร และการเชื่อมโยงระบบโลจิสติกส์ผลผลิตอินทรีย์ระดับภาค (อยู่ระหว่างเตรียมการและประสานงานวิทยากร)',
+    coverImage: 'https://images.unsplash.com/photo-1523741543316-beb7fc7023d8?w=800&h=500&fit=crop',
+    category: 'ประกาศเครือข่าย',
+    author: 'แอดมินเครือข่ายนครสวรรค์',
+    status: 'hidden',
   },
 ];
 

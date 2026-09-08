@@ -12,7 +12,10 @@ export default function NewsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    setNewsList(dataService.getNews());
+    const refresh = () => setNewsList(dataService.getNews());
+    refresh();
+    window.addEventListener('nsw_data_updated', refresh);
+    return () => window.removeEventListener('nsw_data_updated', refresh);
   }, []);
 
   const handleShareLine = (item: NewsEvent) => {
