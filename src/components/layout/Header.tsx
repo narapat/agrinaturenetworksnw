@@ -76,7 +76,20 @@ export default function Header() {
     window.location.reload();
   };
 
-  const navLinks = [
+  // Navigation links for full desktop (clean without duplicate manual button)
+  const desktopNavLinks = [
+    { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag },
+    { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin },
+    { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper },
+    { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User },
+    ...(currentUser?.role === 'admin' 
+      ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, isBadge: true }] 
+      : []),
+  ];
+
+  // Drawer links for hamburger menu (all links)
+  const drawerLinks = [
+    { href: '/', label: 'หน้าแรก', icon: Home, desc: 'ตลาดและภาพรวมเครือข่าย' },
     { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag, desc: 'ผลผลิตอินทรีย์ 15 อำเภอ' },
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin, desc: 'ทำเนียบแปลงและศูนย์เรียนรู้' },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper, desc: 'กิจกรรมและตารางเอามื้อสามัคคี' },
@@ -87,27 +100,22 @@ export default function Header() {
       : []),
   ];
 
-  const drawerLinks = [
-    { href: '/', label: 'หน้าแรก', icon: Home, desc: 'ตลาดและภาพรวมเครือข่าย' },
-    ...navLinks
-  ];
-
   return (
     <header 
       className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full overflow-hidden"
       style={{ fontSize: '15px' }}
     >
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 w-full">
-        <div className="flex items-center justify-between py-2.5 sm:py-4 min-h-[64px] sm:min-h-[76px] gap-1">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full">
+        <div className="flex items-center justify-between py-2.5 sm:py-3.5 min-h-[64px] sm:min-h-[72px] gap-2">
           
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 group min-w-0 shrink">
-            <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Sprout className="w-5 h-5 sm:w-6 sm:h-6" />
+          {/* Logo - shrink-0 ensures it NEVER gets squished or overlapped */}
+          <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Sprout className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 sm:gap-2">
-                <span className="font-bold text-sm sm:text-xl text-stone-900 font-sans tracking-normal truncate">
+            <div className="shrink-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-sm sm:text-lg text-stone-900 font-sans tracking-normal">
                   กสิกรรมธรรมชาติ
                 </span>
                 <span className="inline-block px-1.5 py-0.2 rounded-full bg-brand-100 text-brand-800 text-[10px] sm:text-xs font-bold shrink-0">
@@ -120,9 +128,9 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 shrink-0">
-            {navLinks.map((link) => {
+          {/* Desktop Navigation Links (Only on xl: >= 1280px, otherwise Hamburger Menu triggers) */}
+          <nav className="hidden xl:flex items-center gap-1 xl:gap-2 shrink-0">
+            {desktopNavLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
               const Icon = link.icon;
               return (
@@ -142,13 +150,13 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Right Controls: Guide, Font Size, User Switcher & Hamburger */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Right Controls: Guide (xl only), Font Size, User Switcher & Hamburger */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             
-            {/* Guide / Manual Button */}
+            {/* Guide / Manual Button (Only shown on xl screens where nav is visible) */}
             <Link
               href="/manual"
-              className={`hidden sm:flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
+              className={`hidden xl:flex items-center gap-1 px-3 py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 pathname === '/manual' || pathname === '/guide' ? 'bg-brand-50 text-brand-700 border-brand-200 font-bold' : ''
               }`}
               title="คู่มือการใช้งาน"
@@ -298,10 +306,10 @@ export default function Header() {
               )}
             </div>
 
-            {/* Hamburger Menu Toggle Button (Shows on < lg when desktop shrinks or on mobile) */}
+            {/* Hamburger Menu Toggle Button (Shows on < xl when desktop shrinks or on mobile) */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition-colors shrink-0"
+              className="xl:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition-colors shrink-0"
               aria-label="เปิดเมนูนำทาง"
               title="เมนู"
             >
@@ -315,7 +323,7 @@ export default function Header() {
 
       {/* Slide-over Drawer / Hamburger Menu (Active when desktop is shrunk or on tablet/mobile) */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 xl:hidden" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
