@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { Product, SKUGroup } from '@/types';
-import PhoneMockup from '@/components/ui/PhoneMockup';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -37,84 +36,71 @@ export default function HomePage() {
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-brand-200/40 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-80 -right-40 w-96 h-96 bg-emerald-100/50 rounded-full blur-3xl pointer-events-none" />
 
-      {/* ================= HERO SECTION (Inspired by Reference Design) ================= */}
-      <section className="pt-10 sm:pt-14 md:pt-16 pb-16 md:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+      {/* ================= HERO SECTION (Clean & Spacious) ================= */}
+      <section className="pt-10 sm:pt-16 pb-14 md:pb-20 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div className="space-y-6 flex flex-col items-center">
           
-          {/* Left Column: Headline, Subtitle, CTAs, Stats */}
-          <div className="lg:col-span-7 space-y-6 text-left">
-            
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-brand-100/80 border border-brand-200/60 text-brand-900 text-xs sm:text-sm font-semibold shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-brand-600 animate-pulse"></span>
-              <span>🌾 เครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์</span>
-              <span className="text-brand-500">•</span>
-              <span className="text-brand-700">15 อำเภอ</span>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className={`${getTextClass('title')} text-3xl sm:text-5xl lg:text-6xl font-extrabold text-stone-900 leading-[1.38] space-y-1 sm:space-y-2`}>
-              <span className="block">ของดีกสิกรรมธรรมชาติ</span>
-              <span className="thai-gradient-text text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-emerald-600 to-teal-700">
-                สดจากแปลง แบ่งปันน้ำใจ
-              </span>
-            </h1>
-
-            {/* Subtitle */}
-            <p className={`${getTextClass('body')} text-stone-600 max-w-2xl text-base sm:text-lg leading-relaxed`}>
-              ศูนย์รวมผลผลิตอินทรีย์ ปัจจัยการผลิต By-product (ถ่านไบโอชาร์, น้ำส้มควันไม้, ปุ๋ยหมัก) 
-              และเมล็ดพันธุ์พื้นบ้าน เชื่อมโยงพี่น้องเกษตรกรในจังหวัดนครสวรรค์ 
-              เกื้อกูลกันแบบตรงไปตรงมา ปลอดภัย และไร้สารเคมี
-            </p>
-
-            {/* Quick Action CTAs */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
-              <Link
-                href="/catalog"
-                className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-base sm:text-lg shadow-lg shadow-brand-600/25 hover:shadow-brand-600/35 transition-all transform hover:-translate-y-0.5 touch-target-big"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                <span>ดูของดีเครือข่าย</span>
-              </Link>
-
-              <Link
-                href="/farms"
-                className="inline-flex items-center gap-2 px-6 py-4 rounded-full border-2 border-stone-200 hover:border-brand-300 bg-white/80 hover:bg-stone-50 text-stone-700 font-bold text-base sm:text-lg transition-all touch-target-big"
-              >
-                <MapPin className="w-5 h-5 text-brand-600" />
-                <span>ค้นหาแปลงกสิกรรม</span>
-              </Link>
-            </div>
-
-            {/* Impact / Stats Row (Style from Reference) */}
-            <div className="pt-8 border-t border-stone-200/80">
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                <div>
-                  <div className="text-3xl sm:text-4xl font-black text-stone-900 tracking-tight">15</div>
-                  <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">อำเภอในนครสวรรค์</div>
-                </div>
-                <div>
-                  <div className="text-3xl sm:text-4xl font-black text-brand-600 tracking-tight">48+</div>
-                  <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">แปลงกสิกรรมธรรมชาติ</div>
-                </div>
-                <div>
-                  <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-tight">100%</div>
-                  <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">วิถีไร้สารเคมี</div>
-                </div>
-                <div className="hidden sm:block">
-                  <div className="text-3xl sm:text-4xl font-black text-amber-600 tracking-tight">ฟรี</div>
-                  <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">เมล็ดพันธุ์แบ่งปัน</div>
-                </div>
-              </div>
-            </div>
-
+          {/* Pill Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-100/80 border border-brand-200/60 text-brand-900 text-xs sm:text-sm font-semibold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-brand-600 animate-pulse"></span>
+            <span>🌾 เครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์</span>
+            <span className="text-brand-500">•</span>
+            <span className="text-brand-700">15 อำเภอ</span>
           </div>
 
-          {/* Right Column: Phone Mockup with Live Preview (Style from Reference) */}
-          <div className="lg:col-span-5 flex justify-center">
-            <div className="relative">
-              <div className="absolute -inset-4 bg-gradient-to-r from-brand-300/30 to-emerald-200/30 rounded-[56px] blur-xl opacity-70 transform -rotate-1"></div>
-              <PhoneMockup sampleProducts={products} />
+          {/* Main Headline */}
+          <h1 className={`${getTextClass('title')} text-3xl sm:text-5xl lg:text-6xl font-extrabold text-stone-900 leading-[1.38] space-y-1 sm:space-y-2 max-w-4xl`}>
+            <span className="block">ของดีกสิกรรมธรรมชาติ</span>
+            <span className="thai-gradient-text text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-emerald-600 to-teal-700">
+              สดจากแปลง แบ่งปันน้ำใจ
+            </span>
+          </h1>
+
+          {/* Subtitle */}
+          <p className={`${getTextClass('body')} text-stone-600 max-w-2xl text-base sm:text-lg leading-relaxed mx-auto`}>
+            ศูนย์รวมผลผลิตอินทรีย์ ปัจจัยการผลิต By-product (ถ่านไบโอชาร์, น้ำส้มควันไม้, ปุ๋ยหมัก) 
+            และเมล็ดพันธุ์พื้นบ้าน เชื่อมโยงพี่น้องเกษตรกรในจังหวัดนครสวรรค์ 
+            เกื้อกูลกันแบบตรงไปตรงมา ปลอดภัย และไร้สารเคมี
+          </p>
+
+          {/* Quick Action CTAs */}
+          <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
+            <Link
+              href="/catalog"
+              className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-base sm:text-lg shadow-lg shadow-brand-600/25 hover:shadow-brand-600/35 transition-all transform hover:-translate-y-0.5 touch-target-big"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              <span>ดูของดีเครือข่าย</span>
+            </Link>
+
+            <Link
+              href="/farms"
+              className="inline-flex items-center gap-2 px-6 py-4 rounded-full border-2 border-stone-200 hover:border-brand-300 bg-white/80 hover:bg-stone-50 text-stone-700 font-bold text-base sm:text-lg transition-all touch-target-big"
+            >
+              <MapPin className="w-5 h-5 text-brand-600" />
+              <span>ค้นหาแปลงกสิกรรม</span>
+            </Link>
+          </div>
+
+          {/* Impact / Stats Row */}
+          <div className="pt-8 border-t border-stone-200/80 w-full max-w-3xl mt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-4">
+              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
+                <div className="text-3xl sm:text-4xl font-black text-stone-900 tracking-normal">15</div>
+                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">อำเภอในนครสวรรค์</div>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
+                <div className="text-3xl sm:text-4xl font-black text-brand-600 tracking-normal">48+</div>
+                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">แปลงกสิกรรมธรรมชาติ</div>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
+                <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-normal">100%</div>
+                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">วิถีไร้สารเคมี</div>
+              </div>
+              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
+                <div className="text-3xl sm:text-4xl font-black text-amber-600 tracking-normal">ฟรี</div>
+                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">เมล็ดพันธุ์แบ่งปัน</div>
+              </div>
             </div>
           </div>
 
