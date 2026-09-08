@@ -12,6 +12,10 @@ export const metadata: Metadata = {
     description: 'สดจากแปลง แลกเปลี่ยน แบ่งปัน เชื่อมโยง 15 อำเภอในนครสวรรค์',
     type: 'website',
   },
+  icons: {
+    icon: '/images/logo.jpg',
+    apple: '/images/logo.jpg',
+  },
 };
 
 export const viewport: Viewport = {

@@ -7,7 +7,6 @@ import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { MemberProfile } from '@/types';
 import { 
-  Sprout, 
   ShoppingBag, 
   MapPin, 
   Newspaper, 
@@ -109,10 +108,13 @@ export default function Header() {
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full">
         <div className="flex items-center justify-between py-2.5 sm:py-3.5 min-h-[64px] sm:min-h-[72px] gap-2">
           
-          {/* Logo - shrink-0 ensures it NEVER gets squished or overlapped */}
           <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Sprout className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl overflow-hidden border border-brand-200/90 shadow-sm bg-amber-50/60 group-hover:scale-105 transition-transform shrink-0 flex items-center justify-center">
+              <img
+                src="/images/logo.jpg"
+                alt="โลโก้กสิกรรมธรรมชาตินครสวรรค์"
+                className="w-full h-full object-cover"
+              />
             </div>
             <div className="shrink-0">
               <div className="flex items-center gap-1.5">
@@ -359,8 +361,12 @@ export default function Header() {
             {/* Drawer Header */}
             <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/90 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-sm">
-                  <Sprout className="w-5 h-5" />
+                <div className="w-10 h-10 rounded-2xl overflow-hidden border border-brand-200/90 shadow-sm bg-amber-50/60 shrink-0 flex items-center justify-center">
+                  <img
+                    src="/images/logo.jpg"
+                    alt="โลโก้กสิกรรมธรรมชาตินครสวรรค์"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
