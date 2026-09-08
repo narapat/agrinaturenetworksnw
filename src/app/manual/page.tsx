@@ -231,11 +231,79 @@ export default function ManualPage() {
             </div>
           </div>
 
-          {/* Feature Card 2: Member Dashboard & Privacy */}
+          {/* Feature Card 2: Adding Produce & Farm Data (การลงรายการผลผลิตใหม่) */}
           <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
                 2
+              </span>
+              <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
+                การเพิ่มข้อมูลผลผลิตและของดีในแปลง (ลงรายการสินค้า)
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              เมื่อแปลงลงทะเบียนแล้ว ท่านสามารถเพิ่มรายการผลผลิตสด แปรรูป หรือเมล็ดพันธุ์ขึ้นสู่ตลาดของดี 15 อำเภอได้ทันที โดยแตะปุ่ม <strong>"+ เพิ่มรายการใหม่"</strong>:
+            </p>
+
+            <div className="max-w-xs mx-auto rounded-3xl overflow-hidden border-4 border-stone-800 shadow-2xl bg-black">
+              <img
+                src="/screenshots/05_add_product.png"
+                alt="หน้าเพิ่มผลผลิตและข้อมูลสินค้าใหม่"
+                className="w-full h-auto object-cover"
+              />
+            </div>
+
+            <div className="bg-stone-50 rounded-2xl p-4 space-y-3 text-xs sm:text-sm text-stone-700">
+              <div className="space-y-1.5">
+                <p className="font-bold text-stone-900 text-sm">ขั้นตอนการกรอกข้อมูลผลผลิต:</p>
+                <p>
+                  <strong>1. ถ่ายรูปหรือเลือกรูปภาพผลผลิต:</strong> ถ่ายรูปจากกล้องมือถือหรือเลือกรูปสวยๆ ในเครื่อง มีระบบตัดและปรับขนาดภาพสี่เหลี่ยมให้อัตโนมัติ ไม่ยืดไม่เบี้ยว
+                </p>
+                <p>
+                  <strong>2. เลือกกลุ่มผลผลิตมาตรฐาน (SKU Tag):</strong> เช่น <em>กล้วยน้ำว้า, ข้าวหอมมะลิอินทรีย์, มะนาวแป้น, ไข่ไก่อารมณ์ดี, น้ำหมักชีวภาพ, ปุ๋ยหมักโบกาฉิ, ต้นกล้า</em> เพื่อให้ผู้บริโภคค้นหาเจอง่ายและจัดกลุ่มของดี 15 อำเภอ
+                </p>
+                <p>
+                  <strong>3. ตั้งชื่อผลผลิต:</strong> ใส่ชื่อที่โดดเด่น เช่น <em>"กล้วยน้ำว้ามะลิอ่อง หวีใหญ่ ไม่รมแก๊ส"</em> หรือ <em>"ไข่ไก่ปล่อยแปลง เลี้ยงด้วยแหนแดง"</em>
+                </p>
+                <p>
+                  <strong>4. กำหนดสถานะและราคา:</strong>
+                </p>
+                <div className="pl-3 space-y-1 text-stone-600">
+                  <p>• <strong>🟢 โหมดขาย (Sale):</strong> ระบุราคาต่อหน่วย เช่น 35 บาท/หวี, 50 บาท/กิโลกรัม</p>
+                  <p>• <strong>🎁 โหมดแบ่งปัน (Share):</strong> ราคาจะปรับเป็น 0 บาททันที สำหรับแจกฟรี หรือแลกเปลี่ยนเมล็ดพันธุ์/เอามื้อ</p>
+                  <p>• <strong>⏳ โหมดสั่งจอง (Pre-order):</strong> สำหรับผลผลิตที่กำลังจะเก็บเกี่ยวตามฤดูกาล</p>
+                </div>
+                <p>
+                  <strong>5. ระบุหน่วยนับ:</strong> เช่น กิโลกรัม, หวี, ถุง, กำ, มัด, แผง, ขวด
+                </p>
+                <p>
+                  <strong>6. ใส่เรื่องเล่า & คำอธิบาย:</strong> บรรยายวิถีธรรมชาติ เช่น <em>"ปลูกแบบอินทรีย์ ไร้สารเคมี 100% ปุ๋ยหมักใบก้ามปู รสหวานธรรมชาติ"</em>
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-stone-200 text-brand-800 font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>เมื่อกดบันทึก ผลผลิตจะขึ้นแสดงผลบนหน้าของดีเครือข่ายและหน้าแปลงของท่านทันที</span>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-center pt-2">
+              <Link
+                href="/member/add-product"
+                className="px-6 py-3 rounded-full bg-emerald-600 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-emerald-700 transition-all flex items-center gap-2"
+              >
+                <span>ไปยังหน้าลงรายการผลผลิตใหม่</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Feature Card 3: Member Dashboard & Privacy */}
+          <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                3
               </span>
               <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
                 หน้า "แปลงของฉัน" (Dashboard) & สลับสถานะใน 1 วินาที
@@ -353,40 +421,6 @@ export default function ManualPage() {
               <p>• <strong>ปุ่มอนุมัติสมาชิก:</strong> เมื่อกดอนุมัติ แปลงและผลผลิตจะเปิดสู่สาธารณะทันที</p>
               <p>• <strong>คิวช่วยลงข้อมูล:</strong> รับคำขอจากสมาชิกสูงวัย แล้วช่วยลงรูปและราคาให้</p>
               <p>• <strong>Audit Logs:</strong> บันทึกประวัติทุกการกระทำของแอดมิน ตรวจสอบย้อนหลังได้เพื่อความโปร่งใส</p>
-            </div>
-          </div>
-
-          {/* Feature Card 3: LINE Rich Menu Setup */}
-          <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-sm flex items-center justify-center shrink-0">
-                3
-              </span>
-              <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
-                การดาวน์โหลดภาพปุ่ม LINE Rich Menu
-              </h2>
-            </div>
-
-            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-              เข้าไปที่ <strong>/admin/rich-menu</strong> เพื่อดาวน์โหลดภาพ JPEG 6 ช่องขนาด 2500x1686 px นำไปอัปโหลดใน LINE Official Account Manager:
-            </p>
-
-            <div className="max-w-md mx-auto rounded-2xl overflow-hidden border border-stone-200 shadow-lg">
-              <img
-                src="/images/rich_menu_nsw_2500x1686.jpg"
-                alt="ภาพตัวอย่าง LINE Rich Menu 6 ช่อง"
-                className="w-full h-auto object-cover"
-              />
-            </div>
-
-            <div className="flex gap-2 justify-center pt-2">
-              <Link
-                href="/admin/rich-menu"
-                className="px-6 py-3 rounded-full bg-stone-900 text-white font-bold text-xs sm:text-sm shadow-md hover:bg-stone-800 transition-all flex items-center gap-2"
-              >
-                <span>ดาวน์โหลดภาพ LINE Rich Menu</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
             </div>
           </div>
 

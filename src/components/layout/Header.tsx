@@ -16,7 +16,12 @@ import {
   Type,
   Check,
   ChevronDown,
-  BookOpen
+  ChevronRight,
+  BookOpen,
+  Menu,
+  X,
+  Home,
+  UserPlus
 } from 'lucide-react';
 
 export default function Header() {
@@ -26,6 +31,7 @@ export default function Header() {
   const [allMembers, setAllMembers] = useState<MemberProfile[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showFontMenu, setShowFontMenu] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const user = dataService.getCurrentUser();
@@ -33,11 +39,36 @@ export default function Header() {
     setAllMembers(dataService.getAllMembers());
   }, [pathname]);
 
+  // Close hamburger menu when pathname changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+  }, [pathname]);
+
+  // Handle ESC key and body scroll lock when drawer is open
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsMobileMenuOpen(false);
+      }
+    };
+    if (isMobileMenuOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [isMobileMenuOpen]);
+
   const handleSwitchUser = (userId: string) => {
     dataService.switchUser(userId);
     const user = dataService.getCurrentUser();
     setCurrentUser(user);
     setShowUserMenu(false);
+    setIsMobileMenuOpen(false);
     // sync font size preference
     if (user?.fontSizePref) {
       setFontSize(user.fontSizePref);
@@ -46,14 +77,19 @@ export default function Header() {
   };
 
   const navLinks = [
-    { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag },
-    { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin },
-    { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper },
-    { href: '/guide', label: 'คู่มือใช้งาน', icon: BookOpen },
-    { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User },
+    { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag, desc: 'ผลผลิตอินทรีย์ 15 อำเภอ' },
+    { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin, desc: 'ทำเนียบแปลงและศูนย์เรียนรู้' },
+    { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper, desc: 'กิจกรรมและตารางเอามื้อสามัคคี' },
+    { href: '/manual', label: 'คู่มือใช้งาน', icon: BookOpen, desc: 'วิธีใช้งานระบบและคู่มือออนไลน์' },
+    { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User, desc: 'จัดการผลผลิตและข้อมูลแปลง' },
     ...(currentUser?.role === 'admin' 
-      ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, isBadge: true }] 
+      ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, desc: 'อนุมัติสมาชิกและตรวจสอบระบบ', isBadge: true }] 
       : []),
+  ];
+
+  const drawerLinks = [
+    { href: '/', label: 'หน้าแรก', icon: Home, desc: 'ตลาดและภาพรวมเครือข่าย' },
+    ...navLinks
   ];
 
   return (
@@ -84,8 +120,8 @@ export default function Header() {
             </div>
           </Link>
 
-          {/* Desktop & Tablet Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 lg:gap-2 shrink-0">
+          {/* Desktop Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 shrink-0">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
               const Icon = link.icon;
@@ -106,19 +142,19 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Right Controls: Guide, Font Size & User Switcher */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Right Controls: Guide, Font Size, User Switcher & Hamburger */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
             {/* Guide / Manual Button */}
             <Link
               href="/manual"
-              className={`flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
+              className={`hidden sm:flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
                 pathname === '/manual' || pathname === '/guide' ? 'bg-brand-50 text-brand-700 border-brand-200 font-bold' : ''
               }`}
               title="คู่มือการใช้งาน"
             >
               <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-600 shrink-0" />
-              <span className="hidden xs:inline sm:inline">คู่มือ</span>
+              <span>คู่มือ</span>
             </Link>
 
             {/* Font Size Toggle */}
@@ -262,10 +298,229 @@ export default function Header() {
               )}
             </div>
 
+            {/* Hamburger Menu Toggle Button (Shows on < lg when desktop shrinks or on mobile) */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 hover:text-stone-900 transition-colors shrink-0"
+              aria-label="เปิดเมนูนำทาง"
+              title="เมนู"
+            >
+              <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-stone-800" />
+            </button>
+
           </div>
 
         </div>
       </div>
+
+      {/* Slide-over Drawer / Hamburger Menu (Active when desktop is shrunk or on tablet/mobile) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+            onClick={() => setIsMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Drawer Content */}
+          <div className="fixed inset-y-0 right-0 max-w-sm w-full bg-white shadow-2xl flex flex-col z-10 animate-in slide-in-from-right duration-200 overflow-hidden">
+            
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/90 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-sm">
+                  <Sprout className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-sm text-stone-900">กสิกรรมธรรมชาติ</span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-brand-100 text-brand-800 text-[10px] font-bold">นครสวรรค์</span>
+                  </div>
+                  <p className="text-[10px] text-stone-500">เมนูนำทางเครือข่าย</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-9 h-9 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-800 hover:bg-stone-200/80 transition-colors"
+                aria-label="ปิดเมนู"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-5">
+              
+              {/* User Card */}
+              <div className="p-3 rounded-2xl bg-gradient-to-br from-brand-50/70 to-stone-50 border border-brand-100 flex items-center gap-3">
+                {currentUser?.facePhotoUrl ? (
+                  <img
+                    src={currentUser.facePhotoUrl}
+                    alt={currentUser.fullName}
+                    className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-brand-100 text-brand-800 font-bold flex items-center justify-center text-sm shrink-0 shadow-sm">
+                    ผช
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm text-stone-900 truncate">
+                    {currentUser ? currentUser.fullName : 'บุคคลทั่วไป (Guest)'}
+                  </p>
+                  <p className="text-xs text-brand-700 font-medium">
+                    {currentUser?.role === 'admin' 
+                      ? '🛡️ แอดมินเครือข่าย' 
+                      : currentUser 
+                        ? '🌾 สมาชิกแปลงกสิกรรม' 
+                        : '🌿 ผู้เข้าชมทั่วไป'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Navigation Links */}
+              <div className="space-y-1">
+                <div className="px-2 pb-1.5 text-[11px] font-bold text-stone-400 uppercase tracking-wider">
+                  เมนูหลัก
+                </div>
+                {drawerLinks.map((link) => {
+                  const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center justify-between p-2.5 rounded-xl transition-all ${
+                        isActive
+                          ? 'bg-brand-50 text-brand-800 font-bold border-l-4 border-brand-600 shadow-2xs'
+                          : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          isActive ? 'bg-brand-600 text-white' : 'bg-stone-100 text-stone-600'
+                        }`}>
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <div className="truncate">
+                          <p className="text-sm font-medium leading-snug truncate">{link.label}</p>
+                          {link.desc && (
+                            <p className="text-[11px] text-stone-400 font-normal leading-tight truncate">
+                              {link.desc}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-stone-400 shrink-0 ml-2" />
+                    </Link>
+                  );
+                })}
+              </div>
+
+              {/* Font Size Quick Selector */}
+              <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-600">
+                  <span className="flex items-center gap-1.5">
+                    <Type className="w-3.5 h-3.5 text-brand-600" />
+                    <span>ปรับขนาดตัวอักษร</span>
+                  </span>
+                  <span className="text-[11px] text-stone-400">
+                    {fontSize === 'xlarge' ? 'ใหญ่พิเศษ' : fontSize === 'large' ? 'ใหญ่' : 'ปกติ'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: 'normal', label: 'ปกติ (ก)' },
+                    { id: 'large', label: 'ใหญ่ (ก+)' },
+                    { id: 'xlarge', label: 'พิเศษ (ก++)' }
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setFontSize(item.id as any);
+                        if (currentUser) dataService.updateFontSizePreference(currentUser.id, item.id as any);
+                      }}
+                      className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all ${
+                        fontSize === item.id 
+                          ? 'bg-brand-600 text-white shadow-xs' 
+                          : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-100'
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Member Register CTA */}
+              <Link
+                href="/member/register"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>+ สมัครสมาชิกแปลงใหม่ (ฟรี)</span>
+              </Link>
+
+              {/* Quick Role Switcher (ทดสอบระบบ) */}
+              <div className="space-y-2 pt-2 border-t border-stone-100">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-semibold text-stone-500">สลับบทบาททดสอบระบบ</span>
+                  <span className="text-[10px] text-stone-400">Demo Profiles</span>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  <button
+                    onClick={() => handleSwitchUser('guest')}
+                    className={`w-full text-left p-2 rounded-xl text-xs flex items-center gap-2.5 transition-colors ${
+                      !currentUser ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
+                    }`}
+                  >
+                    <div className="w-6 h-6 rounded-full bg-stone-300 text-stone-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                      ผช
+                    </div>
+                    <span className="truncate flex-1">บุคคลทั่วไป (Guest)</span>
+                    {!currentUser && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
+                  </button>
+
+                  {allMembers.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleSwitchUser(m.id)}
+                      className={`w-full text-left p-2 rounded-xl text-xs flex items-center gap-2.5 transition-colors ${
+                        currentUser?.id === m.id 
+                          ? 'bg-brand-100/70 text-brand-900 font-bold' 
+                          : 'bg-stone-50 text-stone-700 hover:bg-stone-100'
+                      }`}
+                    >
+                      <img
+                        src={m.facePhotoUrl}
+                        alt={m.fullName}
+                        className="w-6 h-6 rounded-full object-cover shrink-0"
+                      />
+                      <span className="truncate flex-1">{m.fullName}</span>
+                      <span className="text-[10px] text-stone-400 shrink-0">
+                        {m.role === 'admin' ? '🛡️ แอดมิน' : '🌾 แปลง'}
+                      </span>
+                      {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-3 border-t border-stone-200 bg-stone-50 text-center text-xs text-stone-500 shrink-0">
+              <p className="font-semibold text-stone-700">เครือข่ายกสิกรรมธรรมชาตินครสวรรค์</p>
+              <p className="text-[10px] text-stone-400">ระบบฐานข้อมูลผลผลิตและการแบ่งปัน 15 อำเภอ</p>
+            </div>
+
+          </div>
+        </div>
+      )}
     </header>
   );
 }

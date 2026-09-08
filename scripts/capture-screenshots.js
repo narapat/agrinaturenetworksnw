@@ -31,6 +31,11 @@ async function main() {
     { name: '03_product_detail.png', url: 'http://localhost:3000/catalog/prod-001' },
     { name: '04_farms.png', url: 'http://localhost:3000/farms' },
     { name: '05_register.png', url: 'http://localhost:3000/member/register' },
+    { name: '05_add_product.png', url: 'http://localhost:3000/member/add-product', setup: async (p) => {
+      await p.evaluate(() => {
+        localStorage.setItem('nsw_current_user_v1', 'mem-001');
+      });
+    }},
     { name: '06_dashboard.png', url: 'http://localhost:3000/member/dashboard', setup: async (p) => {
       await p.evaluate(() => {
         localStorage.setItem('nsw_current_user_v1', 'mem-001');
