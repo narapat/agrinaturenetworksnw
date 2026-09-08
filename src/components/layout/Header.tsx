@@ -15,7 +15,8 @@ import {
   ShieldCheck, 
   Type,
   Check,
-  ChevronDown
+  ChevronDown,
+  BookOpen
 } from 'lucide-react';
 
 export default function Header() {
@@ -48,6 +49,7 @@ export default function Header() {
     { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag },
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper },
+    { href: '/guide', label: 'คู่มือใช้งาน', icon: BookOpen },
     { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User },
     ...(currentUser?.role === 'admin' 
       ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, isBadge: true }] 
@@ -107,6 +109,18 @@ export default function Header() {
           {/* Right Controls: Font Size & User Switcher */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
+            {/* Guide Button */}
+            <Link
+              href="/guide"
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
+                pathname === '/guide' ? 'bg-brand-50 text-brand-700 border-brand-200' : ''
+              }`}
+              title="คู่มือการใช้งาน"
+            >
+              <BookOpen className="w-4 h-4 text-brand-600 shrink-0" />
+              <span className="hidden sm:inline">คู่มือ</span>
+            </Link>
+
             {/* Font Size Toggle */}
             <div className="relative">
               <button
