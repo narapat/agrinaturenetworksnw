@@ -398,7 +398,13 @@ class DataService {
         skuTagId: cat.id,
         name: cat.name,
         category: cat.category,
-        categoryName: prodsForSku[0]?.categoryName || 'ผลผลิต',
+        categoryName: prodsForSku[0]?.categoryName || (
+          cat.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
+          cat.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
+          cat.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
+          cat.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
+          cat.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด'
+        ),
         icon: cat.icon,
         itemCount: prodsForSku.length,
         farmCount: farmIds.size,

@@ -101,9 +101,10 @@ export default function AdminPage() {
       skuTagName: cat.name,
       category: cat.category,
       categoryName: 
+        cat.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
+        cat.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
         cat.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
         cat.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
-        cat.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
         cat.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
       status: 'sale',
       price: Number(assistPrice) || 0,
@@ -421,6 +422,7 @@ export default function AdminPage() {
                   <option value="byproduct">ปัจจัยการผลิต / By-product</option>
                   <option value="seed">เมล็ดพันธุ์/กิ่งพันธุ์</option>
                   <option value="tool">อุปกรณ์ / เครื่องมือ</option>
+                  <option value="smartfarm">สมาร์ทฟาร์ม / Smart Farm</option>
                 </select>
               </div>
               <input
@@ -464,9 +466,10 @@ export default function AdminPage() {
                       {cat.name}
                     </h4>
                     <p className="text-[11px] text-stone-500 font-medium">
-                      {cat.category === 'byproduct' ? '🪵 ปัจจัยการผลิต' :
-                       cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' :
+                      {cat.category === 'smartfarm' ? '📡 สมาร์ทฟาร์ม' :
                        cat.category === 'tool' ? '🛠️ อุปกรณ์ เครื่องมือ' :
+                       cat.category === 'byproduct' ? '🪵 ปัจจัยการผลิต' :
+                       cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' :
                        cat.category === 'processed' ? '🍯 แปรรูป' : '🌾 ผลผลิตสด'}
                     </p>
                   </div>

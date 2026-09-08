@@ -10,12 +10,13 @@ interface PhoneMockupProps {
 }
 
 export default function PhoneMockup({ sampleProducts }: PhoneMockupProps) {
-  const [filter, setFilter] = useState<'all' | 'byproduct' | 'share' | 'tool'>('all');
+  const [filter, setFilter] = useState<'all' | 'byproduct' | 'share' | 'tool' | 'smartfarm'>('all');
 
   const filtered = sampleProducts.filter((p) => {
     if (filter === 'byproduct') return p.category === 'byproduct';
     if (filter === 'share') return p.status === 'share';
     if (filter === 'tool') return p.category === 'tool';
+    if (filter === 'smartfarm') return p.category === 'smartfarm';
     return true;
   });
 
@@ -82,6 +83,16 @@ export default function PhoneMockup({ sampleProducts }: PhoneMockupProps) {
               }`}
             >
               🛠️ เครื่องมือ
+            </button>
+            <button
+              onClick={() => setFilter('smartfarm')}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 transition-colors ${
+                filter === 'smartfarm'
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white border border-stone-200 text-stone-600'
+              }`}
+            >
+              📡 สมาร์ทฟาร์ม
             </button>
             <button
               onClick={() => setFilter('share')}

@@ -85,9 +85,10 @@ export default function AddProductPage() {
       skuTagName: selectedSkuTag.name,
       category: selectedSkuTag.category,
       categoryName: 
+        selectedSkuTag.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
+        selectedSkuTag.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
         selectedSkuTag.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
         selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
-        selectedSkuTag.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
         selectedSkuTag.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
       status: status,
       price: status === 'share' ? 0 : Number(price) || 0,
@@ -188,6 +189,7 @@ export default function AddProductPage() {
               {[
                 { id: 'all', label: 'ทั้งหมด' },
                 { id: 'tool', label: '🛠️ อุปกรณ์ เครื่องมือ' },
+                { id: 'smartfarm', label: '📡 สมาร์ทฟาร์ม' },
                 { id: 'byproduct', label: '🪵 ปัจจัยการผลิต' },
                 { id: 'raw', label: '🌾 ผลผลิตสด' },
                 { id: 'processed', label: '🍯 แปรรูป' },
@@ -230,7 +232,7 @@ export default function AddProductPage() {
                       {cat.name}
                     </span>
                     <span className="text-[10px] text-stone-400 block truncate mt-0.5">
-                      {cat.category === 'tool' ? '🛠️ อุปกรณ์' : cat.category === 'byproduct' ? '🪵 ปัจจัย' : cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' : cat.category === 'processed' ? '🍯 แปรรูป' : '🌾 สด'}
+                      {cat.category === 'smartfarm' ? '📡 สมาร์ทฟาร์ม' : cat.category === 'tool' ? '🛠️ อุปกรณ์' : cat.category === 'byproduct' ? '🪵 ปัจจัย' : cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' : cat.category === 'processed' ? '🍯 แปรรูป' : '🌾 สด'}
                     </span>
                   </button>
                 );

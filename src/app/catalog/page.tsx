@@ -176,6 +176,7 @@ function CatalogContent() {
             { id: 'byproduct', label: '🪵 ปัจจัยการผลิต' },
             { id: 'seed', label: '🌱 เมล็ดพันธุ์' },
             { id: 'tool', label: '🛠️ อุปกรณ์ เครื่องมือ' },
+            { id: 'smartfarm', label: '📡 สมาร์ทฟาร์ม' },
           ].map((cat) => (
             <button
               key={cat.id}

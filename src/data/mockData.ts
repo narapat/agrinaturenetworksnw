@@ -123,6 +123,38 @@ export const INITIAL_CATEGORY_TAGS: CategoryTag[] = [
     description: 'ชุดปั๊มน้ำพลังงานแสงอาทิตย์ ท่อน้ำหยด และหัวสปริงเกอร์รดน้ำแปลงผักแบบพึ่งพาตนเอง',
     isActive: true,
   },
+  {
+    id: 'smart_water_controller',
+    name: 'ตู้ควบคุมรดน้ำอัจฉริยะ (WiFi/4G)',
+    category: 'smartfarm',
+    icon: '📱',
+    description: 'ระบบสั่งการเปิด-ปิดวาล์วน้ำในแปลงผ่านแอปพลิเคชันมือถือ ตั้งเวลาอัตโนมัติตามสภาพอากาศและเซนเซอร์ดิน',
+    isActive: true,
+  },
+  {
+    id: 'smart_iot_sensor',
+    name: 'เซนเซอร์วัดดิน & สภาพอากาศ IoT',
+    category: 'smartfarm',
+    icon: '📡',
+    description: 'เซนเซอร์ตรวจวัดความชื้นในดิน อุณหภูมิ และค่าความสมบูรณ์ดิน ส่งข้อมูลผ่านระบบไร้สายเข้ามือถือแบบเรียลไทม์',
+    isActive: true,
+  },
+  {
+    id: 'smart_drone_agri',
+    name: 'โดรนการเกษตร & กล้องสำรวจแปลง',
+    category: 'smartfarm',
+    icon: '🚁',
+    description: 'โดรนหว่านเมล็ดพันธุ์ พ่นน้ำหมักชีวภาพ และกล้องสำรวจทำแผนที่ความสมบูรณ์ของแปลงโคกหนองนา',
+    isActive: true,
+  },
+  {
+    id: 'smart_greenhouse',
+    name: 'ระบบควบคุมโรงเรือนอัตโนมัติ',
+    category: 'smartfarm',
+    icon: '🤖',
+    description: 'ระบบพ่นหมอก ระบายอากาศ และควบคุมอุณหภูมิโรงเรือนเพาะกล้าอินทรีย์อัตโนมัติผ่านไมโครคอนโทรลเลอร์',
+    isActive: true,
+  },
 ];
 
 export const INITIAL_MEMBERS: MemberProfile[] = [
@@ -646,6 +678,58 @@ export const INITIAL_PRODUCTS: Product[] = [
     isPublicLine: true,
     phone: '089-876-5432',
     lineId: 'pranee_nsw',
+  },
+
+  // --- SKU: smart_water_controller (สมาร์ทฟาร์ม - ตู้ควบคุมน้ำอัตโนมัติ) ---
+  {
+    id: 'prod-012',
+    farmId: 'farm-004',
+    farmName: 'ไร่ภูผาอินทรีย์ บรรพตพิสัย',
+    district: 'บรรพตพิสัย',
+    subdistrict: 'ท่างิ้ว',
+    title: 'กล่องควบคุมระบบน้ำอัจฉริยะ 4 โซน (สั่งงานผ่าน LINE และแอป)',
+    skuTagId: 'smart_water_controller',
+    skuTagName: 'ตู้ควบคุมรดน้ำอัจฉริยะ (WiFi/4G)',
+    category: 'smartfarm',
+    categoryName: 'สมาร์ทฟาร์ม (Smart Farm)',
+    status: 'sale',
+    price: 1850,
+    unit: 'ชุด',
+    description: 'กล่องควบคุมวาล์วโซลินอยด์ 4 โซน รองรับโซลาร์เซลล์ 12V สั่งเปิด-ปิดน้ำตามตารางเวลา หรือรดน้ำอัตโนมัติเมื่อดินแห้ง แจ้งเตือนผ่าน LINE Notify ออกแบบโดยเกษตรกรรุ่นใหม่เพื่อลดการเสียเวลาเฝ้าแปลง',
+    images: [
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&h=600&fit=crop',
+    ],
+    isOrganicCertified: true,
+    updatedAt: '2026-03-07',
+    isPublicPhone: false,
+    isPublicLine: true,
+    lineId: 'chainarong_ysf',
+  },
+
+  // --- SKU: smart_iot_sensor (สมาร์ทฟาร์ม - เซนเซอร์วัดดิน IoT) ---
+  {
+    id: 'prod-013',
+    farmId: 'farm-001',
+    farmName: 'สวนป่าสมดุลย์ ลุงสมชาย',
+    district: 'เมืองนครสวรรค์',
+    subdistrict: 'หนองกรด',
+    title: 'โพรบเซนเซอร์วัดความชื้นและอุณหภูมิดินไร้สาย LoRaWAN / 4G',
+    skuTagId: 'smart_iot_sensor',
+    skuTagName: 'เซนเซอร์วัดดิน & สภาพอากาศ IoT',
+    category: 'smartfarm',
+    categoryName: 'สมาร์ทฟาร์ม (Smart Farm)',
+    status: 'preorder',
+    price: 950,
+    unit: 'ชุด',
+    description: 'เซนเซอร์วัดระดับความชื้นและอุณหภูมิในระดับรากพืช หัววัดสเตนเลส 316 กันสนิม แบตเตอรี่ในตัวชาร์จด้วยโซลาร์เซลล์จิ๋ว ใช้งานได้นาน 3 ปี เชื่อมโยงข้อมูลสภาพดินเพื่อวางแผนการรดน้ำและการคลุมดิน',
+    images: [
+      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=800&h=600&fit=crop',
+    ],
+    isOrganicCertified: true,
+    updatedAt: '2026-03-07',
+    isPublicPhone: false,
+    isPublicLine: true,
+    lineId: 'somchai_earth',
   },
 ];
 
