@@ -38,7 +38,7 @@ export default function Header() {
     setCurrentUser(user);
     setShowUserMenu(false);
     // sync font size preference
-    if (user.fontSizePref) {
+    if (user?.fontSizePref) {
       setFontSize(user.fontSizePref);
     }
     window.location.reload();
@@ -193,7 +193,24 @@ export default function Header() {
                       {currentUser?.fullName} ({currentUser?.role === 'admin' ? 'แอดมิน' : 'สมาชิกแปลง'})
                     </p>
                   </div>
-                  <div className="py-1">
+                  <div className="py-1 max-h-60 overflow-y-auto">
+                    {/* Guest Switcher Option */}
+                    <button
+                      onClick={() => handleSwitchUser('guest')}
+                      className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-stone-50 transition-colors ${
+                        !currentUser ? 'bg-stone-100 font-bold text-stone-900' : 'text-stone-600'
+                      }`}
+                    >
+                      <div className="w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-[10px]">
+                        ผช
+                      </div>
+                      <div className="flex-1 truncate">
+                        <p className="truncate">บุคคลทั่วไป (Guest)</p>
+                        <span className="text-[10px] text-stone-400">ยังไม่ลงทะเบียนแปลง</span>
+                      </div>
+                      {!currentUser && <Check className="w-3.5 h-3.5 text-brand-600" />}
+                    </button>
+
                     {allMembers.map((m) => (
                       <button
                         key={m.id}

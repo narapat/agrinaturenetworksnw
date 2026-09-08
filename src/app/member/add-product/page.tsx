@@ -40,6 +40,10 @@ export default function AddProductPage() {
 
   useEffect(() => {
     const user = dataService.getCurrentUser();
+    if (!user) {
+      router.push('/member/register');
+      return;
+    }
     setCurrentUser(user);
     if (user.farmId) {
       const f = dataService.getFarmById(user.farmId);
@@ -50,7 +54,7 @@ export default function AddProductPage() {
     if (cats.length > 0) {
       setSelectedSkuTag(cats[0]);
     }
-  }, []);
+  }, [router]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -99,18 +103,18 @@ export default function AddProductPage() {
   const commonUnits = ['กิโลกรัม', 'ขวด (1,000 มล.)', 'ถุง (5 กก.)', 'กระสอบ (15 กก.)', 'หวี', 'ชุด/ซอง'];
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
       
       {/* Back Button */}
       <Link
         href="/member/dashboard"
-        className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-sm"
+        className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-xs sm:text-sm"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>กลับไปแปลงของฉัน</span>
       </Link>
 
-      <div className="bg-white rounded-3xl p-6 sm:p-10 border border-stone-200 shadow-sm space-y-8">
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-10 border border-stone-200 shadow-sm space-y-6 sm:space-y-8">
         
         {/* Title */}
         <div>

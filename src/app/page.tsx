@@ -135,45 +135,47 @@ export default function HomePage() {
           </div>
 
           {/* SKU Group Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
             {skuGroups.map((group) => (
               <Link
                 key={group.skuTagId}
                 href={`/catalog?sku=${group.skuTagId}`}
-                className="bg-stone-50/80 hover:bg-white p-5 rounded-3xl border border-stone-200/80 hover:border-brand-300 shadow-xs hover:shadow-md transition-all group"
+                className="bg-stone-50/80 hover:bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-stone-200/80 hover:border-brand-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-3xl p-2.5 bg-white rounded-2xl shadow-xs border border-stone-100">
-                    {group.icon}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-full bg-brand-100/70 text-brand-800 text-xs font-bold">
-                    มี {group.farmCount} แปลง
-                  </span>
+                <div>
+                  <div className="flex items-center justify-between mb-2 sm:mb-3">
+                    <span className="text-2xl sm:text-3xl p-1.5 sm:p-2.5 bg-white rounded-xl sm:rounded-2xl shadow-xs border border-stone-100">
+                      {group.icon}
+                    </span>
+                    <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-brand-100/70 text-brand-800 text-[10px] sm:text-xs font-bold">
+                      {group.farmCount} แปลง
+                    </span>
+                  </div>
+
+                  <h3 className="font-bold text-stone-900 text-xs sm:text-base group-hover:text-brand-700 transition-colors line-clamp-2 leading-snug">
+                    {group.name}
+                  </h3>
+
+                  <p className="text-[11px] sm:text-xs text-stone-500 mt-1 line-clamp-1">
+                    📍 {group.districts.slice(0, 1).join('')} {group.districts.length > 1 ? `+${group.districts.length - 1}` : ''}
+                  </p>
                 </div>
 
-                <h3 className="font-bold text-stone-900 text-base group-hover:text-brand-700 transition-colors line-clamp-1">
-                  {group.name}
-                </h3>
-
-                <p className="text-xs text-stone-500 mt-1 line-clamp-1">
-                  📍 {group.districts.slice(0, 2).join(', ')} {group.districts.length > 2 ? `และอีก ${group.districts.length - 2} อำเภอ` : ''}
-                </p>
-
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-stone-200/60">
+                <div className="flex items-center justify-between mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-stone-200/60">
                   {group.hasSharing ? (
-                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
-                      💙 มีแบ่งปันฟรี
+                    <span className="text-[10px] sm:text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                      💙 แบ่งปัน
                     </span>
                   ) : group.minPrice ? (
-                    <span className="text-xs font-semibold text-stone-700">
-                      เริ่มต้น <b className="text-brand-700 text-sm">฿{group.minPrice}</b>
+                    <span className="text-[10px] sm:text-xs font-semibold text-stone-700">
+                      เริ่ม <b className="text-brand-700 text-xs sm:text-sm">฿{group.minPrice}</b>
                     </span>
                   ) : (
-                    <span className="text-xs text-stone-400">ติดต่อสอบถาม</span>
+                    <span className="text-[10px] sm:text-xs text-stone-400">สอบถาม</span>
                   )}
 
-                  <span className="text-xs text-stone-400 group-hover:text-brand-600 font-semibold flex items-center gap-0.5">
-                    เลือกแปลง <ArrowRight className="w-3 h-3" />
+                  <span className="text-[10px] sm:text-xs text-stone-400 group-hover:text-brand-600 font-semibold flex items-center gap-0.5">
+                    เลือกแปลง <ArrowRight className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   </span>
                 </div>
               </Link>

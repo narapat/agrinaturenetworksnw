@@ -36,7 +36,7 @@ class DataService {
   private categories: CategoryTag[] = [];
   private auditLogs: AuditLog[] = [];
   private news: NewsEvent[] = [];
-  private currentUserId: string = 'mem-001'; // Default active user (ลุงสมชาย)
+  private currentUserId: string = 'guest'; // ค่าเริ่มต้น: ผู้เข้าชมทั่วไป (หากเข้าผ่าน LINE ยังไม่เป็นสมาชิก)
 
   constructor() {
     this.init();
@@ -73,7 +73,11 @@ class DataService {
       this.news = storedNews ? JSON.parse(storedNews) : [...INITIAL_NEWS];
 
       const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      if (storedUser) this.currentUserId = storedUser;
+      if (storedUser) {
+        this.currentUserId = storedUser;
+      } else {
+        this.currentUserId = 'guest';
+      }
     } catch (e) {
       console.error('Error loading data from localStorage', e);
       this.members = [...INITIAL_MEMBERS];
@@ -232,9 +236,12 @@ class DataService {
 
   // ==================== USER PROFILE & PERMISSIONS ====================
 
-  getCurrentUser(): MemberProfile {
+  getCurrentUser(): MemberProfile | null {
+    if (this.currentUserId === 'guest') {
+      return null;
+    }
     const user = this.members.find((m) => m.id === this.currentUserId);
-    return user || this.members[0];
+    return user || null;
   }
 
   switchUser(userId: string) {
@@ -299,6 +306,8 @@ class DataService {
     isPublicLine: boolean;
     practices: string[];
     coordinates?: { lat: number; lng: number };
+    trainingCourse?: string;
+    trainingLocation?: string;
   }): { member: MemberProfile; farm: Farm } {
     const memberId = `mem-${Date.now()}`;
     const farmId = `farm-${Date.now()}`;
@@ -351,6 +360,8 @@ class DataService {
         lineId: data.lineId,
       },
       delegationStatus: 'none',
+      trainingCourse: data.trainingCourse || '',
+      trainingLocation: data.trainingLocation || '',
       farmId: farmId,
       createdAt: new Date().toISOString().split('T')[0],
     };

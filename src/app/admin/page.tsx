@@ -17,7 +17,8 @@ import {
   Eye, 
   Clock, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  GraduationCap
 } from 'lucide-react';
 
 export default function AdminPage() {
@@ -222,35 +223,59 @@ export default function AdminPage() {
                 return (
                   <div
                     key={member.id}
-                    className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs flex items-center justify-between gap-4"
+                    className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs space-y-3"
                   >
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <img
-                        src={member.facePhotoUrl}
-                        alt={member.fullName}
-                        className="w-16 h-16 rounded-2xl object-cover border border-stone-200 shrink-0"
-                      />
-                      <div className="min-w-0">
-                        <h4 className="font-bold text-stone-900 text-sm sm:text-base truncate">
-                          {member.fullName}
-                        </h4>
-                        <p className="text-xs text-stone-500 truncate">
-                          แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
-                        </p>
-                        <p className="text-xs text-brand-700 font-semibold mt-0.5">
-                          📍 {farm?.district}
-                        </p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <img
+                          src={member.facePhotoUrl}
+                          alt={member.fullName}
+                          className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-200 shrink-0 shadow-xs"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-stone-900 text-base truncate">
+                            {member.fullName}
+                          </h4>
+                          <p className="text-xs text-stone-600 truncate font-medium">
+                            แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
+                          </p>
+                          <p className="text-xs text-brand-700 font-bold mt-0.5">
+                            📍 อ.{farm?.district} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex gap-2">
+                        <button
+                          onClick={() => handleApprove(member.id)}
+                          className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-brand-600/20 transition-all"
+                        >
+                          <Check className="w-4 h-4" />
+                          <span>อนุมัติสมาชิก</span>
+                        </button>
                       </div>
                     </div>
 
-                    <div className="shrink-0 flex gap-2">
-                      <button
-                        onClick={() => handleApprove(member.id)}
-                        className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-xs transition-colors"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>อนุมัติ</span>
-                      </button>
+                    {/* ข้อมูลประวัติการอบรม (สำหรับแอดมินดูพิจารณา) */}
+                    <div className="p-3.5 bg-stone-50 rounded-2xl border border-stone-200/80 text-xs space-y-1.5">
+                      <div className="flex items-center gap-1.5 font-bold text-stone-800">
+                        <GraduationCap className="w-4 h-4 text-brand-600" />
+                        <span>ประวัติการอบรมกสิกรรมธรรมชาติ:</span>
+                      </div>
+                      <div className="text-stone-700 pl-1 space-y-1">
+                        <p>
+                          <span className="font-semibold text-stone-500">• หลักสูตร: </span>
+                          <span className="font-medium text-stone-900">{member.trainingCourse || 'ไม่ได้ระบุ'}</span>
+                        </p>
+                        <p>
+                          <span className="font-semibold text-stone-500">• สถานที่/ศูนย์: </span>
+                          <span className="font-medium text-stone-900">{member.trainingLocation || 'ไม่ได้ระบุ'}</span>
+                        </p>
+                      </div>
+                      <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500 font-medium">
+                        <span>📞 {member.phone}</span>
+                        {member.lineId && <span>LINE: {member.lineId}</span>}
+                      </div>
                     </div>
                   </div>
                 );

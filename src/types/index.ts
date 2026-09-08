@@ -32,6 +32,8 @@ export interface MemberProfile {
   socials: SocialLinks;
   delegationStatus: DelegationStatus; // ร้องขอให้แอดมินช่วยลงข้อมูลแทน
   delegationNote?: string;
+  trainingCourse?: string; // อบรมหลักสูตรอะไรมา
+  trainingLocation?: string; // อบรมที่ไหนมา / ศูนย์ใด
   farmId: string;
   createdAt: string;
 }

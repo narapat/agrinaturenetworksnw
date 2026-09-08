@@ -17,7 +17,8 @@ import {
   Sparkles,
   MapPin,
   Phone,
-  MessageSquare
+  MessageSquare,
+  GraduationCap
 } from 'lucide-react';
 
 export default function MemberRegisterPage() {
@@ -32,6 +33,8 @@ export default function MemberRegisterPage() {
   const [subdistrict, setSubdistrict] = useState('');
   const [phone, setPhone] = useState('');
   const [lineId, setLineId] = useState('');
+  const [trainingCourse, setTrainingCourse] = useState('');
+  const [trainingLocation, setTrainingLocation] = useState('');
   const [story, setStory] = useState('');
   const [isPublicPhone, setIsPublicPhone] = useState(false); // ค่าเริ่มต้น: ซ่อนเบอร์โทร (Anti-Scam)
   const [isPublicLine, setIsPublicLine] = useState(true);
@@ -85,6 +88,8 @@ export default function MemberRegisterPage() {
       subdistrict: subdistrict.trim() || 'เมือง',
       phone: phone.trim(),
       lineId: lineId.trim() || phone.trim(),
+      trainingCourse: trainingCourse.trim(),
+      trainingLocation: trainingLocation.trim(),
       isPublicPhone,
       isPublicLine,
       practices: selectedPractices,
@@ -358,10 +363,54 @@ export default function MemberRegisterPage() {
             </div>
           </div>
 
-          {/* Story / About */}
+          {/* 6. ประวัติการอบรมกสิกรรมธรรมชาติ (สำหรับแอดมินคัดกรอง) */}
+          <div className="space-y-4 p-5 rounded-3xl bg-amber-50/60 border border-amber-200/80">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-amber-700" />
+              <h2 className="text-base font-bold text-stone-900">
+                6. ข้อมูลการอบรมกสิกรรมธรรมชาติ (สำหรับแอดมินเครือข่ายพิจารณา)
+              </h2>
+            </div>
+
+            <p className="text-xs text-amber-800 bg-white/80 p-3 rounded-2xl border border-amber-200/60 leading-relaxed">
+              💡 ข้อมูล 2 ข้อนี้จะแสดงให้เฉพาะแอดมินเครือข่ายดูเพื่อพิจารณาอนุมัติเข้าเครือข่าย ไม่ได้เปิดเผยสู่สาธารณะครับ
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  1) ผ่านการอบรมหลักสูตรอะไรมา? (กรอกอิสระ) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={trainingCourse}
+                  onChange={(e) => setTrainingCourse(e.target.value)}
+                  placeholder="เช่น พัฒนากสิกรรมธรรมชาติสู่ระบบเศรษฐกิจพอเพียง, โคกหนองนา..."
+                  className="w-full p-3.5 rounded-2xl border border-stone-200 bg-white text-base font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  2) อบรมที่ไหนมา / ศูนย์เรียนรู้ใด? (กรอกอิสระ) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={trainingLocation}
+                  onChange={(e) => setTrainingLocation(e.target.value)}
+                  placeholder="เช่น ศูนย์กสิกรรมธรรมชาติท่ามะขาม, ศูนย์ ปภ. เขต 8, ศูนย์เครือข่าย จ.นครสวรรค์..."
+                  className="w-full p-3.5 rounded-2xl border border-stone-200 bg-white text-base font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 7. Story / About */}
           <div className="space-y-2">
             <label className="block text-base font-bold text-stone-900">
-              6. เล่าเรื่องราวแปลงของท่านสั้นๆ
+              7. เล่าเรื่องราวแปลงของท่านสั้นๆ (ถ้ามี)
             </label>
             <textarea
               rows={3}
