@@ -107,6 +107,22 @@ export const INITIAL_CATEGORY_TAGS: CategoryTag[] = [
     description: 'อุปกรณ์ทุ่นแรงหยอดเมล็ด กรรไกรตัดแต่งกิ่ง ถังหมักปุ๋ยและน้ำหมักชีวภาพ',
     isActive: true,
   },
+  {
+    id: 'compost_tank',
+    name: 'ถังหมักปุ๋ย & ถังน้ำหมักชีวภาพ',
+    category: 'tool',
+    icon: '🪣',
+    description: 'ถังหมักชีวภาพพร้อมก๊อกถ่ายน้ำหมัก สำหรับผลิตน้ำหมักรสจืด รสเปรี้ยว จุลินทรีย์สังเคราะห์แสง',
+    isActive: true,
+  },
+  {
+    id: 'irrigation_solar',
+    name: 'ระบบน้ำหยด & ปั๊มโซลาร์เซลล์',
+    category: 'tool',
+    icon: '☀️',
+    description: 'ชุดปั๊มน้ำพลังงานแสงอาทิตย์ ท่อน้ำหยด และหัวสปริงเกอร์รดน้ำแปลงผักแบบพึ่งพาตนเอง',
+    isActive: true,
+  },
 ];
 
 export const INITIAL_MEMBERS: MemberProfile[] = [

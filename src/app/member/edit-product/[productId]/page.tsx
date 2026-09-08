@@ -27,6 +27,7 @@ export default function EditProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [farm, setFarm] = useState<Farm | null>(null);
   const [categories, setCategories] = useState<CategoryTag[]>([]);
+  const [selectedCatGroup, setSelectedCatGroup] = useState<string>('all');
 
   // Form State
   const [title, setTitle] = useState('');
@@ -274,12 +275,44 @@ export default function EditProductPage() {
 
           {/* STEP 2: Pick SKU Category Tag */}
           <div className="space-y-3">
-            <label className="block text-base font-bold text-stone-900">
-              2. ชนิดผลผลิต / กลุ่มของดี (SKU Tag)
-            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <label className="block text-base font-bold text-stone-900">
+                2. ชนิดผลผลิต / กลุ่มของดี (SKU Tag)
+              </label>
+              {selectedSkuTag && (
+                <span className="text-xs text-brand-700 font-bold bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200 inline-block w-fit">
+                  เลือกแล้ว: {selectedSkuTag.icon} {selectedSkuTag.name}
+                </span>
+              )}
+            </div>
+
+            {/* Category Filter Tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {[
+                { id: 'all', label: 'ทั้งหมด' },
+                { id: 'tool', label: '🛠️ อุปกรณ์ เครื่องมือ' },
+                { id: 'byproduct', label: '🪵 ปัจจัยการผลิต' },
+                { id: 'raw', label: '🌾 ผลผลิตสด' },
+                { id: 'processed', label: '🍯 แปรรูป' },
+                { id: 'seed', label: '🌱 เมล็ดพันธุ์' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSelectedCatGroup(tab.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                    selectedCatGroup === tab.id
+                      ? 'bg-brand-600 text-white shadow-xs font-black'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              {categories.map((cat) => {
+              {(selectedCatGroup === 'all' ? categories : categories.filter((c) => c.category === selectedCatGroup)).map((cat) => {
                 const isSelected = selectedSkuTag?.id === cat.id;
                 return (
                   <button
@@ -297,6 +330,9 @@ export default function EditProductPage() {
                     <span className="text-2xl block mb-1">{cat.icon}</span>
                     <span className={`text-xs font-bold block truncate ${isSelected ? 'text-brand-900' : 'text-stone-800'}`}>
                       {cat.name}
+                    </span>
+                    <span className="text-[10px] text-stone-400 block truncate mt-0.5">
+                      {cat.category === 'tool' ? '🛠️ อุปกรณ์' : cat.category === 'byproduct' ? '🪵 ปัจจัย' : cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' : cat.category === 'processed' ? '🍯 แปรรูป' : '🌾 สด'}
                     </span>
                   </button>
                 );

@@ -89,6 +89,23 @@ class DataService {
         this.currentUserId = 'guest';
       }
 
+      // Ensure all standard initial categories (especially tool categories) exist in local state
+      for (const initCat of INITIAL_CATEGORY_TAGS) {
+        const existingCat = this.categories.find((c) => c.id === initCat.id);
+        if (!existingCat) {
+          this.categories.push(initCat);
+        } else if (existingCat.category !== initCat.category) {
+          existingCat.category = initCat.category;
+        }
+      }
+
+      // Ensure standard products exist
+      for (const initProd of INITIAL_PRODUCTS) {
+        if (!this.products.some((p) => p.id === initProd.id)) {
+          this.products.push(initProd);
+        }
+      }
+
       // Background Firestore Sync
       setTimeout(() => {
         this.syncWithFirestore();
@@ -224,6 +241,14 @@ class DataService {
               this.categories.push(rc);
             }
           }
+        }
+
+        // Push initial categories (including tools) to Firestore
+        for (const initCat of INITIAL_CATEGORY_TAGS) {
+          if (!this.categories.some((c) => c.id === initCat.id)) {
+            this.categories.push(initCat);
+          }
+          this.firestoreSet('categories', initCat.id, initCat);
         }
 
         const logsSnap = await getDocs(collection(db, 'auditLogs'));
