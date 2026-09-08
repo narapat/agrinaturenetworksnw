@@ -16,6 +16,14 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_NEWS,
 } from '@/data/mockData';
+import { db } from './firebase';
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  setDoc, 
+  updateDoc 
+} from 'firebase/firestore';
 
 // Local Storage Keys
 const STORAGE_KEYS = {
@@ -28,7 +36,7 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'nsw_current_user_v1',
 };
 
-// State Helper with LocalStorage sync
+// State Helper with LocalStorage + Firebase Firestore sync
 class DataService {
   private members: MemberProfile[] = [];
   private farms: Farm[] = [];
@@ -37,6 +45,7 @@ class DataService {
   private auditLogs: AuditLog[] = [];
   private news: NewsEvent[] = [];
   private currentUserId: string = 'guest'; // ค่าเริ่มต้น: ผู้เข้าชมทั่วไป (หากเข้าผ่าน LINE ยังไม่เป็นสมาชิก)
+  private isFirestoreSynced: boolean = false;
 
   constructor() {
     this.init();
@@ -78,6 +87,11 @@ class DataService {
       } else {
         this.currentUserId = 'guest';
       }
+
+      // Background Firestore Sync
+      setTimeout(() => {
+        this.syncWithFirestore();
+      }, 300);
     } catch (e) {
       console.error('Error loading data from localStorage', e);
       this.members = [...INITIAL_MEMBERS];
@@ -101,6 +115,110 @@ class DataService {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, this.currentUserId);
     } catch (e) {
       console.error('Error saving data to localStorage', e);
+    }
+  }
+
+  // ==================== FIRESTORE REAL-TIME SYNC ====================
+
+  /**
+   * ซิงค์ข้อมูลกับ Cloud Firestore แบบ 2 ทาง (Auto-seed ครั้งแรก และดึงข้อมูลล่าสุด)
+   */
+  private async syncWithFirestore() {
+    if (typeof window === 'undefined' || !db || this.isFirestoreSynced) return;
+    try {
+      const productsSnap = await getDocs(collection(db, 'products'));
+
+      if (productsSnap.empty) {
+        // ครั้งแรก: นำข้อมูลเริ่มต้น Seed เข้าสู่ Cloud Firestore อัตโนมัติ
+        console.log('🌾 Initializing Cloud Firestore seed data for Agri-Nature Nakhon Sawan...');
+        for (const p of INITIAL_PRODUCTS) {
+          await setDoc(doc(db, 'products', p.id), this.cleanForFirestore(p));
+        }
+        for (const m of INITIAL_MEMBERS) {
+          await setDoc(doc(db, 'members', m.id), this.cleanForFirestore(m));
+        }
+        for (const f of INITIAL_FARMS) {
+          await setDoc(doc(db, 'farms', f.id), this.cleanForFirestore(f));
+        }
+        for (const c of INITIAL_CATEGORY_TAGS) {
+          await setDoc(doc(db, 'categories', c.id), this.cleanForFirestore(c));
+        }
+        for (const n of INITIAL_NEWS) {
+          await setDoc(doc(db, 'news', n.id), this.cleanForFirestore(n));
+        }
+        for (const l of INITIAL_AUDIT_LOGS) {
+          await setDoc(doc(db, 'auditLogs', l.id), this.cleanForFirestore(l));
+        }
+        console.log('✅ Firestore seed completed!');
+      } else {
+        // ดึงข้อมูลจริงล่าสุดจาก Cloud Firestore ซิงค์เข้าเครื่อง
+        const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
+        if (remoteProds.length > 0) {
+          this.products = remoteProds;
+        }
+
+        const membersSnap = await getDocs(collection(db, 'members'));
+        if (!membersSnap.empty) {
+          this.members = membersSnap.docs.map((d) => d.data() as MemberProfile);
+        }
+
+        const farmsSnap = await getDocs(collection(db, 'farms'));
+        if (!farmsSnap.empty) {
+          this.farms = farmsSnap.docs.map((d) => d.data() as Farm);
+        }
+
+        const categoriesSnap = await getDocs(collection(db, 'categories'));
+        if (!categoriesSnap.empty) {
+          this.categories = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
+        }
+
+        const logsSnap = await getDocs(collection(db, 'auditLogs'));
+        if (!logsSnap.empty) {
+          this.auditLogs = logsSnap.docs.map((d) => d.data() as AuditLog);
+        }
+
+        const newsSnap = await getDocs(collection(db, 'news'));
+        if (!newsSnap.empty) {
+          this.news = newsSnap.docs.map((d) => d.data() as NewsEvent);
+        }
+
+        this.save();
+      }
+
+      this.isFirestoreSynced = true;
+    } catch (err) {
+      console.warn('Firestore sync running in offline-first mode:', err);
+    }
+  }
+
+  // ป้องกัน undefined values ซึ่งทำให้ Firestore error
+  private cleanForFirestore(obj: any): any {
+    if (obj === null || typeof obj !== 'object') return obj;
+    const result: any = Array.isArray(obj) ? [] : {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        result[key] = typeof val === 'object' && val !== null ? this.cleanForFirestore(val) : val;
+      }
+    }
+    return result;
+  }
+
+  private async firestoreSet(collectionName: string, id: string, data: any) {
+    if (typeof window === 'undefined' || !db) return;
+    try {
+      await setDoc(doc(db, collectionName, id), this.cleanForFirestore(data));
+    } catch (e) {
+      console.warn(`Firestore set error [${collectionName}/${id}]:`, e);
+    }
+  }
+
+  private async firestoreUpdate(collectionName: string, id: string, data: any) {
+    if (typeof window === 'undefined' || !db) return;
+    try {
+      await updateDoc(doc(db, collectionName, id), this.cleanForFirestore(data));
+    } catch (e) {
+      console.warn(`Firestore update error [${collectionName}/${id}]:`, e);
     }
   }
 
@@ -254,6 +372,7 @@ class DataService {
     if (member) {
       member.fontSizePref = size;
       this.save();
+      this.firestoreUpdate('members', userId, { fontSizePref: size });
     }
   }
 
@@ -267,23 +386,32 @@ class DataService {
       if (farm) {
         farm.isPublicPhone = isPublicPhone;
         farm.isPublicLine = isPublicLine;
+        this.firestoreUpdate('farms', farm.id, { isPublicPhone, isPublicLine });
       }
 
       // ซิงค์ไปยังสินค้าของแปลงนี้
       this.products = this.products.map((p) => {
         if (p.farmId === member.farmId) {
-          return {
+          const updated = {
             ...p,
             isPublicPhone,
             isPublicLine,
             phone: isPublicPhone ? member.phone : undefined,
             lineId: isPublicLine ? member.lineId : undefined,
           };
+          this.firestoreUpdate('products', p.id, {
+            isPublicPhone,
+            isPublicLine,
+            phone: isPublicPhone ? member.phone : null,
+            lineId: isPublicLine ? member.lineId : null,
+          });
+          return updated;
         }
         return p;
       });
 
       this.save();
+      this.firestoreUpdate('members', userId, { isPublicPhone, isPublicLine });
     }
   }
 
@@ -371,6 +499,10 @@ class DataService {
     this.currentUserId = memberId; // สลับผู้ใช้เป็นสมาชิกใหม่ทันที
     this.save();
 
+    // ซิงค์ไปยัง Cloud Firestore
+    this.firestoreSet('farms', newFarm.id, newFarm);
+    this.firestoreSet('members', newMember.id, newMember);
+
     return { member: newMember, farm: newFarm };
   }
 
@@ -385,6 +517,7 @@ class DataService {
       member.delegationStatus = 'requested';
       member.delegationNote = note;
       this.save();
+      this.firestoreUpdate('members', memberId, { delegationStatus: 'requested', delegationNote: note });
     }
   }
 
@@ -434,6 +567,12 @@ class DataService {
     this.auditLogs.unshift(newLog);
 
     this.save();
+
+    // ซิงค์ไปยัง Cloud Firestore
+    this.firestoreSet('products', newProduct.id, newProduct);
+    this.firestoreUpdate('members', member.id, { delegationStatus: 'completed' });
+    this.firestoreSet('auditLogs', newLog.id, newLog);
+
     return newProduct;
   }
 
@@ -446,6 +585,7 @@ class DataService {
     };
     this.products.unshift(newProduct);
     this.save();
+    this.firestoreSet('products', newProduct.id, newProduct);
     return newProduct;
   }
 
@@ -455,6 +595,7 @@ class DataService {
       prod.status = status;
       prod.updatedAt = new Date().toISOString().split('T')[0];
       this.save();
+      this.firestoreUpdate('products', productId, { status, updatedAt: prod.updatedAt });
     }
   }
 
@@ -471,6 +612,7 @@ class DataService {
     };
     this.categories.push(newCat);
     this.save();
+    this.firestoreSet('categories', newCat.id, newCat);
     return newCat;
   }
 
@@ -479,6 +621,7 @@ class DataService {
     if (cat) {
       cat.isActive = !cat.isActive;
       this.save();
+      this.firestoreUpdate('categories', catId, { isActive: cat.isActive });
     }
   }
 
@@ -509,6 +652,9 @@ class DataService {
       };
       this.auditLogs.unshift(newLog);
       this.save();
+
+      this.firestoreUpdate('members', memberId, { status: 'approved' });
+      this.firestoreSet('auditLogs', newLog.id, newLog);
     }
   }
 
@@ -529,6 +675,7 @@ class DataService {
     };
     this.news.unshift(newItem);
     this.save();
+    this.firestoreSet('news', newItem.id, newItem);
     return newItem;
   }
 }
