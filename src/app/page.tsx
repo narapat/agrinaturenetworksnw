@@ -64,10 +64,10 @@ export default function HomePage() {
           </p>
 
           {/* Quick Action CTAs */}
-          <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 w-full max-w-xs sm:max-w-none mx-auto">
             <Link
               href="/catalog"
-              className="inline-flex items-center gap-2.5 px-7 py-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-base sm:text-lg shadow-lg shadow-brand-600/25 hover:shadow-brand-600/35 transition-all transform hover:-translate-y-0.5 touch-target-big"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 sm:px-7 sm:py-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-lg shadow-lg shadow-brand-600/25 hover:shadow-brand-600/35 transition-all touch-target-big"
             >
               <ShoppingBag className="w-5 h-5" />
               <span>ดูของดีเครือข่าย</span>
@@ -75,7 +75,7 @@ export default function HomePage() {
 
             <Link
               href="/farms"
-              className="inline-flex items-center gap-2 px-6 py-4 rounded-full border-2 border-stone-200 hover:border-brand-300 bg-white/80 hover:bg-stone-50 text-stone-700 font-bold text-base sm:text-lg transition-all touch-target-big"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:px-6 sm:py-4 rounded-full border-2 border-stone-200 hover:border-brand-300 bg-white/80 hover:bg-stone-50 text-stone-700 font-bold text-sm sm:text-lg transition-all touch-target-big"
             >
               <MapPin className="w-5 h-5 text-brand-600" />
               <span>ค้นหาแปลงกสิกรรม</span>

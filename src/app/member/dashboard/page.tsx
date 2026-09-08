@@ -157,10 +157,10 @@ export default function MemberDashboardPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6 overflow-hidden">
       
       {/* Top Welcome Header */}
-      <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-center gap-4 sm:gap-6 overflow-hidden w-full">
         <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-3 border-brand-100 shadow-md shrink-0">
           <img
             src={currentUser.facePhotoUrl}
@@ -332,7 +332,7 @@ export default function MemberDashboardPage() {
             {products.map((item) => (
               <div
                 key={item.id}
-                className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-stone-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4"
+                className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-stone-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 overflow-hidden w-full max-w-full"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full sm:w-auto">
                   <img

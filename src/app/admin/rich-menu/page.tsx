@@ -216,13 +216,13 @@ export default function RichMenuExportPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <code className="px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs text-stone-700 font-mono truncate max-w-[280px] sm:max-w-[340px]">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                <code className="px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs text-stone-700 font-mono truncate min-w-0 max-w-full sm:max-w-[340px]">
                   {item.url}
                 </code>
                 <button
                   onClick={() => handleCopy(item.url, idx)}
-                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 transition-colors"
+                  className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shrink-0 flex items-center justify-center gap-1 transition-colors"
                 >
                   {copiedIndex === idx ? (
                     <>

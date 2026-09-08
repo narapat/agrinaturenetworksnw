@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { FontSizeProvider } from '@/context/FontSizeContext';
 import Header from '@/components/layout/Header';
@@ -14,17 +14,24 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="th">
-      <body className="min-h-screen flex flex-col bg-[#fcfcf9] text-stone-900 pb-20 md:pb-0 selection:bg-brand-100 selection:text-brand-900">
+    <html lang="th" className="overflow-x-hidden max-w-full">
+      <body className="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col bg-[#fcfcf9] text-stone-900 pb-20 md:pb-0 selection:bg-brand-100 selection:text-brand-900">
         <FontSizeProvider>
           <Header />
-          <main className="flex-1">
+          <main className="flex-1 w-full max-w-full overflow-x-hidden">
             {children}
           </main>
           <BottomNav />

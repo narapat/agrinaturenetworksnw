@@ -58,33 +58,33 @@ export default function Header() {
 
   return (
     <header 
-      className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800"
+      className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full overflow-hidden"
       style={{ fontSize: '15px' }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between py-3.5 sm:py-4 min-h-[76px]">
+      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 w-full">
+        <div className="flex items-center justify-between py-2.5 sm:py-4 min-h-[64px] sm:min-h-[76px] gap-1">
           
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group shrink-0">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Sprout className="w-6 h-6 sm:w-7 sm:h-7" />
+          <Link href="/" className="flex items-center gap-2 group min-w-0 shrink">
+            <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center text-white shadow-md shadow-brand-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Sprout className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg sm:text-xl text-stone-900 font-sans tracking-normal whitespace-nowrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <span className="font-bold text-sm sm:text-xl text-stone-900 font-sans tracking-normal truncate">
                   กสิกรรมธรรมชาติ
                 </span>
-                <span className="inline-block px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 text-xs font-bold whitespace-nowrap">
+                <span className="inline-block px-1.5 py-0.2 rounded-full bg-brand-100 text-brand-800 text-[10px] sm:text-xs font-bold shrink-0">
                   นครสวรรค์
                 </span>
               </div>
-              <p className="text-xs text-stone-500 hidden sm:block whitespace-nowrap">
+              <p className="text-[11px] text-stone-500 hidden sm:block whitespace-nowrap">
                 เครือข่ายแห่งการเกื้อกูล สดจากแปลง แบ่งปันน้ำใจ
               </p>
             </div>
           </Link>
 
-          {/* Desktop & Tablet Navigation Links (No wrapping, clean spacing) */}
+          {/* Desktop & Tablet Navigation Links */}
           <nav className="hidden md:flex items-center gap-1 lg:gap-2 shrink-0">
             {navLinks.map((link) => {
               const isActive = pathname === link.href || (link.href !== '/' && pathname.startsWith(link.href));
@@ -106,29 +106,29 @@ export default function Header() {
             })}
           </nav>
 
-          {/* Right Controls: Font Size & User Switcher */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Right Controls: Guide, Font Size & User Switcher */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             
-            {/* Guide Button */}
+            {/* Guide / Manual Button */}
             <Link
-              href="/guide"
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
-                pathname === '/guide' ? 'bg-brand-50 text-brand-700 border-brand-200' : ''
+              href="/manual"
+              className={`flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap ${
+                pathname === '/manual' || pathname === '/guide' ? 'bg-brand-50 text-brand-700 border-brand-200 font-bold' : ''
               }`}
               title="คู่มือการใช้งาน"
             >
-              <BookOpen className="w-4 h-4 text-brand-600 shrink-0" />
-              <span className="hidden sm:inline">คู่มือ</span>
+              <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-600 shrink-0" />
+              <span className="hidden xs:inline sm:inline">คู่มือ</span>
             </Link>
 
             {/* Font Size Toggle */}
             <div className="relative">
               <button
                 onClick={() => setShowFontMenu(!showFontMenu)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap"
+                className="flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap"
                 title="ปรับขนาดตัวอักษร"
               >
-                <Type className="w-4 h-4 text-brand-600 shrink-0" />
+                <Type className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-600 shrink-0" />
                 <span className="font-bold">
                   {fontSize === 'xlarge' ? 'ก++' : fontSize === 'large' ? 'ก+' : 'ก'}
                 </span>
@@ -180,23 +180,23 @@ export default function Header() {
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border border-stone-200 bg-white hover:border-brand-300 transition-all shadow-xs"
+                className="flex items-center gap-1 sm:gap-2 p-1 sm:pl-2 sm:pr-3 sm:py-1.5 rounded-full border border-stone-200 bg-white hover:border-brand-300 transition-all shadow-xs"
               >
                 {currentUser?.facePhotoUrl ? (
                   <img
                     src={currentUser.facePhotoUrl}
                     alt={currentUser.fullName}
-                    className="w-8 h-8 rounded-full object-cover border border-brand-200 shrink-0"
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover border border-brand-200 shrink-0"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-xs shrink-0">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[10px] sm:text-xs shrink-0">
                     ผช
                   </div>
                 )}
                 <span className="text-xs sm:text-sm font-medium text-stone-800 max-w-[90px] lg:max-w-[120px] truncate hidden md:inline-block">
                   {currentUser ? currentUser.fullName.split(' ')[0] : 'ผู้เข้าชม'}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-400 shrink-0 hidden sm:inline-block" />
               </button>
 
               {showUserMenu && (
