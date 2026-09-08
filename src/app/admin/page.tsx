@@ -143,6 +143,13 @@ export default function AdminPage() {
             <div className="text-lg font-black text-amber-400">{assistQueue.length}</div>
             <div className="text-[10px] text-stone-400">คิวช่วยลงข้อมูล</div>
           </div>
+
+          <Link
+            href="/admin/rich-menu"
+            className="px-4 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-1.5 transition-colors shadow-md"
+          >
+            <span>📱 ภาพริชเมนู LINE</span>
+          </Link>
         </div>
       </div>
 
