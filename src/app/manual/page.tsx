@@ -40,9 +40,6 @@ export default function ManualPage() {
           <h1 className={`${getTextClass('title')} text-2xl sm:text-4xl font-black text-white leading-tight`}>
             คู่มือการใช้งานระบบเครือข่ายกสิกรรมธรรมชาติ
           </h1>
-          <p className="text-stone-300 text-xs sm:text-base max-w-2xl leading-relaxed">
-            คู่มือพร้อมภาพจับภาพหน้าจอจริง (Screenshots) เน้นการใช้งานผ่านสมาร์ทโฟนและ LINE Official Account ครอบคลุมทั้งผู้บริโภค สมาชิกแปลง และแอดมิน
-          </p>
         </div>
       </div>
 
