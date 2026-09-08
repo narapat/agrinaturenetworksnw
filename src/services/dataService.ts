@@ -7,6 +7,7 @@ import {
   NewsEvent,
   SKUGroup,
   FontSizePref,
+  UserRole,
 } from '@/types';
 import {
   INITIAL_MEMBERS,
@@ -103,6 +104,20 @@ class DataService {
       for (const initProd of INITIAL_PRODUCTS) {
         if (!this.products.some((p) => p.id === initProd.id)) {
           this.products.push(initProd);
+        }
+      }
+
+      // Ensure all members have roles array properly initialized
+      for (const m of this.members) {
+        if (!m.roles || m.roles.length === 0) {
+          m.roles = m.role === 'admin' ? ['member', 'admin'] : ['member'];
+        }
+      }
+
+      // Ensure farm-admin exists so admin has their own farm
+      for (const initFarm of INITIAL_FARMS) {
+        if (!this.farms.some((f) => f.id === initFarm.id)) {
+          this.farms.push(initFarm);
         }
       }
 
@@ -863,6 +878,59 @@ class DataService {
     this.save();
     this.firestoreSet('news', newItem.id, newItem);
     return newItem;
+  }
+
+  deleteNews(id: string): boolean {
+    const idx = this.news.findIndex((n) => n.id === id);
+    if (idx === -1) return false;
+    this.news.splice(idx, 1);
+    this.save();
+    this.firestoreDelete('news', id);
+    return true;
+  }
+
+  // ==================== ROLE ASSIGNMENT ====================
+
+  assignAdminRole(memberId: string, makeAdmin: boolean): boolean {
+    const member = this.members.find((m) => m.id === memberId);
+    if (!member) return false;
+    if (member.status !== 'approved') return false; // เฉพาะสมาชิกที่ผ่านการอนุมัติแล้วเท่านั้น
+
+    const currentRoles = member.roles && member.roles.length > 0 
+      ? [...member.roles] 
+      : [member.role || 'member'];
+
+    let newRoles: UserRole[];
+    if (makeAdmin) {
+      newRoles = Array.from(new Set<UserRole>([...currentRoles, 'member', 'admin']));
+      member.role = 'admin'; // เพื่อ backward compatibility
+    } else {
+      newRoles = currentRoles.filter((r) => r !== 'admin');
+      if (newRoles.length === 0) newRoles = ['member'];
+      member.role = 'member';
+    }
+    member.roles = newRoles;
+
+    this.save();
+    this.firestoreUpdate('members', memberId, { role: member.role, roles: member.roles });
+
+    // บันทึกประวัติการมอบ/ถอนสิทธิ์เข้า Audit Logs
+    const actor = this.getCurrentUser();
+    const farm = this.farms.find((f) => f.memberId === member.id) || this.getFarmById(member.farmId);
+    this.auditLogs.unshift({
+      id: `log-${Date.now()}`,
+      action: makeAdmin ? 'assign_admin' : 'revoke_admin',
+      performedByAdminId: actor ? actor.id : 'admin-001',
+      performedByAdminName: actor ? actor.fullName : 'แอดมินเครือข่าย',
+      targetMemberId: member.id,
+      targetMemberName: member.fullName,
+      targetFarmName: farm?.farmName || 'แปลงสมาชิก',
+      details: `${makeAdmin ? 'แต่งตั้งสิทธิ์แอดมินเครือข่าย' : 'ถอนสิทธิ์แอดมินเครือข่าย'} ให้แก่สมาชิก บทบาทปัจจุบัน: ${member.roles.join(', ')}`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    });
+    this.save();
+
+    return true;
   }
 }
 

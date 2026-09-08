@@ -22,6 +22,7 @@ export interface MemberProfile {
   fullName: string; // ชื่อ-นามสกุล / ชื่อเล่น
   facePhotoUrl: string; // รูปหน้าสมาชิกตัวจริง (ใช้สำหรับแอดมินคัดกรอง Verify)
   role: UserRole;
+  roles?: UserRole[]; // รองรับสมาชิกที่มี 2 บทบาทควบคู่กัน เช่น ['member', 'admin']
   status: MemberStatus;
   fontSizePref: FontSizePref;
   phone: string; // เบอร์โทรศัพท์ (มีระบบซ่อนเป็นค่าเริ่มต้น)
@@ -122,7 +123,7 @@ export interface CategoryTag {
 
 export interface AuditLog {
   id: string;
-  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member';
+  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin';
   performedByAdminId: string;
   performedByAdminName: string;
   targetMemberId: string;
@@ -144,3 +145,17 @@ export interface NewsEvent {
   category: 'เอามื้อสามัคคี' | 'อบรมวิชาการ' | 'ตลาดนัดกสิกรรม' | 'ประกาศเครือข่าย';
   author: string;
 }
+
+export const hasAdminRole = (user: MemberProfile | null | undefined): boolean => {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (user.roles && user.roles.includes('admin')) return true;
+  return false;
+};
+
+export const hasMemberRole = (user: MemberProfile | null | undefined): boolean => {
+  if (!user) return false;
+  if (user.role === 'member' || user.role === 'admin') return true;
+  if (user.roles && user.roles.includes('member')) return true;
+  return true;
+};

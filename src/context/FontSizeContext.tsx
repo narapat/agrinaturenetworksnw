@@ -11,56 +11,81 @@ interface FontSizeContextType {
 
 const FontSizeContext = createContext<FontSizeContextType | undefined>(undefined);
 
+// ฟังก์ชันปรับขนาดฟอนต์ระดับราก (root element <html>) เพื่อให้หน่วย rem ใน Tailwind ขยายตามทุกหน้า
+export const applyRootFontSize = (size: FontSizePref) => {
+  if (typeof document === 'undefined') return;
+
+  const root = document.documentElement;
+  root.setAttribute('data-font-size', size);
+
+  // กำหนดขนาดฟอนต์บน <html> โดยตรง
+  // ปกติ 16px (100%), ใหญ่ 18.5px (+15.6%), ใหญ่พิเศษ 21.5px (+34.4%)
+  const sizePx = size === 'xlarge' ? '21.5px' : size === 'large' ? '18.5px' : '16px';
+  root.style.fontSize = sizePx;
+
+  // บันทึกลง Cookie เป็นแผนสำรองสำหรับ Webview (เช่น LINE LIFF)
+  try {
+    document.cookie = `nsw_agri_font_size=${size};path=/;max-age=31536000;SameSite=Lax`;
+  } catch (e) {
+    // ignore
+  }
+};
+
 export function FontSizeProvider({ children }: { children: React.ReactNode }) {
   const [fontSize, setFontSizeState] = useState<FontSizePref>('normal');
 
   useEffect(() => {
-    // โหลดการตั้งค่าจาก localStorage (ถ้ามี)
-    const saved = localStorage.getItem('nsw_agri_font_size') as FontSizePref;
+    // 1. โหลดการตั้งค่าจาก localStorage หรือ cookie
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem('nsw_agri_font_size');
+    } catch (e) {
+      // ignore
+    }
+
+    if (!saved && typeof document !== 'undefined') {
+      try {
+        const match = document.cookie.match(/nsw_agri_font_size=([^;]+)/);
+        if (match) saved = match[1];
+      } catch (e) {
+        // ignore
+      }
+    }
+
     if (saved && ['normal', 'large', 'xlarge'].includes(saved)) {
-      setFontSizeState(saved);
+      const pref = saved as FontSizePref;
+      setFontSizeState(pref);
+      applyRootFontSize(pref);
+    } else {
+      applyRootFontSize('normal');
     }
   }, []);
 
   const setFontSize = (size: FontSizePref) => {
     setFontSizeState(size);
-    localStorage.setItem('nsw_agri_font_size', size);
+    try {
+      localStorage.setItem('nsw_agri_font_size', size);
+    } catch (e) {
+      // ignore
+    }
+    applyRootFontSize(size);
   };
 
-  // Helper สำหรับส่งคืนคลาส Tailwind ตามระดับขนาดตัวอักษรที่รองรับสระภาษาไทย
+  // Helper สำหรับส่งคืนคลาสตามโครงสร้างฟอนต์ภาษาไทย ไม่ซ้อนทับขนาด rem ของ Tailwind
   const getTextClass = (type: 'title' | 'subtitle' | 'body' | 'caption' | 'button'): string => {
-    switch (fontSize) {
-      case 'xlarge':
-        switch (type) {
-          case 'title': return 'text-3xl md:text-5xl font-extrabold leading-[1.38] tracking-normal';
-          case 'subtitle': return 'text-2xl md:text-3xl font-bold leading-[1.38] tracking-normal';
-          case 'body': return 'text-xl font-medium leading-[1.6]';
-          case 'caption': return 'text-lg font-normal leading-normal';
-          case 'button': return 'text-xl font-bold';
-        }
-      case 'large':
-        switch (type) {
-          case 'title': return 'text-2xl md:text-4xl font-bold leading-[1.38] tracking-normal';
-          case 'subtitle': return 'text-xl md:text-2xl font-semibold leading-[1.38] tracking-normal';
-          case 'body': return 'text-lg font-normal leading-[1.6]';
-          case 'caption': return 'text-base font-normal leading-normal';
-          case 'button': return 'text-lg font-semibold';
-        }
-      case 'normal':
-      default:
-        switch (type) {
-          case 'title': return 'text-xl md:text-3xl font-bold leading-[1.38] tracking-normal';
-          case 'subtitle': return 'text-lg md:text-xl font-semibold leading-[1.38] tracking-normal';
-          case 'body': return 'text-base font-normal leading-[1.6]';
-          case 'caption': return 'text-sm font-normal leading-normal';
-          case 'button': return 'text-base font-medium';
-        }
+    switch (type) {
+      case 'title': return 'font-extrabold leading-[1.38] tracking-normal';
+      case 'subtitle': return 'font-bold leading-[1.38] tracking-normal';
+      case 'body': return 'font-medium leading-[1.6]';
+      case 'caption': return 'font-normal leading-normal';
+      case 'button': return 'font-bold';
+      default: return '';
     }
   };
 
   return (
     <FontSizeContext.Provider value={{ fontSize, setFontSize, getTextClass }}>
-      <div className={`font-size-${fontSize}`}>
+      <div className={`font-size-${fontSize} min-h-screen w-full max-w-full`}>
         {children}
       </div>
     </FontSizeContext.Provider>

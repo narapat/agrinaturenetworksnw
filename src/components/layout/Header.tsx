@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { MemberProfile } from '@/types';
+import { MemberProfile, hasAdminRole } from '@/types';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -92,7 +92,7 @@ export default function Header() {
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper },
     { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User },
-    ...(currentUser?.role === 'admin' 
+    ...(hasAdminRole(currentUser)
       ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, isBadge: true }] 
       : []),
   ];
@@ -105,7 +105,7 @@ export default function Header() {
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper, desc: 'กิจกรรมและตารางเอามื้อสามัคคี' },
     { href: '/manual', label: 'คู่มือใช้งาน', icon: BookOpen, desc: 'วิธีใช้งานระบบและคู่มือออนไลน์' },
     { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User, desc: 'จัดการผลผลิตและข้อมูลแปลง' },
-    ...(currentUser?.role === 'admin' 
+    ...(hasAdminRole(currentUser)
       ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, desc: 'อนุมัติสมาชิกและตรวจสอบระบบ', isBadge: true }] 
       : []),
   ];
@@ -114,7 +114,6 @@ export default function Header() {
     <>
       <header 
         className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full"
-        style={{ fontSize: '15px' }}
       >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full">
         <div className="flex items-center justify-between py-2.5 sm:py-3.5 min-h-[64px] sm:min-h-[72px] gap-2">
@@ -281,7 +280,7 @@ export default function Header() {
                     <div className="px-4 py-2 border-b border-stone-100">
                       <p className="text-xs text-stone-500 font-medium">สลับบทบาททดสอบระบบ</p>
                       <p className="text-sm font-bold text-stone-800 truncate">
-                        {currentUser?.fullName} ({currentUser?.role === 'admin' ? 'แอดมิน' : 'สมาชิกแปลง'})
+                        {currentUser?.fullName} ({currentUser && hasAdminRole(currentUser) && currentUser.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : currentUser && hasAdminRole(currentUser) ? '🛡️ แอดมิน' : '🌾 สมาชิกแปลง'})
                       </p>
                     </div>
                     <div className="py-1 max-h-60 overflow-y-auto">
@@ -318,7 +317,7 @@ export default function Header() {
                           <div className="flex-1 truncate">
                             <p className="truncate">{m.fullName}</p>
                             <span className="text-[10px] text-stone-400">
-                              {m.role === 'admin' ? '🛡️ แอดมินเครือข่าย' : '🌾 สมาชิกแปลง'}
+                              {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมินเครือข่าย' : '🌾 สมาชิกแปลง'}
                             </span>
                           </div>
                           {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-600" />}
@@ -418,11 +417,13 @@ export default function Header() {
                     {currentUser ? currentUser.fullName : 'บุคคลทั่วไป (Guest)'}
                   </p>
                   <p className="text-xs text-brand-700 font-medium">
-                    {currentUser?.role === 'admin' 
-                      ? '🛡️ แอดมินเครือข่าย' 
-                      : currentUser 
-                        ? '🌾 สมาชิกแปลงกสิกรรม' 
-                        : '🌿 ผู้เข้าชมทั่วไป'}
+                    {currentUser && hasAdminRole(currentUser) && currentUser.roles?.includes('member')
+                      ? '🛡️ แอดมิน & 🌾 สมาชิกแปลง'
+                      : currentUser && hasAdminRole(currentUser)
+                        ? '🛡️ แอดมินเครือข่าย'
+                        : currentUser 
+                          ? '🌾 สมาชิกแปลงกสิกรรม' 
+                          : '🌿 ผู้เข้าชมทั่วไป'}
                   </p>
                 </div>
               </div>
@@ -549,7 +550,7 @@ export default function Header() {
                       />
                       <span className="truncate flex-1">{m.fullName}</span>
                       <span className="text-[10px] text-stone-400 shrink-0">
-                        {m.role === 'admin' ? '🛡️ แอดมิน' : '🌾 แปลง'}
+                        {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมิน' : '🌾 แปลง'}
                       </span>
                       {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
                     </button>

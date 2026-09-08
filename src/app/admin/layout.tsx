@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { dataService } from '@/services/dataService';
+import { hasAdminRole } from '@/types';
 import { ShieldCheck, Lock, ArrowLeft, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 const ADMIN_STORAGE_KEY = 'nsw_admin_session_token';
@@ -27,12 +28,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const sessionToken = sessionStorage.getItem(ADMIN_STORAGE_KEY) || localStorage.getItem(ADMIN_STORAGE_KEY);
     const currentUser = dataService.getCurrentUser();
 
-    if (sessionToken === 'authenticated' && currentUser?.role === 'admin') {
+    if (sessionToken === 'authenticated' && hasAdminRole(currentUser)) {
       setIsAdminAuthenticated(true);
     } else if (sessionToken === 'authenticated') {
-      // สลับเป็น user แอดมินอัตโนมัติ
-      dataService.switchUser('admin-001');
-      setIsAdminAuthenticated(true);
+      // หากผู้ใช้ปัจจุบันมีสิทธิ์แอดมินอยู่แล้ว ให้ใช้บัญชีเดิมได้เลย
+      if (currentUser && hasAdminRole(currentUser)) {
+        setIsAdminAuthenticated(true);
+      } else {
+        dataService.switchUser('admin-001');
+        setIsAdminAuthenticated(true);
+      }
     } else {
       setIsAdminAuthenticated(false);
     }
@@ -47,7 +52,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       // บันทึก Session Token
       sessionStorage.setItem(ADMIN_STORAGE_KEY, 'authenticated');
       localStorage.setItem(ADMIN_STORAGE_KEY, 'authenticated');
-      dataService.switchUser('admin-001');
+      const currentUser = dataService.getCurrentUser();
+      if (!currentUser || !hasAdminRole(currentUser)) {
+        dataService.switchUser('admin-001');
+      }
       setIsAdminAuthenticated(true);
       window.location.reload();
     } else {

@@ -47,16 +47,46 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* Accessibility Font Size Overrides */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html[data-font-size="normal"],
+html:not([data-font-size]) {
+  font-size: 16px;
+}
+
+html[data-font-size="large"] {
+  font-size: 18.5px;
+}
+
+html[data-font-size="xlarge"] {
+  font-size: 21.5px;
+}
+
+/* Also scale arbitrary fixed-pixel micro texts */
+html[data-font-size="large"] .text-\[9px\] { font-size: 11px !important; }
+html[data-font-size="large"] .text-\[10px\] { font-size: 12px !important; }
+html[data-font-size="large"] .text-\[11px\] { font-size: 13px !important; }
+html[data-font-size="large"] .text-\[12px\] { font-size: 14px !important; }
+
+html[data-font-size="xlarge"] .text-\[9px\] { font-size: 12.5px !important; }
+html[data-font-size="xlarge"] .text-\[10px\] { font-size: 14px !important; }
+html[data-font-size="xlarge"] .text-\[11px\] { font-size: 15.5px !important; }
+html[data-font-size="xlarge"] .text-\[12px\] { font-size: 16.5px !important; }
+
 .font-size-normal {
   font-size: 16px;
 }
 
 .font-size-large {
-  font-size: 19px;
+  font-size: 18.5px;
 }
 
 .font-size-xlarge {
-  font-size: 22px;
+  font-size: 21.5px;
 }
 
 /* High contrast touch buttons for elderly */

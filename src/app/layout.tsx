@@ -32,6 +32,33 @@ export default function RootLayout({
 }) {
   return (
     <html lang="th" className="overflow-x-hidden max-w-full">
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var size = localStorage.getItem('nsw_agri_font_size');
+                  if (!size) {
+                    var m = document.cookie.match(/nsw_agri_font_size=([^;]+)/);
+                    if (m) size = m[1];
+                  }
+                  if (size === 'xlarge') {
+                    document.documentElement.setAttribute('data-font-size', 'xlarge');
+                    document.documentElement.style.fontSize = '21.5px';
+                  } else if (size === 'large') {
+                    document.documentElement.setAttribute('data-font-size', 'large');
+                    document.documentElement.style.fontSize = '18.5px';
+                  } else {
+                    document.documentElement.setAttribute('data-font-size', 'normal');
+                    document.documentElement.style.fontSize = '16px';
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col bg-[#fcfcf9] text-stone-900 pb-20 md:pb-0 selection:bg-brand-100 selection:text-brand-900">
         <FontSizeProvider>
           <Header />
