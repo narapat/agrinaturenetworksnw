@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 28, 25, 23;
+  --background-start-rgb: 245, 250, 246;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: #fbfbf9;
+  font-family: 'Prompt', 'Sarabun', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Accessibility Font Size Overrides */
+.font-size-normal {
+  font-size: 16px;
+}
+
+.font-size-large {
+  font-size: 19px;
+}
+
+.font-size-xlarge {
+  font-size: 22px;
+}
+
+/* High contrast touch buttons for elderly */
+.touch-target-big {
+  min-height: 52px;
+  min-width: 52px;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
