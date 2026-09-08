@@ -33,9 +33,20 @@ export default function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const user = dataService.getCurrentUser();
-    setCurrentUser(user);
-    setAllMembers(dataService.getAllMembers());
+    const refreshHeaderUser = () => {
+      const user = dataService.getCurrentUser();
+      setCurrentUser(user);
+      setAllMembers(dataService.getAllMembers());
+    };
+
+    refreshHeaderUser();
+
+    window.addEventListener('nsw_data_updated', refreshHeaderUser);
+    window.addEventListener('storage', refreshHeaderUser);
+    return () => {
+      window.removeEventListener('nsw_data_updated', refreshHeaderUser);
+      window.removeEventListener('storage', refreshHeaderUser);
+    };
   }, [pathname]);
 
   // Close hamburger menu when pathname changes

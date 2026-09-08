@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { MemberProfile, Farm, Product } from '@/types';
+import { DISTRICTS_NSW } from '@/data/mockData';
+import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
 import { 
   Plus, 
   Shield, 
@@ -19,7 +21,13 @@ import {
   Sparkles,
   ChevronRight,
   UserCheck,
-  Sprout
+  Sprout,
+  Edit3,
+  Trash2,
+  EyeOff,
+  X,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function MemberDashboardPage() {
@@ -31,8 +39,31 @@ export default function MemberDashboardPage() {
   const [assistNote, setAssistNote] = useState('');
   const [assistSuccess, setAssistSuccess] = useState(false);
 
+  // Edit Farm Modal State
+  const [showEditFarmModal, setShowEditFarmModal] = useState(false);
+  const [editFarmName, setEditFarmName] = useState('');
+  const [editTagline, setEditTagline] = useState('');
+  const [editStory, setEditStory] = useState('');
+  const [editDistrict, setEditDistrict] = useState('');
+  const [editSubdistrict, setEditSubdistrict] = useState('');
+  const [editPhotos, setEditPhotos] = useState<string[]>([]);
+  const [farmSaveSuccess, setFarmSaveSuccess] = useState(false);
+
+  // Delete Product Confirmation Modal State
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeletingProd, setIsDeletingProd] = useState(false);
+
   useEffect(() => {
     loadData();
+    const handleDataUpdated = () => {
+      loadData();
+    };
+    window.addEventListener('nsw_data_updated', handleDataUpdated);
+    window.addEventListener('storage', handleDataUpdated);
+    return () => {
+      window.removeEventListener('nsw_data_updated', handleDataUpdated);
+      window.removeEventListener('storage', handleDataUpdated);
+    };
   }, []);
 
   const loadData = () => {
@@ -41,7 +72,8 @@ export default function MemberDashboardPage() {
     if (user && user.farmId) {
       const f = dataService.getFarmById(user.farmId);
       if (f) setFarm(f);
-      setProducts(dataService.getProductsByFarmId(user.farmId));
+      // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
+      setProducts(dataService.getProductsByFarmId(user.farmId, true));
     } else {
       setFarm(null);
       setProducts([]);
@@ -76,6 +108,47 @@ export default function MemberDashboardPage() {
   const handleStatusChange = (productId: string, newStatus: Product['status']) => {
     dataService.updateProductStatus(productId, newStatus);
     loadData();
+  };
+
+  const handleOpenEditFarm = () => {
+    if (!farm) return;
+    setEditFarmName(farm.farmName);
+    setEditTagline(farm.tagline || '');
+    setEditStory(farm.story || '');
+    setEditDistrict(farm.district);
+    setEditSubdistrict(farm.subdistrict);
+    setEditPhotos(farm.photos ? [...farm.photos] : []);
+    setShowEditFarmModal(true);
+  };
+
+  const handleSaveFarm = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!farm) return;
+    dataService.updateFarm(farm.id, {
+      farmName: editFarmName.trim() || farm.farmName,
+      tagline: editTagline.trim(),
+      story: editStory.trim(),
+      district: editDistrict,
+      subdistrict: editSubdistrict.trim(),
+      photos: editPhotos.length > 0 ? editPhotos : farm.photos,
+    });
+    setFarmSaveSuccess(true);
+    setTimeout(() => {
+      setFarmSaveSuccess(false);
+      setShowEditFarmModal(false);
+      loadData();
+    }, 800);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!productToDelete) return;
+    setIsDeletingProd(true);
+    dataService.deleteProduct(productToDelete.id);
+    setTimeout(() => {
+      setIsDeletingProd(false);
+      setProductToDelete(null);
+      loadData();
+    }, 500);
   };
 
   if (!currentUser) {
@@ -190,6 +263,26 @@ export default function MemberDashboardPage() {
           <p className="text-xs sm:text-sm font-semibold text-stone-500">
             แปลง: <b className="text-stone-800">{farm?.farmName || 'ยังไม่ได้ระบุแปลง'}</b> ({farm?.district})
           </p>
+
+          {farm && (
+            <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+              <button
+                type="button"
+                onClick={handleOpenEditFarm}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-brand-50 text-stone-700 hover:text-brand-800 text-xs font-bold border border-stone-200 hover:border-brand-300 transition-colors"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-brand-600" />
+                <span>✏️ แก้ไขข้อมูลแปลง & รูปภาพ</span>
+              </button>
+              <Link
+                href={`/farms/${farm.id}`}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-xs font-bold border border-stone-200 transition-colors"
+              >
+                <span>🌿 ดูหน้าแปลงสาธารณะ</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          )}
 
           {currentUser.status === 'pending' && (
             <p className="text-[11px] sm:text-xs text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-200 mt-1.5 font-medium">
@@ -344,9 +437,17 @@ export default function MemberDashboardPage() {
                     className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl object-cover border border-stone-100 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <span className="text-[10px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
-                      {item.skuTagName}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
+                        {item.skuTagName}
+                      </span>
+                      {item.status === 'hidden' && (
+                        <span className="text-[10px] font-bold text-stone-600 bg-stone-100 border border-stone-300 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <EyeOff className="w-3 h-3 text-stone-500" />
+                          <span>🔒 ไม่แสดงบน e-Catalog</span>
+                        </span>
+                      )}
+                    </div>
                     <h3 className="font-bold text-stone-900 text-sm sm:text-base line-clamp-1 mt-0.5">
                       {item.title}
                     </h3>
@@ -356,41 +457,75 @@ export default function MemberDashboardPage() {
                   </div>
                 </div>
 
-                {/* Status Select Buttons: Full-width 3-button grid on mobile, flex on desktop */}
-                <div className="w-full sm:w-auto pt-2 border-t border-stone-100 sm:pt-0 sm:border-0">
-                  <div className="grid grid-cols-3 gap-1.5 sm:flex sm:items-center">
+                {/* Right controls: Quick Status Switcher + Edit & Delete Actions */}
+                <div className="w-full sm:w-auto pt-2 border-t border-stone-100 sm:pt-0 sm:border-0 flex flex-col sm:items-end gap-2">
+                  <div className="grid grid-cols-4 gap-1 sm:flex sm:items-center">
                     <button
                       type="button"
                       onClick={() => handleStatusChange(item.id, 'sale')}
-                      className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+                      className={`py-1.5 px-2 sm:px-2.5 sm:py-1 rounded-xl text-[11px] font-bold transition-all text-center ${
                         item.status === 'sale'
                           ? 'bg-brand-600 text-white shadow-xs font-black'
                           : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                       }`}
+                      title="ตั้งค่าเป็นมีจำหน่าย"
                     >
                       🟢 มีขาย
                     </button>
                     <button
                       type="button"
                       onClick={() => handleStatusChange(item.id, 'share')}
-                      className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+                      className={`py-1.5 px-2 sm:px-2.5 sm:py-1 rounded-xl text-[11px] font-bold transition-all text-center ${
                         item.status === 'share'
                           ? 'bg-blue-600 text-white shadow-xs font-black'
                           : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                       }`}
+                      title="ตั้งค่าเป็นแบ่งปันฟรี"
                     >
-                      🔵 แบ่งปันฟรี
+                      🔵 แบ่งปัน
                     </button>
                     <button
                       type="button"
                       onClick={() => handleStatusChange(item.id, 'out_of_stock')}
-                      className={`py-2 px-2 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
+                      className={`py-1.5 px-2 sm:px-2.5 sm:py-1 rounded-xl text-[11px] font-bold transition-all text-center ${
                         item.status === 'out_of_stock'
                           ? 'bg-stone-800 text-white shadow-xs font-black'
                           : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
                       }`}
+                      title="ตั้งค่าเป็นหมดชั่วคราว"
                     >
                       ⚪ หมด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStatusChange(item.id, 'hidden')}
+                      className={`py-1.5 px-2 sm:px-2.5 sm:py-1 rounded-xl text-[11px] font-bold transition-all text-center ${
+                        item.status === 'hidden'
+                          ? 'bg-stone-700 text-white shadow-xs font-black'
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      }`}
+                      title="ตั้งค่าเป็นไม่แสดงใน e-Catalog"
+                    >
+                      🔒 ซ่อน
+                    </button>
+                  </div>
+
+                  {/* Edit & Delete Action Buttons */}
+                  <div className="flex items-center justify-end gap-2 pt-0.5">
+                    <Link
+                      href={`/member/edit-product/${item.id}`}
+                      className="px-3 py-1 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-bold border border-brand-200 flex items-center gap-1 transition-colors"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>แก้ไข</span>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setProductToDelete(item)}
+                      className="px-2.5 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 flex items-center gap-1 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>ลบ</span>
                     </button>
                   </div>
                 </div>
@@ -448,6 +583,170 @@ export default function MemberDashboardPage() {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Edit Farm Modal */}
+      {showEditFarmModal && farm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white w-full max-w-xl rounded-3xl p-5 sm:p-8 space-y-5 border border-stone-200 shadow-2xl animate-in fade-in zoom-in-95 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2 text-stone-900 font-bold text-lg sm:text-xl">
+                <Edit3 className="w-5 h-5 text-brand-600" />
+                <h3>แก้ไขข้อมูลแปลง & รูปภาพ</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowEditFarmModal(false)}
+                className="p-1.5 rounded-full hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFarm} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  ชื่อแปลง / สวน / ศูนย์เรียนรู้ <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editFarmName}
+                  onChange={(e) => setEditFarmName(e.target.value)}
+                  className="w-full p-3 rounded-2xl border border-stone-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  สโลแกนหรือแนวคิดของแปลง
+                </label>
+                <input
+                  type="text"
+                  value={editTagline}
+                  onChange={(e) => setEditTagline(e.target.value)}
+                  placeholder="เช่น คืนชีวิตให้ดินด้วยถ่านไบโอชาร์..."
+                  className="w-full p-3 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    อำเภอ (จ.นครสวรรค์) <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={editDistrict}
+                    onChange={(e) => setEditDistrict(e.target.value)}
+                    className="w-full p-3 rounded-2xl border border-stone-200 text-sm font-semibold text-stone-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {DISTRICTS_NSW.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    ตำบล
+                  </label>
+                  <input
+                    type="text"
+                    value={editSubdistrict}
+                    onChange={(e) => setEditSubdistrict(e.target.value)}
+                    placeholder="เช่น หนองกรด, เกยไชย..."
+                    className="w-full p-3 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  เรื่องเล่า & ปรัชญากสิกรรมธรรมชาติของแปลง
+                </label>
+                <textarea
+                  rows={3}
+                  value={editStory}
+                  onChange={(e) => setEditStory(e.target.value)}
+                  className="w-full p-3 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+                ></textarea>
+              </div>
+
+              {/* Multi-Photo Farm Uploader */}
+              <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200">
+                <FarmPhotoUploader
+                  photos={editPhotos}
+                  onChange={setEditPhotos}
+                  label="รูปภาพบรรยากาศแปลง / ศูนย์เรียนรู้"
+                  description="อัพโหลดได้หลายรูป ระบบจะย่อขนาดให้อัตโนมัติและแสดงผลแบบภาพวน (Slideshow) ในหน้าแปลง"
+                />
+              </div>
+
+              {farmSaveSuccess && (
+                <div className="p-3 bg-brand-50 border border-brand-200 rounded-2xl text-xs font-bold text-brand-900 text-center flex items-center justify-center gap-2">
+                  <Check className="w-4 h-4 text-brand-600" />
+                  <span>บันทึกข้อมูลแปลงสำเร็จแล้ว!</span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditFarmModal(false)}
+                  className="flex-1 py-3 rounded-2xl border border-stone-200 text-stone-700 font-bold text-sm hover:bg-stone-50"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={farmSaveSuccess}
+                  className="flex-1 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20"
+                >
+                  💾 บันทึกข้อมูลแปลง
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Product Confirmation Modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 space-y-4 border border-stone-200 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="font-black text-stone-900 text-lg">
+                ยืนยันการลบผลผลิต?
+              </h3>
+              <p className="text-xs text-stone-500">
+                คุณต้องการลบ <b>"{productToDelete.title}"</b> ออกจากระบบใช่หรือไม่ การลบนี้ไม่สามารถย้อนกลับได้
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setProductToDelete(null)}
+                disabled={isDeletingProd}
+                className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-bold text-sm hover:bg-stone-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingProd}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md shadow-rose-600/20"
+              >
+                {isDeletingProd ? 'กำลังลบ...' : 'ยืนยันลบ'}
+              </button>
+            </div>
           </div>
         </div>
       )}

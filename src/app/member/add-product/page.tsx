@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { CategoryTag, MemberProfile, Farm } from '@/types';
+import { CategoryTag, MemberProfile, Farm, ProductStatus } from '@/types';
 import ImageCropperModal from '@/components/ui/ImageCropperModal';
 import { 
   ArrowLeft, 
@@ -14,7 +14,8 @@ import {
   Check, 
   Sparkles, 
   Layers, 
-  HelpCircle 
+  HelpCircle,
+  EyeOff
 } from 'lucide-react';
 
 export default function AddProductPage() {
@@ -27,7 +28,7 @@ export default function AddProductPage() {
   // Form State
   const [title, setTitle] = useState('');
   const [selectedSkuTag, setSelectedSkuTag] = useState<CategoryTag | null>(null);
-  const [status, setStatus] = useState<'sale' | 'share' | 'preorder'>('sale');
+  const [status, setStatus] = useState<ProductStatus>('sale');
   const [price, setPrice] = useState<string>('50');
   const [unit, setUnit] = useState('กิโลกรัม');
   const [description, setDescription] = useState('');
@@ -222,46 +223,69 @@ export default function AddProductPage() {
               4. สถานะและราคา
             </label>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 type="button"
                 onClick={() => setStatus('sale')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
                   status === 'sale'
                     ? 'border-brand-600 bg-brand-50 ring-2 ring-brand-500/20'
                     : 'border-stone-200 bg-white'
                 }`}
               >
-                <span className="text-base font-black text-brand-700 block">🟢 มีจำหน่าย</span>
-                <span className="text-xs text-stone-500 mt-1 block">ตั้งราคาเพื่อขายสู่ผู้บริโภค</span>
+                <span className="text-sm font-black text-brand-700 block">🟢 มีจำหน่าย</span>
+                <span className="text-[11px] text-stone-500 mt-0.5 block">พร้อมขายสู่ตลาด</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setStatus('share')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
                   status === 'share'
                     ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-500/20'
                     : 'border-stone-200 bg-white'
                 }`}
               >
-                <span className="text-base font-black text-blue-700 block">🔵 มีแบ่งปันฟรี</span>
-                <span className="text-xs text-stone-500 mt-1 block">ปันน้ำใจ / แลกเปลี่ยนเมล็ดพันธุ์</span>
+                <span className="text-sm font-black text-blue-700 block">🔵 แบ่งปันฟรี</span>
+                <span className="text-[11px] text-stone-500 mt-0.5 block">ร่วมเกื้อกูล</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setStatus('preorder')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
                   status === 'preorder'
                     ? 'border-amber-600 bg-amber-50 ring-2 ring-amber-500/20'
                     : 'border-stone-200 bg-white'
                 }`}
               >
-                <span className="text-base font-black text-amber-700 block">🟡 สั่งจองล่วงหน้า</span>
-                <span className="text-xs text-stone-500 mt-1 block">กำลังออกผลใกล้เก็บเกี่ยว</span>
+                <span className="text-sm font-black text-amber-700 block">🟡 สั่งจองล่วงหน้า</span>
+                <span className="text-[11px] text-stone-500 mt-0.5 block">ใกล้เก็บเกี่ยว</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatus('hidden')}
+                className={`p-3.5 rounded-2xl border text-left transition-all ${
+                  status === 'hidden'
+                    ? 'border-rose-600 bg-rose-50 ring-2 ring-rose-500/20'
+                    : 'border-stone-200 bg-white'
+                }`}
+              >
+                <span className="text-sm font-black text-rose-700 block">🔒 ไม่แสดง</span>
+                <span className="text-[11px] text-stone-500 mt-0.5 block">ซ่อนจาก e-Catalog</span>
               </button>
             </div>
+
+            {status === 'hidden' && (
+              <div className="p-3 bg-stone-100 border border-stone-200 rounded-2xl text-xs text-stone-700 flex items-start gap-2">
+                <EyeOff className="w-4 h-4 text-stone-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">สถานะ "ไม่แสดง":</p>
+                  <p>ผลผลิตนี้จะไม่ปรากฏบนตลาดของดีเครือข่าย (e-Catalog) หรือผลการค้นหาของบุคคลภายนอก จะมองเห็นได้เฉพาะในหน้าแปลงของฉันเท่านั้น</p>
+                </div>
+              </div>
+            )}
 
             {/* Price Input (if status !== 'share') */}
             {status !== 'share' && (

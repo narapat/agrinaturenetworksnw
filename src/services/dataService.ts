@@ -22,7 +22,8 @@ import {
   getDocs, 
   doc, 
   setDoc, 
-  updateDoc 
+  updateDoc,
+  deleteDoc
 } from 'firebase/firestore';
 
 // Local Storage Keys
@@ -113,8 +114,15 @@ class DataService {
       localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(this.auditLogs));
       localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(this.news));
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, this.currentUserId);
+      this.dispatchDataUpdated();
     } catch (e) {
       console.error('Error saving data to localStorage', e);
+    }
+  }
+
+  public dispatchDataUpdated() {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
     }
   }
 
@@ -151,38 +159,95 @@ class DataService {
         }
         console.log('✅ Firestore seed completed!');
       } else {
-        // ดึงข้อมูลจริงล่าสุดจาก Cloud Firestore ซิงค์เข้าเครื่อง
+        // ดึงข้อมูลจริงล่าสุดจาก Cloud Firestore ซิงค์เข้าเครื่องแบบผสาน (Merge) เพื่อไม่ให้ทับสถานะที่แอดมินอนุมัติไปแล้ว
         const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
         if (remoteProds.length > 0) {
-          this.products = remoteProds;
+          const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
+          this.products = this.products.map((localP) => {
+            const remoteP = remoteProdMap.get(localP.id);
+            return remoteP ? { ...remoteP, ...localP } : localP;
+          });
+          for (const rp of remoteProds) {
+            if (!this.products.some((p) => p.id === rp.id)) {
+              this.products.push(rp);
+            }
+          }
         }
 
         const membersSnap = await getDocs(collection(db, 'members'));
         if (!membersSnap.empty) {
-          this.members = membersSnap.docs.map((d) => d.data() as MemberProfile);
+          const remoteMembers = membersSnap.docs.map((d) => d.data() as MemberProfile);
+          const remoteMemMap = new Map(remoteMembers.map((m) => [m.id, m]));
+
+          this.members = this.members.map((localM) => {
+            const remoteM = remoteMemMap.get(localM.id);
+            if (!remoteM) return localM;
+            // จุดสำคัญ: ถ้าสมาชิกได้รับการอนุมัติในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
+            if (localM.status === 'approved') {
+              if (remoteM.status !== 'approved') {
+                this.firestoreUpdate('members', localM.id, { status: 'approved' });
+              }
+              return { ...remoteM, ...localM, status: 'approved' };
+            }
+            return { ...localM, ...remoteM };
+          });
+
+          for (const rm of remoteMembers) {
+            if (!this.members.some((m) => m.id === rm.id)) {
+              this.members.push(rm);
+            }
+          }
         }
 
         const farmsSnap = await getDocs(collection(db, 'farms'));
         if (!farmsSnap.empty) {
-          this.farms = farmsSnap.docs.map((d) => d.data() as Farm);
+          const remoteFarms = farmsSnap.docs.map((d) => d.data() as Farm);
+          const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
+
+          this.farms = this.farms.map((localF) => {
+            const remoteF = remoteFarmMap.get(localF.id);
+            return remoteF ? { ...remoteF, ...localF } : localF;
+          });
+
+          for (const rf of remoteFarms) {
+            if (!this.farms.some((f) => f.id === rf.id)) {
+              this.farms.push(rf);
+            }
+          }
         }
 
         const categoriesSnap = await getDocs(collection(db, 'categories'));
         if (!categoriesSnap.empty) {
-          this.categories = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
+          const remoteCats = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
+          for (const rc of remoteCats) {
+            if (!this.categories.some((c) => c.id === rc.id)) {
+              this.categories.push(rc);
+            }
+          }
         }
 
         const logsSnap = await getDocs(collection(db, 'auditLogs'));
         if (!logsSnap.empty) {
-          this.auditLogs = logsSnap.docs.map((d) => d.data() as AuditLog);
+          const remoteLogs = logsSnap.docs.map((d) => d.data() as AuditLog);
+          for (const rl of remoteLogs) {
+            if (!this.auditLogs.some((l) => l.id === rl.id)) {
+              this.auditLogs.push(rl);
+            }
+          }
         }
 
         const newsSnap = await getDocs(collection(db, 'news'));
         if (!newsSnap.empty) {
-          this.news = newsSnap.docs.map((d) => d.data() as NewsEvent);
+          const remoteNews = newsSnap.docs.map((d) => d.data() as NewsEvent);
+          if (remoteNews.length > 0) {
+            this.news = remoteNews;
+          }
         }
 
         this.save();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('nsw_data_updated'));
+        }
       }
 
       this.isFirestoreSynced = true;
@@ -222,6 +287,15 @@ class DataService {
     }
   }
 
+  private async firestoreDelete(collectionName: string, id: string) {
+    if (typeof window === 'undefined' || !db) return;
+    try {
+      await deleteDoc(doc(db, collectionName, id));
+    } catch (e) {
+      console.warn(`Firestore delete error [${collectionName}/${id}]:`, e);
+    }
+  }
+
   // ==================== SECURITY & ZERO-DATA LEAKAGE ====================
   // คัดกรองข้อมูลก่อนส่งให้บุคคลทั่วไปดู (ตัดเบอร์โทร, LINE ID, และพิกัดจริงทิ้งทั้งหมด)
   private sanitizeFarmForPublic(farm: Farm): Farm {
@@ -256,7 +330,10 @@ class DataService {
    * ดึงรายการผลผลิตสาธารณะทั้งหมด (ปลอดภัยจากมิจฉาชีพ)
    */
   getPublicProducts(filters?: { district?: string; category?: string; status?: string }): Product[] {
-    let result = this.products.map((p) => this.sanitizeProductForPublic(p));
+    // กรองสินค้าสถานะ 'hidden' (ไม่แสดง) ออกจากตลาด e-Catalog สาธารณะ 100%
+    let result = this.products
+      .filter((p) => p.status !== 'hidden')
+      .map((p) => this.sanitizeProductForPublic(p));
 
     if (filters?.district && filters.district !== 'ทั้งหมด') {
       result = result.filter((p) => p.district === filters.district);
@@ -326,6 +403,11 @@ class DataService {
     return prod ? this.sanitizeProductForPublic(prod) : undefined;
   }
 
+  // ดึงข้อมูลสินค้าตัวเต็มสำหรับเจ้าของหรือแอดมินแก้ไขข้อมูล
+  getRawProductById(id: string): Product | undefined {
+    return this.products.find((p) => p.id === id);
+  }
+
   // ==================== FARM & DIRECTORY ====================
 
   getPublicFarms(district?: string): Farm[] {
@@ -346,9 +428,9 @@ class DataService {
     return this.farms.find((f) => f.id === id);
   }
 
-  getProductsByFarmId(farmId: string): Product[] {
+  getProductsByFarmId(farmId: string, includeHidden = false): Product[] {
     return this.products
-      .filter((p) => p.farmId === farmId)
+      .filter((p) => p.farmId === farmId && (includeHidden || p.status !== 'hidden'))
       .map((p) => this.sanitizeProductForPublic(p));
   }
 
@@ -436,6 +518,7 @@ class DataService {
     coordinates?: { lat: number; lng: number };
     trainingCourse?: string;
     trainingLocation?: string;
+    photos?: string[];
   }): { member: MemberProfile; farm: Farm } {
     const memberId = `mem-${Date.now()}`;
     const farmId = `farm-${Date.now()}`;
@@ -447,7 +530,7 @@ class DataService {
       farmName: data.farmName,
       tagline: data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
       story: data.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์',
-      photos: [
+      photos: data.photos && data.photos.length > 0 ? data.photos : [
         'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
       ],
       district: data.district,
@@ -599,6 +682,71 @@ class DataService {
     }
   }
 
+  // แก้ไขข้อมูลผลผลิตที่ลงไปแล้ว (ชื่อ, ราคา, หมวดหมู่, รูปภาพ, สถานะ, คำอธิบาย)
+  updateProduct(productId: string, updatedData: Partial<Product>): Product | null {
+    const index = this.products.findIndex((p) => p.id === productId);
+    if (index === -1) return null;
+
+    const existing = this.products[index];
+    const updated: Product = {
+      ...existing,
+      ...updatedData,
+      id: existing.id,
+      farmId: existing.farmId,
+      updatedAt: new Date().toISOString().split('T')[0],
+    };
+
+    this.products[index] = updated;
+    this.save();
+    this.firestoreUpdate('products', productId, updated);
+    return updated;
+  }
+
+  // ลบผลผลิตออกจากระบบ
+  deleteProduct(productId: string): boolean {
+    const initialLen = this.products.length;
+    this.products = this.products.filter((p) => p.id !== productId);
+    if (this.products.length !== initialLen) {
+      this.save();
+      this.firestoreDelete('products', productId);
+      return true;
+    }
+    return false;
+  }
+
+  // แก้ไขข้อมูลแปลงกสิกรรม (ชื่อแปลง, คำขวัญ, เรื่องเล่า, อำเภอ, ตำบล, แนวทางปฏิบัติ)
+  updateFarm(farmId: string, updatedData: Partial<Farm>): Farm | null {
+    const farm = this.farms.find((f) => f.id === farmId);
+    if (!farm) return null;
+
+    Object.assign(farm, updatedData);
+
+    // ซิงค์ชื่อแปลง อำเภอ ตำบล ไปยังสินค้าของแปลงนี้
+    if (updatedData.farmName || updatedData.district || updatedData.subdistrict) {
+      this.products = this.products.map((p) => {
+        if (p.farmId === farmId) {
+          const updatedP = {
+            ...p,
+            farmName: farm.farmName,
+            district: farm.district,
+            subdistrict: farm.subdistrict,
+          };
+          this.firestoreUpdate('products', p.id, {
+            farmName: farm.farmName,
+            district: farm.district,
+            subdistrict: farm.subdistrict,
+          });
+          return updatedP;
+        }
+        return p;
+      });
+    }
+
+    this.save();
+    this.firestoreUpdate('farms', farmId, farm);
+    return farm;
+  }
+
   // ==================== ADMIN: CATEGORIES & MEMBERS ====================
 
   getCategories(): CategoryTag[] {
@@ -639,15 +787,18 @@ class DataService {
       member.status = 'approved';
 
       const farm = this.farms.find((f) => f.id === member.farmId);
+      const adminId = admin?.id || 'admin-001';
+      const adminName = admin?.fullName || 'แอดมินเครือข่าย';
+
       const newLog: AuditLog = {
         id: `log-${Date.now()}`,
         action: 'approve_member',
-        performedByAdminId: admin.id,
-        performedByAdminName: admin.fullName,
+        performedByAdminId: adminId,
+        performedByAdminName: adminName,
         targetMemberId: member.id,
         targetMemberName: member.fullName,
         targetFarmName: farm?.farmName || 'แปลงใหม่',
-        details: `แอดมิน ${admin.fullName} อนุมัติการเป็นสมาชิกของ ${member.fullName} (${farm?.farmName || ''}) ผ่านการตรวจรูปหน้าและยืนยันตัวตน`,
+        details: `แอดมิน ${adminName} อนุมัติการเป็นสมาชิกของ ${member.fullName} (${farm?.farmName || ''}) ผ่านการตรวจรูปหน้าและยืนยันตัวตน`,
         timestamp: new Date().toLocaleString('th-TH'),
       };
       this.auditLogs.unshift(newLog);
@@ -655,6 +806,10 @@ class DataService {
 
       this.firestoreUpdate('members', memberId, { status: 'approved' });
       this.firestoreSet('auditLogs', newLog.id, newLog);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
     }
   }
 

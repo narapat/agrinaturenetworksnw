@@ -7,6 +7,7 @@ import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import ImageCropperModal from '@/components/ui/ImageCropperModal';
+import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
 import { 
   ArrowLeft, 
   Camera, 
@@ -18,7 +19,8 @@ import {
   MapPin,
   Phone,
   MessageSquare,
-  GraduationCap
+  GraduationCap,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function MemberRegisterPage() {
@@ -39,6 +41,9 @@ export default function MemberRegisterPage() {
   const [isPublicPhone, setIsPublicPhone] = useState(false); // ค่าเริ่มต้น: ซ่อนเบอร์โทร (Anti-Scam)
   const [isPublicLine, setIsPublicLine] = useState(true);
   const [selectedPractices, setSelectedPractices] = useState<string[]>(['โคก หนอง นา', 'กสิกรรมธรรมชาติ']);
+  const [farmPhotos, setFarmPhotos] = useState<string[]>([
+    'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop'
+  ]);
 
   // Face Photo
   const [facePhotoUrl, setFacePhotoUrl] = useState(
@@ -93,6 +98,7 @@ export default function MemberRegisterPage() {
       isPublicPhone,
       isPublicLine,
       practices: selectedPractices,
+      photos: farmPhotos,
     });
 
     setIsSubmitted(true);
@@ -221,6 +227,16 @@ export default function MemberRegisterPage() {
                 onChange={(e) => setTagline(e.target.value)}
                 placeholder="เช่น คืนชีวิตให้ดินด้วยถ่านไบโอชาร์, สวนกล้วยอินทรีย์วิถีพอเพียง..."
                 className="w-full p-3.5 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            {/* Multi-Photo Farm Uploader */}
+            <div className="p-4 sm:p-5 rounded-2xl bg-stone-50 border border-stone-200">
+              <FarmPhotoUploader
+                photos={farmPhotos}
+                onChange={setFarmPhotos}
+                label="รูปภาพบรรยากาศแปลง / ศูนย์เรียนรู้ (อัพโหลดได้หลายรูป)"
+                description="อัพโหลดรูปบรรยากาศแปลง โคก หนอง นา เตาเผาไบโอชาร์ หรือสวนผลไม้ได้หลายรูปพร้อมกัน ระบบจะย่อขนาดให้อัตโนมัติและแสดงผลแบบภาพวน (Slideshow)"
               />
             </div>
           </div>

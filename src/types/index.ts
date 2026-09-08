@@ -4,7 +4,7 @@ export type UserRole = 'guest' | 'member' | 'admin';
 
 export type MemberStatus = 'pending' | 'approved' | 'rejected';
 
-export type ProductStatus = 'sale' | 'share' | 'preorder' | 'out_of_stock';
+export type ProductStatus = 'sale' | 'share' | 'preorder' | 'out_of_stock' | 'hidden';
 
 export type DelegationStatus = 'none' | 'requested' | 'completed';
 

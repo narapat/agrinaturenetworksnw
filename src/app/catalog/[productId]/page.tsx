@@ -18,7 +18,9 @@ import {
   ChevronRight,
   ExternalLink,
   Sparkles,
-  Lock
+  Lock,
+  Edit3,
+  EyeOff
 } from 'lucide-react';
 
 export default function ProductDetailPage() {
@@ -31,9 +33,12 @@ export default function ProductDetailPage() {
   const [farm, setFarm] = useState<Farm | null>(null);
   const [crossFarmProducts, setCrossFarmProducts] = useState<Product[]>([]);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     if (!productId) return;
+    const user = dataService.getCurrentUser();
+    setCurrentUser(user);
     const prod = dataService.getProductById(productId);
     if (!prod) {
       router.push('/catalog');
@@ -51,6 +56,32 @@ export default function ProductDetailPage() {
   }, [productId, router]);
 
   if (!product) return null;
+
+  const isOwner = currentUser && farm && (currentUser.farmId === farm.id || currentUser.id === farm.memberId);
+  const isAdmin = currentUser?.role === 'admin';
+  const canEdit = Boolean(isOwner || isAdmin);
+
+  if (product.status === 'hidden' && !canEdit) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-stone-100 text-stone-500 mx-auto flex items-center justify-center shadow-inner">
+          <EyeOff className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-bold text-stone-900">ผลผลิตนี้ไม่เปิดให้บุคคลทั่วไปเข้าชม</h2>
+        <p className="text-xs text-stone-500 leading-relaxed max-w-xs mx-auto">
+          เจ้าของแปลงได้ตั้งค่าสถานะ "ไม่แสดง" (ซ่อนจาก e-Catalog สาธารณะ) ไว้ชั่วคราวครับ
+        </p>
+        <div className="pt-2">
+          <Link
+            href="/catalog"
+            className="inline-block px-6 py-3 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md"
+          >
+            ← กลับสู่หน้ารวมผลผลิต
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleShareLine = () => {
     const url = encodeURIComponent(window.location.href);
@@ -70,16 +101,46 @@ export default function ProductDetailPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
-      {/* Back Button */}
-      <Link
-        href="/catalog"
-        className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-sm transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>กลับไปหน้ารวมผลผลิต</span>
-      </Link>
+      {/* Top Header: Back Button & Owner Edit CTA */}
+      <div className="flex items-center justify-between gap-4">
+        <Link
+          href="/catalog"
+          className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-sm transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>กลับไปหน้ารวมผลผลิต</span>
+        </Link>
+
+        {canEdit && (
+          <Link
+            href={`/member/edit-product/${product.id}`}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold border border-brand-200 transition-colors shadow-xs"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-brand-600" />
+            <span>✏️ แก้ไขข้อมูลผลผลิตนี้</span>
+          </Link>
+        )}
+      </div>
+
+      {/* Hidden Status Alert for Owner/Admin */}
+      {product.status === 'hidden' && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-xs sm:text-sm text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2 font-medium">
+            <EyeOff className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>
+              🔒 ผลผลิตนี้อยู่ในสถานะ <b>"ไม่แสดง"</b> (ซ่อนจาก e-Catalog สาธารณะ บุคคลภายนอกจะไม่เห็นรายการนี้)
+            </span>
+          </div>
+          <Link
+            href={`/member/edit-product/${product.id}`}
+            className="px-3 py-1 bg-amber-800 hover:bg-amber-900 text-white rounded-xl font-bold text-xs shrink-0 transition-colors"
+          >
+            แก้ไขสถานะ
+          </Link>
+        </div>
+      )}
 
       {/* Main Product Card */}
       <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-12 gap-0">

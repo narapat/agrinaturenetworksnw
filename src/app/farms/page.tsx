@@ -99,6 +99,13 @@ export default function FarmsDirectoryPage() {
                     <span>{farm.district}</span>
                   </span>
                 </div>
+                {farm.photos && farm.photos.length > 1 && (
+                  <div className="absolute bottom-2.5 right-2.5">
+                    <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-bold backdrop-blur-xs flex items-center gap-1">
+                      📷 {farm.photos.length} รูป
+                    </span>
+                  </div>
+                )}
               </Link>
 
               {/* Farm Details */}

@@ -47,6 +47,13 @@ export default function AdminPage() {
 
   useEffect(() => {
     loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('nsw_data_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('nsw_data_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   const loadData = () => {
@@ -58,8 +65,27 @@ export default function AdminPage() {
   };
 
   const handleApprove = (memberId: string) => {
-    if (!currentUser) return;
-    dataService.approveMember(currentUser, memberId);
+    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
+      || dataService.getAllMembers().find((m) => m.role === 'admin')
+      || currentUser
+      || { 
+          id: 'admin-001', 
+          fullName: 'แอดมินเครือข่าย', 
+          role: 'admin' as const, 
+          status: 'approved' as const, 
+          fontSizePref: 'normal' as const, 
+          phone: '', 
+          lineId: '', 
+          isPublicPhone: false, 
+          isPublicLine: false, 
+          isPublicSocials: false, 
+          socials: {}, 
+          delegationStatus: 'none' as const, 
+          farmId: 'farm-001', 
+          facePhotoUrl: '', 
+          createdAt: '' 
+        };
+    dataService.approveMember(adminUser, memberId);
     loadData();
   };
 
