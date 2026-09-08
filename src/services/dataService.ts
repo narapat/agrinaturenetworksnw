@@ -280,6 +280,89 @@ class DataService {
     }
   }
 
+  // ==================== MEMBER REGISTRATION ====================
+
+  /**
+   * สมาชิกเกษตรกรลงทะเบียนแปลงใหม่ (สถานะเริ่มต้น: รออนุมัติ pending)
+   */
+  registerNewMember(data: {
+    fullName: string;
+    facePhotoUrl: string;
+    farmName: string;
+    tagline?: string;
+    story: string;
+    district: string;
+    subdistrict: string;
+    phone: string;
+    lineId: string;
+    isPublicPhone: boolean;
+    isPublicLine: boolean;
+    practices: string[];
+    coordinates?: { lat: number; lng: number };
+  }): { member: MemberProfile; farm: Farm } {
+    const memberId = `mem-${Date.now()}`;
+    const farmId = `farm-${Date.now()}`;
+
+    const newFarm: Farm = {
+      id: farmId,
+      memberId: memberId,
+      ownerName: data.fullName,
+      farmName: data.farmName,
+      tagline: data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
+      story: data.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์',
+      photos: [
+        'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
+      ],
+      district: data.district,
+      subdistrict: data.subdistrict,
+      internalCoordinates: data.coordinates || {
+        lat: 15.7 + Math.random() * 0.2,
+        lng: 100.0 + Math.random() * 0.2,
+      },
+      publicZone: {
+        name: `โซน ต.${data.subdistrict} อ.${data.district}`,
+        approxLat: 15.7 + Math.random() * 0.2,
+        approxLng: 100.0 + Math.random() * 0.2,
+        radiusKm: 4.0,
+      },
+      practices: data.practices.length > 0 ? data.practices : ['กสิกรรมธรรมชาติ', 'ไร้สารเคมี 100%'],
+      isPublicPhone: data.isPublicPhone,
+      isPublicLine: data.isPublicLine,
+      phone: data.phone,
+      lineId: data.lineId,
+      socials: {
+        lineId: data.lineId,
+      },
+    };
+
+    const newMember: MemberProfile = {
+      id: memberId,
+      fullName: data.fullName,
+      facePhotoUrl: data.facePhotoUrl,
+      role: 'member',
+      status: 'pending', // ต้องให้แอดมินเครือข่ายตรวจสอบและอนุมัติก่อน
+      fontSizePref: 'normal',
+      phone: data.phone,
+      lineId: data.lineId,
+      isPublicPhone: data.isPublicPhone,
+      isPublicLine: data.isPublicLine,
+      isPublicSocials: true,
+      socials: {
+        lineId: data.lineId,
+      },
+      delegationStatus: 'none',
+      farmId: farmId,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    this.farms.unshift(newFarm);
+    this.members.unshift(newMember);
+    this.currentUserId = memberId; // สลับผู้ใช้เป็นสมาชิกใหม่ทันที
+    this.save();
+
+    return { member: newMember, farm: newFarm };
+  }
+
   // ==================== ASSISTED ENTRY & TRACEABILITY ====================
 
   /**

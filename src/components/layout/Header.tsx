@@ -217,6 +217,16 @@ export default function Header() {
                       </button>
                     ))}
                   </div>
+
+                  <div className="p-2 border-t border-stone-100">
+                    <Link
+                      href="/member/register"
+                      onClick={() => setShowUserMenu(false)}
+                      className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <span>+ สมัครสมาชิกแปลงใหม่</span>
+                    </Link>
+                  </div>
                 </div>
               )}
             </div>

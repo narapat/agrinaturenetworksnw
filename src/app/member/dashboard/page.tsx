@@ -94,15 +94,28 @@ export default function MemberDashboardPage() {
             <h1 className={`${getTextClass('title')} text-2xl sm:text-3xl font-black text-stone-900`}>
               สวัสดี, {currentUser.fullName}
             </h1>
-            <span className="px-3 py-0.5 rounded-full bg-brand-100 text-brand-800 text-xs font-bold flex items-center gap-1">
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>สมาชิกที่ผ่านการยืนยัน</span>
-            </span>
+            {currentUser.status === 'approved' ? (
+              <span className="px-3 py-0.5 rounded-full bg-brand-100 text-brand-800 text-xs font-bold flex items-center gap-1">
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>สมาชิกที่ผ่านการยืนยัน</span>
+              </span>
+            ) : (
+              <span className="px-3 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold flex items-center gap-1">
+                <AlertCircle className="w-3.5 h-3.5" />
+                <span>รอการอนุมัติจากแอดมินเครือข่าย</span>
+              </span>
+            )}
           </div>
           
           <p className="text-sm font-semibold text-stone-500">
             แปลง: <b className="text-stone-800">{farm?.farmName || 'ยังไม่ได้ระบุแปลง'}</b> ({farm?.district})
           </p>
+
+          {currentUser.status === 'pending' && (
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-200 mt-2 font-medium">
+              ⏳ ใบสมัครแปลงของท่านอยู่ระหว่างรอแอดมินเครือข่ายตรวจสอบรูปหน้าและข้อมูล ท่านสามารถลงผลผลิตเตรียมไว้ได้เลยครับ
+            </p>
+          )}
         </div>
 
         {/* Quick Add Product Button */}
