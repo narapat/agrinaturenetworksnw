@@ -82,7 +82,11 @@ export default function AddProductPage() {
       skuTagId: selectedSkuTag.id,
       skuTagName: selectedSkuTag.name,
       category: selectedSkuTag.category,
-      categoryName: selectedSkuTag.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' : selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' : 'ผลผลิตสด',
+      categoryName: 
+        selectedSkuTag.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
+        selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
+        selectedSkuTag.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
+        selectedSkuTag.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
       status: status,
       price: status === 'share' ? 0 : Number(price) || 0,
       unit: unit,
@@ -100,7 +104,7 @@ export default function AddProductPage() {
     }, 600);
   };
 
-  const commonUnits = ['กิโลกรัม', 'ขวด (1,000 มล.)', 'ถุง (5 กก.)', 'กระสอบ (15 กก.)', 'หวี', 'ชุด/ซอง'];
+  const commonUnits = ['กิโลกรัม', 'ขวด (1,000 มล.)', 'ถุง (5 กก.)', 'กระสอบ (15 กก.)', 'หวี', 'ชุด/ซอง', 'ชิ้น/เล่ม', 'เตา/ชุด', 'เครื่อง'];
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6">

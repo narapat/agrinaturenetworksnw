@@ -10,11 +10,12 @@ interface PhoneMockupProps {
 }
 
 export default function PhoneMockup({ sampleProducts }: PhoneMockupProps) {
-  const [filter, setFilter] = useState<'all' | 'byproduct' | 'share'>('all');
+  const [filter, setFilter] = useState<'all' | 'byproduct' | 'share' | 'tool'>('all');
 
   const filtered = sampleProducts.filter((p) => {
     if (filter === 'byproduct') return p.category === 'byproduct';
     if (filter === 'share') return p.status === 'share';
+    if (filter === 'tool') return p.category === 'tool';
     return true;
   });
 
@@ -70,7 +71,17 @@ export default function PhoneMockup({ sampleProducts }: PhoneMockupProps) {
                   : 'bg-white border border-stone-200 text-stone-600'
               }`}
             >
-              🪵 ถ่าน & น้ำส้ม
+              🪵 ปัจจัยผลิต
+            </button>
+            <button
+              onClick={() => setFilter('tool')}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold shrink-0 transition-colors ${
+                filter === 'tool'
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white border border-stone-200 text-stone-600'
+              }`}
+            >
+              🛠️ เครื่องมือ
             </button>
             <button
               onClick={() => setFilter('share')}

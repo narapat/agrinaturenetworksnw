@@ -68,6 +68,8 @@ export interface Farm {
   socials?: SocialLinks;
 }
 
+export type ProductCategory = 'byproduct' | 'raw' | 'processed' | 'seed' | 'tool';
+
 export interface Product {
   id: string;
   farmId: string;
@@ -77,8 +79,8 @@ export interface Product {
   title: string; // เช่น "ถ่านไบโอชาร์อุณหภูมิสูง", "น้ำส้มควันไม้บริสุทธิ์"
   skuTagId: string; // จับคู่กับ Standard SKU เช่น "biochar", "wood_vinegar", "bokashi"
   skuTagName: string; // เช่น "ถ่านไบโอชาร์"
-  category: 'byproduct' | 'raw' | 'processed' | 'seed';
-  categoryName: string; // ปัจจัยการผลิต/By-product, วัตถุดิบสด, แปรรูป, เมล็ดพันธุ์
+  category: ProductCategory;
+  categoryName: string; // ปัจจัยการผลิต/By-product, วัตถุดิบสด, แปรรูป, เมล็ดพันธุ์, อุปกรณ์ เครื่องมือ
   status: ProductStatus;
   price?: number; // ราคา (ถ้า status === 'sale')
   unit: string; // กิโลกรัม, ขวด 500ml, ถุง 5 กก., กระสอบ, ต้น, ซอง
@@ -97,7 +99,7 @@ export interface Product {
 export interface SKUGroup {
   skuTagId: string;
   name: string;
-  category: 'byproduct' | 'raw' | 'processed' | 'seed';
+  category: ProductCategory;
   categoryName: string;
   icon: string;
   itemCount: number;
@@ -112,7 +114,7 @@ export interface SKUGroup {
 export interface CategoryTag {
   id: string;
   name: string;
-  category: 'byproduct' | 'raw' | 'processed' | 'seed';
+  category: ProductCategory;
   icon: string;
   description: string;
   isActive: boolean;

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { MemberProfile, CategoryTag, AuditLog, Product } from '@/types';
+import { MemberProfile, CategoryTag, AuditLog, Product, ProductCategory } from '@/types';
 import { 
   ShieldCheck, 
   UserCheck, 
@@ -41,7 +41,7 @@ export default function AdminPage() {
   // New Category State
   const [newCatName, setNewCatName] = useState('');
   const [newCatIcon, setNewCatIcon] = useState('🌾');
-  const [newCatType, setNewCatType] = useState<'byproduct' | 'raw' | 'processed' | 'seed'>('raw');
+  const [newCatType, setNewCatType] = useState<ProductCategory>('raw');
   const [newCatDesc, setNewCatDesc] = useState('');
   const [showAddCat, setShowAddCat] = useState(false);
 
@@ -74,7 +74,11 @@ export default function AdminPage() {
       skuTagId: cat.id,
       skuTagName: cat.name,
       category: cat.category,
-      categoryName: cat.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' : cat.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' : 'ผลผลิตสด',
+      categoryName: 
+        cat.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
+        cat.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
+        cat.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
+        cat.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
       status: 'sale',
       price: Number(assistPrice) || 0,
       unit: 'กก./ชุด',
@@ -386,10 +390,11 @@ export default function AdminPage() {
                   onChange={(e) => setNewCatType(e.target.value as any)}
                   className="p-2.5 rounded-xl border border-stone-200 text-xs sm:text-sm"
                 >
-                  <option value="byproduct">ปัจจัยการผลิต / By-product</option>
                   <option value="raw">ผลผลิตสด</option>
                   <option value="processed">แปรรูป</option>
+                  <option value="byproduct">ปัจจัยการผลิต / By-product</option>
                   <option value="seed">เมล็ดพันธุ์/กิ่งพันธุ์</option>
+                  <option value="tool">อุปกรณ์ / เครื่องมือ</option>
                 </select>
               </div>
               <input
@@ -432,8 +437,11 @@ export default function AdminPage() {
                     <h4 className="font-bold text-stone-900 text-sm truncate">
                       {cat.name}
                     </h4>
-                    <p className="text-[11px] text-stone-400">
-                      {cat.category}
+                    <p className="text-[11px] text-stone-500 font-medium">
+                      {cat.category === 'byproduct' ? '🪵 ปัจจัยการผลิต' :
+                       cat.category === 'seed' ? '🌱 เมล็ดพันธุ์' :
+                       cat.category === 'tool' ? '🛠️ อุปกรณ์ เครื่องมือ' :
+                       cat.category === 'processed' ? '🍯 แปรรูป' : '🌾 ผลผลิตสด'}
                     </p>
                   </div>
                 </div>

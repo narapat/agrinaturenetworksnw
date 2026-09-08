@@ -88,7 +88,7 @@ function CatalogContent() {
             ของดีกสิกรรมธรรมชาตินครสวรรค์
           </h1>
           <p className={`${getTextClass('body')} text-brand-100 text-xs sm:text-base`}>
-            ผลผลิตสด แปรรูป ถ่านไบโอชาร์ น้ำส้มควันไม้ และเมล็ดพันธุ์แบ่งปัน จาก 15 อำเภอ
+            ผลผลิตสด แปรรูป ถ่านไบโอชาร์ อุปกรณ์เครื่องมือ และเมล็ดพันธุ์แบ่งปัน จาก 15 อำเภอ
           </p>
         </div>
       </div>
@@ -166,12 +166,39 @@ function CatalogContent() {
 
         </div>
 
-        {/* Filter Badges (Status & Category) */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <span className="text-xs font-bold text-stone-400">สถานะ:</span>
+        {/* Filter Badges: Categories */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-stone-100">
+          <span className="text-xs font-bold text-stone-400 shrink-0 mr-1">หมวดหมู่:</span>
+          {[
+            { id: 'ทั้งหมด', label: 'ทั้งหมด' },
+            { id: 'raw', label: '🌾 ผลผลิตสด' },
+            { id: 'processed', label: '🍯 แปรรูป' },
+            { id: 'byproduct', label: '🪵 ปัจจัยการผลิต' },
+            { id: 'seed', label: '🌱 เมล็ดพันธุ์' },
+            { id: 'tool', label: '🛠️ อุปกรณ์ เครื่องมือ' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                selectedCategory === cat.id
+                  ? 'bg-brand-600 text-white shadow-xs'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filter Badges: Status */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <span className="text-xs font-bold text-stone-400 shrink-0 mr-1">สถานะ:</span>
           {['ทั้งหมด', 'sale', 'share', 'preorder'].map((st) => (
             <button
               key={st}
+              type="button"
               onClick={() => setSelectedStatus(st)}
               className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
                 selectedStatus === st
@@ -186,12 +213,19 @@ function CatalogContent() {
             </button>
           ))}
 
-          {selectedSkuTag && (
+          {(selectedSkuTag || selectedCategory !== 'ทั้งหมด' || selectedStatus !== 'ทั้งหมด' || selectedDistrict !== 'ทั้งหมด') && (
             <button
-              onClick={() => setSelectedSkuTag('')}
+              type="button"
+              onClick={() => {
+                setSelectedSkuTag('');
+                setSelectedCategory('ทั้งหมด');
+                setSelectedStatus('ทั้งหมด');
+                setSelectedDistrict('ทั้งหมด');
+                setSearchQuery('');
+              }}
               className="ml-auto text-xs text-rose-600 hover:underline font-bold"
             >
-              ✕ ล้างตัวกรองชนิดผลผลิต
+              ✕ ล้างตัวกรองทั้งหมด
             </button>
           )}
         </div>
