@@ -38,7 +38,7 @@ export default function HomePage() {
       <div className="absolute top-80 -right-40 w-96 h-96 bg-emerald-100/50 rounded-full blur-3xl pointer-events-none" />
 
       {/* ================= HERO SECTION (Inspired by Reference Design) ================= */}
-      <section className="pt-8 pb-16 md:pt-14 md:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="pt-10 sm:pt-14 md:pt-16 pb-16 md:pb-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
           
           {/* Left Column: Headline, Subtitle, CTAs, Stats */}
