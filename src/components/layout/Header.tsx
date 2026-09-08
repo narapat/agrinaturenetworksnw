@@ -101,10 +101,11 @@ export default function Header() {
   ];
 
   return (
-    <header 
-      className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full overflow-hidden"
-      style={{ fontSize: '15px' }}
-    >
+    <>
+      <header 
+        className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full"
+        style={{ fontSize: '15px' }}
+      >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full">
         <div className="flex items-center justify-between py-2.5 sm:py-3.5 min-h-[64px] sm:min-h-[72px] gap-2">
           
@@ -168,7 +169,10 @@ export default function Header() {
             {/* Font Size Toggle */}
             <div className="relative">
               <button
-                onClick={() => setShowFontMenu(!showFontMenu)}
+                onClick={() => {
+                  setShowFontMenu(!showFontMenu);
+                  setShowUserMenu(false);
+                }}
                 className="flex items-center gap-1 px-2 py-1.5 sm:px-3 sm:py-2 rounded-full border border-stone-200 bg-stone-50/90 text-stone-700 hover:bg-stone-100 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap"
                 title="ปรับขนาดตัวอักษร"
               >
@@ -179,51 +183,61 @@ export default function Header() {
               </button>
 
               {showFontMenu && (
-                <div className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-xl border border-stone-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-3.5 py-1.5 text-xs font-semibold text-stone-400 border-b border-stone-100">
-                    ขนาดตัวอักษร
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowFontMenu(false)} 
+                    aria-hidden="true" 
+                  />
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-2xl border border-stone-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-3.5 py-1.5 text-xs font-semibold text-stone-400 border-b border-stone-100">
+                      ขนาดตัวอักษร
+                    </div>
+                    <button
+                      onClick={() => {
+                        setFontSize('normal');
+                        if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'normal');
+                        setShowFontMenu(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 text-sm flex items-center justify-between hover:bg-stone-50 transition-colors"
+                    >
+                      <span className="font-medium">ปกติ</span>
+                      {fontSize === 'normal' && <Check className="w-4 h-4 text-brand-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFontSize('large');
+                        if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'large');
+                        setShowFontMenu(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 text-base flex items-center justify-between hover:bg-stone-50 transition-colors"
+                    >
+                      <span className="font-bold">ใหญ่</span>
+                      {fontSize === 'large' && <Check className="w-4 h-4 text-brand-600" />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setFontSize('xlarge');
+                        if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'xlarge');
+                        setShowFontMenu(false);
+                      }}
+                      className="w-full text-left px-3.5 py-2.5 text-lg flex items-center justify-between hover:bg-stone-50 transition-colors"
+                    >
+                      <span className="font-extrabold text-brand-800">ใหญ่พิเศษ</span>
+                      {fontSize === 'xlarge' && <Check className="w-4 h-4 text-brand-600" />}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => {
-                      setFontSize('normal');
-                      if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'normal');
-                      setShowFontMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-sm flex items-center justify-between hover:bg-stone-50 transition-colors"
-                  >
-                    <span className="font-medium">ปกติ</span>
-                    {fontSize === 'normal' && <Check className="w-4 h-4 text-brand-600" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFontSize('large');
-                      if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'large');
-                      setShowFontMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-base flex items-center justify-between hover:bg-stone-50 transition-colors"
-                  >
-                    <span className="font-bold">ใหญ่</span>
-                    {fontSize === 'large' && <Check className="w-4 h-4 text-brand-600" />}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFontSize('xlarge');
-                      if (currentUser) dataService.updateFontSizePreference(currentUser.id, 'xlarge');
-                      setShowFontMenu(false);
-                    }}
-                    className="w-full text-left px-3.5 py-2.5 text-lg flex items-center justify-between hover:bg-stone-50 transition-colors"
-                  >
-                    <span className="font-extrabold text-brand-800">ใหญ่พิเศษ</span>
-                    {fontSize === 'xlarge' && <Check className="w-4 h-4 text-brand-600" />}
-                  </button>
-                </div>
+                </>
               )}
             </div>
 
             {/* Test User Switcher Dropdown (สลับสถานะจำลอง) */}
             <div className="relative">
               <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowFontMenu(false);
+                }}
                 className="flex items-center gap-1 sm:gap-2 p-1 sm:pl-2 sm:pr-3 sm:py-1.5 rounded-full border border-stone-200 bg-white hover:border-brand-300 transition-all shadow-xs"
               >
                 {currentUser?.facePhotoUrl ? (
@@ -244,65 +258,72 @@ export default function Header() {
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-stone-200 py-2 z-50">
-                  <div className="px-4 py-2 border-b border-stone-100">
-                    <p className="text-xs text-stone-500 font-medium">สลับบทบาททดสอบระบบ</p>
-                    <p className="text-sm font-bold text-stone-800 truncate">
-                      {currentUser?.fullName} ({currentUser?.role === 'admin' ? 'แอดมิน' : 'สมาชิกแปลง'})
-                    </p>
-                  </div>
-                  <div className="py-1 max-h-60 overflow-y-auto">
-                    {/* Guest Switcher Option */}
-                    <button
-                      onClick={() => handleSwitchUser('guest')}
-                      className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-stone-50 transition-colors ${
-                        !currentUser ? 'bg-stone-100 font-bold text-stone-900' : 'text-stone-600'
-                      }`}
-                    >
-                      <div className="w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-[10px]">
-                        ผช
-                      </div>
-                      <div className="flex-1 truncate">
-                        <p className="truncate">บุคคลทั่วไป (Guest)</p>
-                        <span className="text-[10px] text-stone-400">ยังไม่ลงทะเบียนแปลง</span>
-                      </div>
-                      {!currentUser && <Check className="w-3.5 h-3.5 text-brand-600" />}
-                    </button>
-
-                    {allMembers.map((m) => (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowUserMenu(false)} 
+                    aria-hidden="true" 
+                  />
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-stone-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-2 border-b border-stone-100">
+                      <p className="text-xs text-stone-500 font-medium">สลับบทบาททดสอบระบบ</p>
+                      <p className="text-sm font-bold text-stone-800 truncate">
+                        {currentUser?.fullName} ({currentUser?.role === 'admin' ? 'แอดมิน' : 'สมาชิกแปลง'})
+                      </p>
+                    </div>
+                    <div className="py-1 max-h-60 overflow-y-auto">
+                      {/* Guest Switcher Option */}
                       <button
-                        key={m.id}
-                        onClick={() => handleSwitchUser(m.id)}
-                        className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-brand-50 transition-colors ${
-                          currentUser?.id === m.id ? 'bg-brand-50/80 font-bold text-brand-800' : 'text-stone-700'
+                        onClick={() => handleSwitchUser('guest')}
+                        className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-stone-50 transition-colors ${
+                          !currentUser ? 'bg-stone-100 font-bold text-stone-900' : 'text-stone-600'
                         }`}
                       >
-                        <img
-                          src={m.facePhotoUrl}
-                          alt={m.fullName}
-                          className="w-6 h-6 rounded-full object-cover"
-                        />
-                        <div className="flex-1 truncate">
-                          <p className="truncate">{m.fullName}</p>
-                          <span className="text-[10px] text-stone-400">
-                            {m.role === 'admin' ? '🛡️ แอดมินเครือข่าย' : '🌾 สมาชิกแปลง'}
-                          </span>
+                        <div className="w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-[10px]">
+                          ผช
                         </div>
-                        {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-600" />}
+                        <div className="flex-1 truncate">
+                          <p className="truncate">บุคคลทั่วไป (Guest)</p>
+                          <span className="text-[10px] text-stone-400">ยังไม่ลงทะเบียนแปลง</span>
+                        </div>
+                        {!currentUser && <Check className="w-3.5 h-3.5 text-brand-600" />}
                       </button>
-                    ))}
-                  </div>
 
-                  <div className="p-2 border-t border-stone-100">
-                    <Link
-                      href="/member/register"
-                      onClick={() => setShowUserMenu(false)}
-                      className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <span>+ สมัครสมาชิกแปลงใหม่</span>
-                    </Link>
+                      {allMembers.map((m) => (
+                        <button
+                          key={m.id}
+                          onClick={() => handleSwitchUser(m.id)}
+                          className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-brand-50 transition-colors ${
+                            currentUser?.id === m.id ? 'bg-brand-50/80 font-bold text-brand-800' : 'text-stone-700'
+                          }`}
+                        >
+                          <img
+                            src={m.facePhotoUrl}
+                            alt={m.fullName}
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                          <div className="flex-1 truncate">
+                            <p className="truncate">{m.fullName}</p>
+                            <span className="text-[10px] text-stone-400">
+                              {m.role === 'admin' ? '🛡️ แอดมินเครือข่าย' : '🌾 สมาชิกแปลง'}
+                            </span>
+                          </div>
+                          {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-600" />}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="p-2 border-t border-stone-100">
+                      <Link
+                        href="/member/register"
+                        onClick={() => setShowUserMenu(false)}
+                        className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        <span>+ สมัครสมาชิกแปลงใหม่</span>
+                      </Link>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
 
@@ -320,10 +341,11 @@ export default function Header() {
 
         </div>
       </div>
+    </header>
 
-      {/* Slide-over Drawer / Hamburger Menu (Active when desktop is shrunk or on tablet/mobile) */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 xl:hidden" role="dialog" aria-modal="true">
+    {/* Slide-over Drawer / Hamburger Menu (Rendered OUTSIDE <header> with z-[100] so it's ALWAYS visible on top) */}
+    {isMobileMenuOpen && (
+      <div className="fixed inset-0 z-[100] xl:hidden" role="dialog" aria-modal="true">
           {/* Backdrop */}
           <div 
             className="fixed inset-0 bg-stone-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
@@ -529,6 +551,6 @@ export default function Header() {
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 }
