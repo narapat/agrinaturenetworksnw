@@ -91,7 +91,7 @@ export default function FarmDetailPage() {
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>สมาชิกเครือข่ายกสิกรรมธรรมชาตินครสวรรค์</span>
               </div>
-              <h1 className={`${getTextClass('title')} text-2xl sm:text-4xl font-black tracking-tight`}>
+              <h1 className={`${getTextClass('title')} text-2xl sm:text-4xl font-extrabold leading-[1.38]`}>
                 {farm.farmName}
               </h1>
               <p className="text-xs sm:text-sm text-stone-300 mt-1 flex items-center gap-1.5">

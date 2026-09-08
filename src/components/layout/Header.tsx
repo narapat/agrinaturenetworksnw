@@ -66,7 +66,7 @@ export default function Header() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-black text-xl md:text-2xl tracking-tight text-stone-900 font-sans">
+                <span className="font-bold text-xl md:text-2xl text-stone-900 font-sans">
                   กสิกรรมธรรมชาติ
                 </span>
                 <span className="inline-block px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 text-xs font-bold">

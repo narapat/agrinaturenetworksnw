@@ -27,31 +27,31 @@ export function FontSizeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('nsw_agri_font_size', size);
   };
 
-  // Helper สำหรับส่งคืนคลาส Tailwind ตามระดับขนาดตัวอักษร
+  // Helper สำหรับส่งคืนคลาส Tailwind ตามระดับขนาดตัวอักษรที่รองรับสระภาษาไทย
   const getTextClass = (type: 'title' | 'subtitle' | 'body' | 'caption' | 'button'): string => {
     switch (fontSize) {
       case 'xlarge':
         switch (type) {
-          case 'title': return 'text-3xl md:text-4xl font-extrabold leading-tight';
-          case 'subtitle': return 'text-2xl font-bold leading-snug';
-          case 'body': return 'text-xl font-medium leading-relaxed';
+          case 'title': return 'text-3xl md:text-5xl font-extrabold leading-[1.38] tracking-normal';
+          case 'subtitle': return 'text-2xl md:text-3xl font-bold leading-[1.38] tracking-normal';
+          case 'body': return 'text-xl font-medium leading-[1.6]';
           case 'caption': return 'text-lg font-normal leading-normal';
           case 'button': return 'text-xl font-bold';
         }
       case 'large':
         switch (type) {
-          case 'title': return 'text-2xl md:text-3xl font-bold leading-tight';
-          case 'subtitle': return 'text-xl font-semibold leading-snug';
-          case 'body': return 'text-lg font-normal leading-relaxed';
+          case 'title': return 'text-2xl md:text-4xl font-bold leading-[1.38] tracking-normal';
+          case 'subtitle': return 'text-xl md:text-2xl font-semibold leading-[1.38] tracking-normal';
+          case 'body': return 'text-lg font-normal leading-[1.6]';
           case 'caption': return 'text-base font-normal leading-normal';
           case 'button': return 'text-lg font-semibold';
         }
       case 'normal':
       default:
         switch (type) {
-          case 'title': return 'text-xl md:text-2xl font-bold leading-tight';
-          case 'subtitle': return 'text-lg font-semibold leading-snug';
-          case 'body': return 'text-base font-normal leading-relaxed';
+          case 'title': return 'text-xl md:text-3xl font-bold leading-[1.38] tracking-normal';
+          case 'subtitle': return 'text-lg md:text-xl font-semibold leading-[1.38] tracking-normal';
+          case 'body': return 'text-base font-normal leading-[1.6]';
           case 'caption': return 'text-sm font-normal leading-normal';
           case 'button': return 'text-base font-medium';
         }

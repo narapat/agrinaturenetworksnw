@@ -13,8 +13,29 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: #fbfbf9;
-  font-family: 'Prompt', 'Sarabun', sans-serif;
+  font-family: 'Prompt', 'Sarabun', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  line-height: 1.6;
+}
+
+/* ป้องกันสระภาษาไทย 3 ชั้นซ้อนชนกัน (วรรณยุกต์ + สระบน + สระล่าง) */
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.38 !important;
+  letter-spacing: 0 !important;
+}
+
+.thai-headline {
+  line-height: 1.35;
+  letter-spacing: 0;
+  word-break: keep-all;
+}
+
+.thai-gradient-text {
+  display: inline-block;
+  line-height: 1.35;
+  padding-top: 0.08em;
+  padding-bottom: 0.12em;
 }
 
 /* Accessibility Font Size Overrides */

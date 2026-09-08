@@ -53,9 +53,9 @@ export default function HomePage() {
             </div>
 
             {/* Main Headline */}
-            <h1 className={`${getTextClass('title')} text-4xl sm:text-5xl lg:text-6xl font-black text-stone-900 tracking-tight leading-tight`}>
-              ของดีกสิกรรมธรรมชาติ <br className="hidden sm:inline" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-emerald-600 to-teal-700">
+            <h1 className={`${getTextClass('title')} text-3xl sm:text-5xl lg:text-6xl font-extrabold text-stone-900 leading-[1.38] space-y-1 sm:space-y-2`}>
+              <span className="block">ของดีกสิกรรมธรรมชาติ</span>
+              <span className="thai-gradient-text text-transparent bg-clip-text bg-gradient-to-r from-brand-600 via-emerald-600 to-teal-700">
                 สดจากแปลง แบ่งปันน้ำใจ
               </span>
             </h1>
@@ -211,7 +211,7 @@ export default function HomePage() {
               <span>วิถีกสิกรรมธรรมชาติ: มีกิน มีใช้ มีแบ่งปัน</span>
             </div>
 
-            <h2 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
+            <h2 className="text-3xl sm:text-4xl font-extrabold leading-[1.38]">
               เกษตรกรผู้ผลิตพบผู้บริโภค <br />
               เกื้อกูลกันโดยตรง ปลอดภัย ไร้คนกลาง
             </h2>

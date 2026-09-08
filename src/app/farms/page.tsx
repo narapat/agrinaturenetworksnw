@@ -36,7 +36,7 @@ export default function FarmsDirectoryPage() {
         <span className="px-3 py-1 rounded-full bg-white/10 text-emerald-300 text-xs font-bold uppercase tracking-wider backdrop-blur-xs">
           สารบบแปลงเกษตรกร
         </span>
-        <h1 className={`${getTextClass('title')} text-3xl sm:text-4xl font-black tracking-tight`}>
+        <h1 className={`${getTextClass('title')} text-3xl sm:text-4xl font-extrabold leading-[1.38]`}>
           แปลงกสิกรรมธรรมชาติ จ.นครสวรรค์
         </h1>
         <p className={`${getTextClass('body')} text-stone-300 text-sm sm:text-base`}>

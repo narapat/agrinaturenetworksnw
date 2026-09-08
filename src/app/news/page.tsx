@@ -40,7 +40,7 @@ export default function NewsPage() {
         <span className="px-3 py-1 rounded-full bg-white/20 text-white text-xs font-bold uppercase tracking-wider backdrop-blur-xs">
           กระดานข่าวสารเครือข่าย
         </span>
-        <h1 className={`${getTextClass('title')} text-3xl sm:text-4xl font-black tracking-tight`}>
+        <h1 className={`${getTextClass('title')} text-3xl sm:text-4xl font-extrabold leading-[1.38]`}>
           งานเอามื้อสามัคคี & กิจกรรมอบรม
         </h1>
         <p className={`${getTextClass('body')} text-emerald-100 text-sm sm:text-base`}>
