@@ -344,7 +344,8 @@ export default function MemberDashboardPage() {
             <FarmSlideshow
               photos={farm.photos || []}
               farmName={farm.farmName}
-              aspectRatioClass="aspect-21/9 sm:aspect-3/1"
+              heightClass="h-56 sm:h-72 md:h-80"
+              aspectRatioClass="aspect-21/9"
               autoPlayInterval={3500}
               showControls={farm.photos && farm.photos.length > 1}
               showIndicators={farm.photos && farm.photos.length > 1}

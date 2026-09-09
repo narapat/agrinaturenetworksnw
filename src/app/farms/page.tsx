@@ -87,19 +87,21 @@ export default function FarmsDirectoryPage() {
               key={farm.id}
               className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-brand-300 transition-all flex flex-col group"
             >
-              {/* Farm Photo Slideshow */}
-              <div className="relative aspect-16/9 overflow-hidden bg-stone-100">
+              {/* Farm Photo Slideshow (แสดงทีละรูป หมุนวนอัตโนมัติ และคลิกรูปเพื่อเปิดแปลงได้) */}
+              <div className="relative w-full h-52 sm:h-56 bg-stone-900 overflow-hidden shrink-0">
                 <FarmSlideshow
                   photos={farm.photos}
                   farmName={farm.farmName}
-                  aspectRatioClass="aspect-16/9"
-                  autoPlayInterval={4000}
-                  showControls={farm.photos.length > 1}
-                  showIndicators={farm.photos.length > 1}
-                  showBadge={farm.photos.length > 1}
+                  heightClass="h-52 sm:h-56"
+                  aspectRatioClass="aspect-video"
+                  autoPlayInterval={3500}
+                  showControls={farm.photos && farm.photos.length > 1}
+                  showIndicators={farm.photos && farm.photos.length > 1}
+                  showBadge={farm.photos && farm.photos.length > 1}
+                  linkHref={`/farms/${farm.id}`}
                   overlayChildren={
-                    <div className="absolute top-3 left-3 pointer-events-none">
-                      <span className="px-3 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-xs flex items-center gap-1 shadow-xs">
+                    <div className="absolute top-3 left-3 pointer-events-none z-20">
+                      <span className="px-3 py-1 rounded-full bg-black/65 text-white text-xs font-bold backdrop-blur-xs flex items-center gap-1 shadow-xs">
                         <MapPin className="w-3 h-3 text-brand-400" />
                         <span>{farm.district}</span>
                       </span>

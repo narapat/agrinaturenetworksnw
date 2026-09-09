@@ -39,6 +39,12 @@ module.exports = {
       boxShadow: {
         'soft': '0 4px 20px -2px rgba(22, 163, 74, 0.08), 0 2px 6px -1px rgba(0, 0, 0, 0.04)',
         'float': '0 12px 36px -4px rgba(22, 163, 74, 0.15), 0 4px 12px -2px rgba(0, 0, 0, 0.06)',
+      },
+      aspectRatio: {
+        '16/9': '16 / 9',
+        '21/9': '21 / 9',
+        '3/1': '3 / 1',
+        '4/3': '4 / 3',
       }
     },
   },
