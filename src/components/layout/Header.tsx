@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { liffService } from '@/services/liffService';
 import { MemberProfile, hasAdminRole, hasMemberRole } from '@/types';
 import { 
   ShoppingBag, 
@@ -12,19 +13,19 @@ import {
   Newspaper, 
   User, 
   ShieldCheck, 
-  Type,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  BookOpen,
-  Menu,
-  X,
-  Home,
-  UserPlus,
-  Sprout,
-  LogOut,
-  MessageSquare,
-  Sparkles
+  Type, 
+  Check, 
+  ChevronDown, 
+  ChevronRight, 
+  BookOpen, 
+  Menu, 
+  X, 
+  Home, 
+  UserPlus, 
+  Sprout, 
+  LogOut, 
+  MessageSquare, 
+  Sparkles 
 } from 'lucide-react';
 
 export default function Header() {
@@ -35,6 +36,16 @@ export default function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showFontMenu, setShowFontMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    // Initialize LINE LIFF in background on mount
+    liffService.init().then((ready) => {
+      if (ready) {
+        const user = dataService.getCurrentUser();
+        if (user) setCurrentUser(user);
+      }
+    }).catch((e) => console.warn('LIFF init notice:', e));
+  }, []);
 
   useEffect(() => {
     const refreshHeaderUser = () => {
@@ -52,6 +63,13 @@ export default function Header() {
       window.removeEventListener('storage', refreshHeaderUser);
     };
   }, [pathname]);
+
+  const handleLineLogin = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setShowUserMenu(false);
+    setIsMobileMenuOpen(false);
+    await liffService.login('/member/dashboard');
+  };
 
   // Close hamburger menu when pathname changes
   useEffect(() => {
@@ -315,13 +333,14 @@ export default function Header() {
                       {/* If Guest: Show LINE Login & Register */}
                       {!currentUser ? (
                         <>
-                          <a
-                            href="https://liff.line.me/2011512009-Zjd5Loph"
-                            className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                          <button
+                            type="button"
+                            onClick={handleLineLogin}
+                            className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm cursor-pointer"
                           >
                             <MessageSquare className="w-4 h-4 fill-white" />
                             <span>เข้าสู่ระบบด้วย LINE</span>
-                          </a>
+                          </button>
 
                           <Link
                             href="/member/register"
@@ -577,15 +596,16 @@ export default function Header() {
               {/* Quick Actions & Auth */}
               <div className="space-y-2 pt-2 border-t border-stone-100">
                 {/* LINE Login CTA */}
-                <a
-                  href="https://liff.line.me/2011512009-Zjd5Loph"
-                  className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+                <button
+                  type="button"
+                  onClick={handleLineLogin}
+                  className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
                 >
                   <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                     <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
                   </svg>
                   <span>เข้าสู่ระบบด้วย LINE</span>
-                </a>
+                </button>
 
                 {/* Dedicated Demo Page Link */}
                 <Link

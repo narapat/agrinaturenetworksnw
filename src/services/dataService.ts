@@ -534,6 +534,97 @@ class DataService {
     this.save();
   }
 
+  // เข้าสู่ระบบในฐานะสมาชิกจริง (เช่น ผ่าน LINE Login หรือหลังสมัครสมาชิก)
+  loginAsMember(userId: string): MemberProfile | null {
+    const member = this.members.find((m) => m.id === userId);
+    if (!member) return null;
+    this.currentUserId = member.id;
+    this.save();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return member;
+  }
+
+  // เข้าสู่ระบบหรือผูกบัญชีด้วยข้อมูลจาก LINE Profile (LINE Login / LIFF)
+  loginWithLineProfile(profile: {
+    userId: string;
+    displayName: string;
+    pictureUrl?: string;
+    statusMessage?: string;
+  }): { member: MemberProfile; isNew: boolean } {
+    // 1. ค้นหาสมาชิกเดิมที่มี lineUserId ตรงกัน
+    let member = this.members.find((m) => m.lineUserId === profile.userId);
+
+    // 2. ถ้าไม่พบ ลองค้นหาด้วย lineId หรือชื่อ (กรณีเคยสมัครไว้ก่อนแล้ว)
+    if (!member && profile.displayName) {
+      member = this.members.find(
+        (m) =>
+          (m.lineId && (m.lineId === profile.displayName || m.lineId === profile.userId)) ||
+          m.fullName.toLowerCase() === profile.displayName.toLowerCase()
+      );
+    }
+
+    if (member) {
+      let changed = false;
+      if (!member.lineUserId) {
+        member.lineUserId = profile.userId;
+        changed = true;
+      }
+      if (profile.pictureUrl && (!member.facePhotoUrl || member.facePhotoUrl.includes('unsplash'))) {
+        member.facePhotoUrl = profile.pictureUrl;
+        changed = true;
+      }
+      this.currentUserId = member.id;
+      this.save();
+      if (changed) {
+        this.firestoreUpdate('members', member.id, {
+          lineUserId: member.lineUserId,
+          facePhotoUrl: member.facePhotoUrl,
+        });
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+      return { member, isNew: false };
+    }
+
+    // 3. หากยังไม่เคยเป็นสมาชิก สร้างบัญชีสมาชิกใหม่จาก LINE Profile ให้ทันที
+    const memberId = `mem-line-${profile.userId.slice(-6)}`;
+    const newMember: MemberProfile = {
+      id: memberId,
+      lineUserId: profile.userId,
+      fullName: profile.displayName || 'สมาชิกกสิกรรมธรรมชาติ',
+      facePhotoUrl:
+        profile.pictureUrl ||
+        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop&crop=faces',
+      role: 'member',
+      roles: ['member'],
+      status: 'pending',
+      fontSizePref: 'normal',
+      phone: '',
+      lineId: profile.displayName || '',
+      isPublicPhone: false,
+      isPublicLine: true,
+      isPublicSocials: true,
+      socials: { lineId: profile.displayName || '' },
+      delegationStatus: 'none',
+      farmId: '', // ยังไม่มีแปลง -> ระบบจะพาไปหน้า /member/create-farm
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    this.members.unshift(newMember);
+    this.currentUserId = memberId;
+    this.save();
+    this.firestoreSet('members', newMember.id, newMember);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+
+    return { member: newMember, isNew: true };
+  }
+
   updateFontSizePreference(userId: string, size: FontSizePref) {
     const member = this.members.find((m) => m.id === userId);
     if (member) {

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { liffService } from '@/services/liffService';
 import { MemberProfile, Farm, Product, hasMemberRole } from '@/types';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
@@ -64,25 +65,51 @@ export default function MemberDashboardPage() {
   const [isDeletingProd, setIsDeletingProd] = useState(false);
 
   useEffect(() => {
-    loadData();
+    let isMounted = true;
+
+    async function checkAuthAndLoad() {
+      let user = dataService.getCurrentUser();
+      if (user && hasMemberRole(user)) {
+        if (isMounted) processUserFarm(user);
+        return;
+      }
+
+      // ถ้ายังไม่พบสิทธิ์สมาชิก อาจกำลัง redirect กลับมาจาก LINE Login ให้รอ LIFF init
+      try {
+        await liffService.init();
+      } catch (err) {
+        console.warn('LIFF init in dashboard notice:', err);
+      }
+
+      if (!isMounted) return;
+
+      user = dataService.getCurrentUser();
+      if (!user || !hasMemberRole(user)) {
+        router.replace('/member/register');
+        return;
+      }
+
+      processUserFarm(user);
+    }
+
+    checkAuthAndLoad();
+
     const handleDataUpdated = () => {
-      loadData();
+      const u = dataService.getCurrentUser();
+      if (u && hasMemberRole(u) && isMounted) {
+        processUserFarm(u);
+      }
     };
     window.addEventListener('nsw_data_updated', handleDataUpdated);
     window.addEventListener('storage', handleDataUpdated);
     return () => {
+      isMounted = false;
       window.removeEventListener('nsw_data_updated', handleDataUpdated);
       window.removeEventListener('storage', handleDataUpdated);
     };
-  }, []);
+  }, [router]);
 
-  const loadData = () => {
-    const user = dataService.getCurrentUser();
-    if (!user || !hasMemberRole(user)) {
-      router.replace('/member/register');
-      return;
-    }
-
+  const processUserFarm = (user: MemberProfile) => {
     // ตรวจสอบว่าสมาชิกสร้างฟาร์มแล้วหรือยัง
     const userFarm = user.farmId 
       ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
@@ -104,6 +131,13 @@ export default function MemberDashboardPage() {
     // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
     setProducts(dataService.getProductsByFarmId(userFarm.id, true));
     setIsLoadingAuth(false);
+  };
+
+  const loadData = () => {
+    const user = dataService.getCurrentUser();
+    if (user && hasMemberRole(user)) {
+      processUserFarm(user);
+    }
   };
 
   const handleTogglePhone = (e: React.ChangeEvent<HTMLInputElement>) => {

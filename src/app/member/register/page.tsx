@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { liffService } from '@/services/liffService';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import { hasMemberRole } from '@/types';
 import ImageCropperModal from '@/components/ui/ImageCropperModal';
@@ -55,18 +56,30 @@ export default function MemberRegisterPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
-    const user = dataService.getCurrentUser();
-    if (user && hasMemberRole(user)) {
-      const userFarm = user.farmId 
-        ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
-        : dataService.getFarmByMemberId(user.id);
+    const checkUser = () => {
+      const user = dataService.getCurrentUser();
+      if (user && hasMemberRole(user)) {
+        const userFarm = user.farmId 
+          ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
+          : dataService.getFarmByMemberId(user.id);
 
-      if (userFarm) {
-        router.replace('/member/dashboard');
-      } else {
-        router.replace('/member/create-farm');
+        if (userFarm) {
+          router.replace('/member/dashboard');
+        } else {
+          router.replace('/member/create-farm');
+        }
       }
-    }
+    };
+
+    checkUser();
+    liffService.init().then(() => checkUser());
+
+    window.addEventListener('nsw_data_updated', checkUser);
+    window.addEventListener('storage', checkUser);
+    return () => {
+      window.removeEventListener('nsw_data_updated', checkUser);
+      window.removeEventListener('storage', checkUser);
+    };
   }, [router]);
 
   const practiceOptions = [
@@ -163,15 +176,16 @@ export default function MemberRegisterPage() {
               <p className="text-xs text-stone-600">หากเปิดผ่านเบราว์เซอร์ปกติ กดเข้าสู่ระบบด้วย LINE เพื่อเชื่อมต่อบัญชีเดิมของคุณ</p>
             </div>
           </div>
-          <a
-            href="https://liff.line.me/2011512009-Zjd5Loph"
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0"
+          <button
+            type="button"
+            onClick={() => liffService.login('/member/dashboard')}
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0 cursor-pointer"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
               <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
             </svg>
             <span>เข้าสู่ระบบด้วย LINE</span>
-          </a>
+          </button>
         </div>
 
         {/* Anti-Scam Notice */}

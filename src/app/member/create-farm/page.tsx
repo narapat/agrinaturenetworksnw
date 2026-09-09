@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { liffService } from '@/services/liffService';
 import { MemberProfile, hasMemberRole } from '@/types';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
@@ -61,29 +62,60 @@ export default function CreateFarmPage() {
   ];
 
   useEffect(() => {
-    const user = dataService.getCurrentUser();
-    // ถ้ายังไม่ได้เป็นสมาชิก ให้ส่งไปหน้าลงทะเบียน
-    if (!user || !hasMemberRole(user)) {
-      router.replace('/member/register');
-      return;
+    let isMounted = true;
+
+    async function checkAuth() {
+      let user = dataService.getCurrentUser();
+      if (!user || !hasMemberRole(user)) {
+        try {
+          await liffService.init();
+        } catch (err) {
+          console.warn('LIFF init in create-farm notice:', err);
+        }
+        user = dataService.getCurrentUser();
+      }
+
+      if (!isMounted) return;
+
+      // ถ้ายังไม่ได้เป็นสมาชิก ให้ส่งไปหน้าลงทะเบียน
+      if (!user || !hasMemberRole(user)) {
+        router.replace('/member/register');
+        return;
+      }
+
+      // ถ้ามีแปลงแล้ว ให้ส่งไปที่หน้าแดชบอร์ดแปลงของตนเองทันที
+      const userFarm = user.farmId 
+        ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
+        : dataService.getFarmByMemberId(user.id);
+
+      if (userFarm) {
+        router.replace('/member/dashboard');
+        return;
+      }
+
+      setCurrentUser(user);
+      if (user.phone) setPhone(user.phone);
+      if (user.lineId) setLineId(user.lineId);
+      setIsPublicPhone(user.isPublicPhone ?? false);
+      setIsPublicLine(user.isPublicLine ?? true);
+      setIsLoading(false);
     }
 
-    // ถ้ามีแปลงแล้ว ให้ส่งไปที่หน้าแดชบอร์ดแปลงของตนเองทันที
-    const userFarm = user.farmId 
-      ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
-      : dataService.getFarmByMemberId(user.id);
+    checkAuth();
 
-    if (userFarm) {
-      router.replace('/member/dashboard');
-      return;
-    }
-
-    setCurrentUser(user);
-    if (user.phone) setPhone(user.phone);
-    if (user.lineId) setLineId(user.lineId);
-    setIsPublicPhone(user.isPublicPhone ?? false);
-    setIsPublicLine(user.isPublicLine ?? true);
-    setIsLoading(false);
+    const handleDataUpdated = () => {
+      const user = dataService.getCurrentUser();
+      if (user && hasMemberRole(user) && isMounted) {
+        setCurrentUser(user);
+      }
+    };
+    window.addEventListener('nsw_data_updated', handleDataUpdated);
+    window.addEventListener('storage', handleDataUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('nsw_data_updated', handleDataUpdated);
+      window.removeEventListener('storage', handleDataUpdated);
+    };
   }, [router]);
 
   const handleTogglePractice = (item: string) => {

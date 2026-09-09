@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@line/liff": "^2.31.0",
     "clsx": "^2.1.1",
     "firebase": "^12.18.0",
     "lucide-react": "^0.417.0",
