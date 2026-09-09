@@ -3,6 +3,7 @@ import './globals.css';
 import { FontSizeProvider } from '@/context/FontSizeContext';
 import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
   title: 'เครือข่ายกสิกรรมธรรมชาติ จังหวัดนครสวรรค์ | Agri-Nature Network Nakhon Sawan',
@@ -66,6 +67,7 @@ export default function RootLayout({
             {children}
           </main>
           <BottomNav />
+          <Analytics />
         </FontSizeProvider>
       </body>
     </html>
