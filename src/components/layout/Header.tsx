@@ -95,6 +95,13 @@ export default function Header() {
     };
   }, [isMobileMenuOpen]);
 
+  const handleSignOut = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setShowUserMenu(false);
+    setIsMobileMenuOpen(false);
+    await liffService.logout();
+  };
+
   const handleSwitchUser = (userId: string) => {
     if (userId === 'guest') {
       dataService.clearAdminSession();
@@ -381,10 +388,7 @@ export default function Header() {
 
                           <button
                             type="button"
-                            onClick={() => {
-                              handleSwitchUser('guest');
-                              setShowUserMenu(false);
-                            }}
+                            onClick={handleSignOut}
                             className="w-full py-2 px-3 rounded-xl hover:bg-stone-100 text-stone-500 hover:text-stone-800 text-xs font-semibold flex items-center gap-2 transition-colors text-left"
                           >
                             <LogOut className="w-3.5 h-3.5" />
@@ -630,10 +634,7 @@ export default function Header() {
                 {/* Logout Button if Logged In */}
                 {currentUser && (
                   <button
-                    onClick={() => {
-                      handleSwitchUser('guest');
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={handleSignOut}
                     className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors flex items-center justify-center gap-1.5"
                   >
                     <LogOut className="w-3.5 h-3.5" />

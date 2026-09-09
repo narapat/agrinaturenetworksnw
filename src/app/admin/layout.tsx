@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { dataService } from '@/services/dataService';
+import { liffService } from '@/services/liffService';
 import { hasAdminRole } from '@/types';
 import { ShieldCheck, Lock, ArrowLeft, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
@@ -106,14 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleLogout = async () => {
-    try {
-      await fetch('/api/admin/auth', { method: 'DELETE' });
-    } catch {}
-    dataService.clearAdminSession();
-    dataService.switchUser('guest');
-    setIsAdminAuthenticated(false);
-    dataService.dispatchDataUpdated();
-    router.push('/');
+    await liffService.logout();
   };
 
   if (isLoading) {

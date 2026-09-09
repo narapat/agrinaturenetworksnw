@@ -60,7 +60,11 @@ class LiffService {
         }
 
         // ตรวจสอบสถานะการ Login
-        if (liff.isLoggedIn()) {
+        const isUserLoggedOut = typeof window !== 'undefined' && 
+          (localStorage.getItem('nsw_user_logged_out') === 'true' || 
+           sessionStorage.getItem('nsw_user_logged_out') === 'true');
+
+        if (liff.isLoggedIn() && !isUserLoggedOut) {
           try {
             const profile = await liff.getProfile();
             this.currentProfile = {
@@ -124,6 +128,10 @@ class LiffService {
     if (typeof window === 'undefined') return;
 
     try {
+      try {
+        localStorage.removeItem('nsw_user_logged_out');
+        sessionStorage.removeItem('nsw_user_logged_out');
+      } catch {}
       sessionStorage.setItem('nsw_auth_redirect', redirectPath);
       await this.init();
 
@@ -168,24 +176,42 @@ class LiffService {
   }
 
   /**
-   * ออกจากระบบ LINE
+   * ออกจากระบบ LINE และระบบทั้งหมด (Sign Out)
    */
   async logout(): Promise<void> {
     if (typeof window === 'undefined') return;
     try {
-      if (this.liffInstance && this.liffInstance.isLoggedIn()) {
-        this.liffInstance.logout();
-      }
-      this.currentProfile = null;
+      // 1. ตั้งสถานะ Explicit Logout
       try {
+        localStorage.setItem('nsw_user_logged_out', 'true');
+        sessionStorage.setItem('nsw_user_logged_out', 'true');
         sessionStorage.removeItem('nsw_line_profile');
         sessionStorage.removeItem('nsw_auth_redirect');
       } catch {}
+
+      // 2. ออกจากระบบ LINE LIFF SDK
+      if (this.liffInstance && this.liffInstance.isLoggedIn()) {
+        try {
+          this.liffInstance.logout();
+        } catch (liffErr) {
+          console.warn('LIFF logout notice:', liffErr);
+        }
+      }
+      this.currentProfile = null;
+
+      // 3. ส่งคำขอไปยังเซิร์ฟเวอร์เพื่อลบ HTTP-Only Cookie
+      try {
+        await fetch('/api/admin/auth', { method: 'DELETE' });
+      } catch {}
+
+      // 4. ล้างค่าใน local storage
       dataService.clearAdminSession();
       dataService.switchUser('guest');
+
+      // 5. นำทางกลับหน้าแรก
       window.location.href = '/';
     } catch (err) {
-      console.error('Error logging out from LINE:', err);
+      console.error('Error logging out:', err);
       dataService.clearAdminSession();
       dataService.switchUser('guest');
       window.location.href = '/';

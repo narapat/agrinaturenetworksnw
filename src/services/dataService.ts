@@ -596,6 +596,12 @@ class DataService {
       console.warn('Security: Cannot switch to non-demo member account via demo switcher');
       return;
     }
+    if (userId !== 'guest') {
+      try {
+        localStorage.removeItem('nsw_user_logged_out');
+        sessionStorage.removeItem('nsw_user_logged_out');
+      } catch {}
+    }
     this.currentUserId = userId;
     this.save();
     if (typeof window !== 'undefined') {
@@ -607,6 +613,10 @@ class DataService {
   loginAsMember(userId: string): MemberProfile | null {
     const member = this.members.find((m) => m.id === userId);
     if (!member) return null;
+    try {
+      localStorage.removeItem('nsw_user_logged_out');
+      sessionStorage.removeItem('nsw_user_logged_out');
+    } catch {}
     this.currentUserId = member.id;
     this.save();
     if (typeof window !== 'undefined') {
