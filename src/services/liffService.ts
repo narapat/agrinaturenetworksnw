@@ -201,7 +201,7 @@ class LiffService {
 
       // 3. ส่งคำขอไปยังเซิร์ฟเวอร์เพื่อลบ HTTP-Only Cookie
       try {
-        await fetch('/api/admin/auth', { method: 'DELETE' });
+        await fetch('/api/admin/auth', { method: 'DELETE', keepalive: true });
       } catch {}
 
       // 4. ล้างค่าใน local storage

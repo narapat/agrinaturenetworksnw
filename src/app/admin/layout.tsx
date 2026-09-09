@@ -31,6 +31,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const checkAdminAuth = async () => {
     if (typeof window === 'undefined') return;
 
+    // หากผู้ใช้จงใจออกจากระบบ ให้ระงับการตรวจสอบอัตโนมัติและแสดงหน้าใส่รหัสทันที
+    const isLoggedOut =
+      localStorage.getItem('nsw_user_logged_out') === 'true' ||
+      sessionStorage.getItem('nsw_user_logged_out') === 'true';
+    if (isLoggedOut) {
+      setIsAdminAuthenticated(false);
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const currentUser = dataService.getCurrentUser();
       const lineUserId = currentUser?.lineUserId || '';
@@ -85,6 +95,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       const data = await res.json();
 
       if (res.ok && data.success) {
+        try {
+          localStorage.removeItem('nsw_user_logged_out');
+          sessionStorage.removeItem('nsw_user_logged_out');
+        } catch {}
         dataService.setAdminSession();
         const freshUser = dataService.getCurrentUser();
         if (freshUser && freshUser.id !== 'guest') {

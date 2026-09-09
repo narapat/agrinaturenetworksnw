@@ -1213,6 +1213,10 @@ class DataService {
     return this.members;
   }
 
+  getMemberById(id: string): MemberProfile | undefined {
+    return this.members.find((m) => m.id === id);
+  }
+
   approveMember(admin: MemberProfile, memberId: string) {
     const member = this.members.find((m) => m.id === memberId);
     if (member) {
