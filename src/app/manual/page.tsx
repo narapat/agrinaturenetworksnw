@@ -19,7 +19,10 @@ import {
   GraduationCap,
   Download,
   Smartphone,
-  Check
+  Check,
+  LogOut,
+  Laptop,
+  KeyRound
 } from 'lucide-react';
 
 export default function ManualPage() {
@@ -354,6 +357,44 @@ export default function ManualPage() {
             </div>
           </div>
 
+          {/* Feature Card 4: Desktop Login & Sign Out */}
+          <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                4
+              </span>
+              <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
+                การใช้งานบนคอมพิวเตอร์ & การออกจากระบบ (Sign Out)
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              เกษตรกรสามารถเปิดใช้งานผ่านเครื่องคอมพิวเตอร์หรือแท็บเล็ตได้สะดวก และออกจากระบบได้อย่างปลอดภัย:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+              <div className="bg-stone-50 rounded-2xl p-4 space-y-2 border border-stone-100">
+                <div className="flex items-center gap-2 font-bold text-stone-900">
+                  <Laptop className="w-4 h-4 text-brand-600" />
+                  <span>เข้าสู่ระบบบนคอมพิวเตอร์ (PC / Mac):</span>
+                </div>
+                <p className="text-stone-600">
+                  เมื่อเปิดเว็บไซต์บนคอมพิวเตอร์แล้วกดเมนู <strong>"แปลงของฉัน"</strong> ระบบจะแสดงหน้าล็อกอินของ LINE ให้ท่านเปิดแอป LINE ในมือถือขึ้นมาแล้ว <strong>สแกน QR Code</strong> เพื่อเข้าสู่ระบบได้ทันทีโดยไม่ต้องจำรหัสผ่าน
+                </p>
+              </div>
+
+              <div className="bg-stone-50 rounded-2xl p-4 space-y-2 border border-stone-100">
+                <div className="flex items-center gap-2 font-bold text-stone-900">
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  <span>การออกจากระบบ (Sign Out):</span>
+                </div>
+                <p className="text-stone-600">
+                  หากใช้งานบนเครื่องคอมพิวเตอร์ร่วมกับผู้อื่น ให้แตะที่ <strong>รูปโปรไฟล์หรือชื่อของท่านที่มุมขวาบน</strong> แล้วกด <strong>"ออกจากระบบ"</strong> เพื่อความปลอดภัย ระบบจะตัดการเชื่อมต่อและป้องกันไม่ให้ผู้อื่นเข้าถึงข้อมูลแปลงของท่าน
+                </p>
+              </div>
+            </div>
+          </div>
+
         </div>
       )}
 
@@ -418,6 +459,54 @@ export default function ManualPage() {
               <p>• <strong>ปุ่มอนุมัติสมาชิก:</strong> เมื่อกดอนุมัติ แปลงและผลผลิตจะเปิดสู่สาธารณะทันที</p>
               <p>• <strong>คิวช่วยลงข้อมูล:</strong> รับคำขอจากสมาชิกสูงวัย แล้วช่วยลงรูปและราคาให้</p>
               <p>• <strong>Audit Logs:</strong> บันทึกประวัติทุกการกระทำของแอดมิน ตรวจสอบย้อนหลังได้เพื่อความโปร่งใส</p>
+            </div>
+          </div>
+
+          {/* Feature Card 3: Admin Security & Sign Out */}
+          <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                3
+              </span>
+              <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
+                ระบบความปลอดภัยเซิร์ฟเวอร์ & การออกจากระบบแอดมิน (Sign Out)
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              ศูนย์แอดมินได้รับการยกระดับความปลอดภัยขั้นสูงสุดระดับ Server-Side Cryptography เพื่อปกป้องฐานข้อมูลของสมาชิกทั้งเครือข่าย:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+              <div className="bg-stone-50 rounded-2xl p-4 space-y-2 border border-stone-100">
+                <div className="flex items-center gap-2 font-bold text-stone-900">
+                  <KeyRound className="w-4 h-4 text-emerald-600" />
+                  <span>ความปลอดภัย Server-Side HMAC:</span>
+                </div>
+                <p className="text-stone-600">
+                  รหัสผ่านแอดมินถูกตรวจสอบบนเซิร์ฟเวอร์ ไม่ส่งไปยังหน้าเว็บของผู้ใช้ และยืนยันตัวตนด้วย HTTP-Only Cookie ที่ถูกเข้ารหัส ป้องกันการโจรกรรมสิทธิ์และแฮกเกอร์ 100%
+                </p>
+              </div>
+
+              <div className="bg-stone-50 rounded-2xl p-4 space-y-2 border border-stone-100">
+                <div className="flex items-center gap-2 font-bold text-stone-900">
+                  <LogOut className="w-4 h-4 text-rose-600" />
+                  <span>การออกจากระบบแอดมิน:</span>
+                </div>
+                <p className="text-stone-600">
+                  เมื่อปฏิบัติหน้าที่เสร็จสิ้น ให้แตะปุ่ม <strong>"ออกจากระบบแอดมิน"</strong> ที่แถบสีเข้มด้านบนของหน้า เพื่อล้าง Session Cookie อย่างปลอดภัย และล็อกประตูศูนย์แอดมินทันที
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-brand-50 border border-brand-200 rounded-2xl p-4 text-xs sm:text-sm text-brand-950 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-brand-700" />
+                <span>รองรับ 2 บทบาทควบคู่กัน (Dual Roles):</span>
+              </p>
+              <p className="text-brand-800">
+                แอดมินที่เป็นเกษตรกรด้วย สามารถกดเมนู <strong>"แปลงของฉัน"</strong> เพื่อดูแลผลผลิตของแปลงตนเอง และกดปุ่มลัด <strong>"🛡️ ศูนย์แอดมิน"</strong> เพื่อกลับมาอนุมัติสมาชิกได้สะดวกรวดเร็วโดยไม่ต้องล็อกอินใหม่
+              </p>
             </div>
           </div>
 

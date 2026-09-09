@@ -41,6 +41,7 @@
 * **Icons:** [Lucide React](https://lucide.dev/)
 * **Image Processing:** HTML5 Canvas Client-side Resizer & Aspect Ratio Cropper
 * **Accessibility:** Custom React `FontSizeContext` with LocalStorage & Profile synchronization
+* **Testing & Quality Assurance:** [Vitest](https://vitest.dev/) (Unit, Security & RBAC), [Puppeteer](https://pptr.dev/) (End-to-End Headless Smoke Tests)
 * **Account กลางของเครือข่าย:** `agrinature.network.nsw@gmail.com`
 
 ---
@@ -58,11 +59,47 @@ npm run dev
 ```
 เปิดเบราว์เซอร์ไปที่ [http://localhost:3000](http://localhost:3000)
 
-### 3. ตรวจสอบการ Build (Production Build)
+### 3. รันชุดทดสอบถดถอยอัตโนมัติ (Automated Regression Testing)
+โปรเจกต์มีชุดทดสอบอัตโนมัติเพื่อป้องกันบั๊กย้อนกลับ (Regression) เมื่อพัฒนาฟีเจอร์ใหม่:
+```bash
+# ตรวจสอบ Business Logic, HMAC Cryptography, สิทธิ์ RBAC, และ Data Privacy (< 0.5 วินาที)
+npm test
+
+# จำลองการทดสอบบนเบราว์เซอร์จริงด้วย Puppeteer (Admin Gate, Login, Sign Out) (~3-5 วินาที)
+npm run test:e2e
+```
+
+### 4. ตรวจสอบการ Build (Production Build)
 ```bash
 npm run build
 npm run start
 ```
+
+---
+
+## 🔒 การตั้งค่าความปลอดภัยระดับเซิร์ฟเวอร์ (Server Security Environment)
+
+ระบบใช้การยืนยันตัวตนแอดมินระดับ Server-Side ผ่าน HMAC-SHA256 Signed Cookies ป้องกันการแฮกหรือดูรหัสผ่านจากเบราว์เซอร์ 100% โปรดกำหนดค่าใน `.env.local` หรือบน Vercel Dashboard:
+
+```bash
+# รหัสผ่านสำหรับเข้าศูนย์แอดมิน (ห้ามใส่ NEXT_PUBLIC_ เด็ดขาด)
+ADMIN_PASSCODE=your_secret_passcode
+
+# Secret Key สุ่มยาวๆ สำหรับลงลายมือชื่อ HMAC Session Cookie
+ADMIN_SESSION_SECRET=your_super_secret_hmac_key_32chars
+
+# (ทางเลือก) LINE User ID ของแอดมิน คั่นด้วยจุลภาค สำหรับล็อกอินอัตโนมัติ
+ADMIN_LINE_USER_IDS=U11111111111111111111111111111111
+```
+
+---
+
+## 🤖 แนวทางสำหรับ AI Developers & Autonomous Agents
+
+สำหรับ AI Developers และ Coding Agents ที่ร่วมพัฒนา Repository นี้:
+* โปรดอ่านข้อบังคับและกฎ 4 ข้อที่ไม่สามารถละเมิดได้ใน [`AGENTS.md`](./AGENTS.md)
+* คู่มือสถาปัตยกรรมและรายละเอียดแนวทางการพัฒนาแบบเต็มอยู่ใน [`.agents/skills/agrinature-dev-guidelines/SKILL.md`](./.agents/skills/agrinature-dev-guidelines/SKILL.md)
+* **ต้องรัน `npm test` และ `npm run test:e2e` ให้ผ่าน 100% เสมอก่อนส่งมอบงาน**
 
 ---
 
@@ -77,6 +114,7 @@ npm run start
 * `/member/add-product` : วิซาร์ดเพิ่มผลผลิต 1 นาที พร้อมระบบย่อรูปภาพ
 * `/admin` : แผงควบคุมแอดมิน (อนุมัติสมาชิก, คิวช่วยเหลือ, จัดการหมวดหมู่ SKU, Audit Log)
 * `/news` : กระดานข่าวสาร งานเอามื้อสามัคคี พร้อมปุ่มแชร์ลง LINE และ Facebook
+* `/manual` : คู่มือการใช้งานออนไลน์ 3 บทบาท (ผู้บริโภค, สมาชิกเกษตรกร, แอดมินเครือข่าย)
 
 ---
 
