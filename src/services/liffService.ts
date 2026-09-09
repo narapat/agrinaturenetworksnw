@@ -181,10 +181,12 @@ class LiffService {
         sessionStorage.removeItem('nsw_line_profile');
         sessionStorage.removeItem('nsw_auth_redirect');
       } catch {}
+      dataService.clearAdminSession();
       dataService.switchUser('guest');
       window.location.href = '/';
     } catch (err) {
       console.error('Error logging out from LINE:', err);
+      dataService.clearAdminSession();
       dataService.switchUser('guest');
       window.location.href = '/';
     }

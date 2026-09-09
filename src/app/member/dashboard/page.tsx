@@ -125,6 +125,13 @@ export default function MemberDashboardPage() {
       dataService.updateMember(user.id, { farmId: userFarm.id });
     }
 
+    // ซิงค์ lineUserId เข้ากับ LINE Profile อัตโนมัติหากยังไม่ได้ผูก
+    const lineProf = liffService.getProfile();
+    if (lineProf && (!user.lineUserId || user.lineUserId !== lineProf.userId)) {
+      user.lineUserId = lineProf.userId;
+      dataService.updateMember(user.id, { lineUserId: lineProf.userId });
+    }
+
     setCurrentUser(user);
     setFarm(userFarm);
     setEditPractices(userFarm.practices ? [...userFarm.practices] : []);

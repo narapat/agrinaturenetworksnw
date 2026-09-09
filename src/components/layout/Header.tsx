@@ -96,6 +96,9 @@ export default function Header() {
   }, [isMobileMenuOpen]);
 
   const handleSwitchUser = (userId: string) => {
+    if (userId === 'guest') {
+      dataService.clearAdminSession();
+    }
     dataService.switchUser(userId);
     const user = dataService.getCurrentUser();
     setCurrentUser(user);
@@ -282,11 +285,13 @@ export default function Header() {
                   />
                 ) : (
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[10px] sm:text-xs shrink-0">
-                    ผช
+                    {dataService.isAdminSession() ? '🛡️' : 'ผช'}
                   </div>
                 )}
                 <span className="text-xs sm:text-sm font-medium text-stone-800 max-w-[90px] lg:max-w-[120px] truncate hidden md:inline-block">
-                  {currentUser ? currentUser.fullName.split(' ')[0] : 'ผู้เข้าชม'}
+                  {currentUser 
+                    ? currentUser.fullName.split(' ')[0] 
+                    : (dataService.isAdminSession() ? 'แอดมิน' : 'ผู้เข้าชม')}
                 </span>
                 <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-400 shrink-0 hidden sm:inline-block" />
               </button>

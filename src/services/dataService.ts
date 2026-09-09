@@ -10,6 +10,7 @@ import {
   SKUGroup,
   FontSizePref,
   UserRole,
+  hasAdminRole,
 } from '@/types';
 import {
   INITIAL_MEMBERS,
@@ -101,6 +102,11 @@ class DataService {
         this.currentUserId = storedUser;
       } else {
         this.currentUserId = 'guest';
+      }
+
+      // หากเปิดเข้ามาในเซสชันแอดมินที่ผ่านการพิสูจน์รหัสแล้ว และสถานะยังเป็น guest ให้เริ่มต้นเป็น admin-001 ทันที
+      if (this.isAdminSession() && (this.currentUserId === 'guest' || !this.currentUserId)) {
+        this.currentUserId = 'admin-001';
       }
 
       // Ensure all standard initial categories (especially tool categories) exist in local state
@@ -523,11 +529,58 @@ class DataService {
 
   // ==================== USER PROFILE & PERMISSIONS ====================
 
+  /**
+   * ตรวจสอบว่าปัจจุบันอยู่ในเซสชันผู้ดูแลระบบ (Admin) หรือไม่
+   */
+  isAdminSession(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return (
+        sessionStorage.getItem('nsw_admin_session_token') === 'authenticated' ||
+        localStorage.getItem('nsw_admin_session_token') === 'authenticated'
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * ตั้งค่าเซสชันผู้ดูแลระบบ
+   */
+  setAdminSession(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.setItem('nsw_admin_session_token', 'authenticated');
+      localStorage.setItem('nsw_admin_session_token', 'authenticated');
+    } catch {}
+  }
+
+  /**
+   * ล้างเซสชันผู้ดูแลระบบ
+   */
+  clearAdminSession(): void {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.removeItem('nsw_admin_session_token');
+      localStorage.removeItem('nsw_admin_session_token');
+    } catch {}
+  }
+
   getCurrentUser(): MemberProfile | null {
     if (this.currentUserId === 'guest') {
+      // หากอยู่ในเซสชันแอดมิน ให้ดึงบัญชีแอดมินหลัก 'admin-001'
+      if (this.isAdminSession()) {
+        const admin = this.members.find((m) => m.id === 'admin-001');
+        if (admin) return admin;
+      }
       return null;
     }
     const user = this.members.find((m) => m.id === this.currentUserId);
+    if (user && this.isAdminSession() && !hasAdminRole(user)) {
+      // หากผู้ใช้อยู่ในเซสชันแอดมิน ให้มอบสิทธิ์ admin ควบคู่ทันที
+      user.roles = Array.from(new Set<UserRole>([...(user.roles || []), 'member', 'admin']));
+      user.role = 'admin';
+    }
     return user || null;
   }
 
@@ -544,6 +597,9 @@ class DataService {
     }
     this.currentUserId = userId;
     this.save();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
   }
 
   // เข้าสู่ระบบในฐานะสมาชิกจริง (เช่น ผ่าน LINE Login หรือหลังสมัครสมาชิก)
@@ -568,23 +624,44 @@ class DataService {
     // 1. ค้นหาสมาชิกเดิมที่มี lineUserId ตรงกัน
     let member = this.members.find((m) => m.lineUserId === profile.userId);
 
-    // 2. ถ้าไม่พบ ลองค้นหาด้วย lineId หรือชื่อ (กรณีเคยสมัครไว้ก่อนแล้ว)
+    // 2. ถ้าไม่พบ ลองค้นหาด้วย lineId หรือชื่อ (Smart & Partial Matching)
     if (!member && profile.displayName) {
-      member = this.members.find(
-        (m) =>
-          (m.lineId && (m.lineId.trim().toLowerCase() === profile.displayName.trim().toLowerCase() || m.lineId === profile.userId)) ||
-          m.fullName.trim().toLowerCase() === profile.displayName.trim().toLowerCase()
-      );
+      const cleanName = profile.displayName.trim().toLowerCase();
+      const firstWord = cleanName.split(/[\s/\\_-]+/)[0].trim();
+
+      member = this.members.find((m) => {
+        const mLineId = (m.lineId || '').trim().toLowerCase();
+        const mFullName = (m.fullName || '').trim().toLowerCase();
+
+        // ตรงกันเป๊ะ
+        if (mLineId && (mLineId === cleanName || mLineId === profile.userId)) return true;
+        if (mFullName && mFullName === cleanName) return true;
+
+        // Smart Partial Matching:
+        // ตัวอย่าง: LINE ชื่อ "Narapat /E24YVI" แต่ในระบบกรอก lineId: "narapat"
+        if (firstWord && firstWord.length >= 3) {
+          if (mLineId && (mLineId === firstWord || cleanName.startsWith(mLineId))) return true;
+          if (mFullName && (mFullName === firstWord || cleanName.startsWith(mFullName))) return true;
+        }
+
+        return false;
+      });
     }
 
     if (member) {
       let changed = false;
-      if (!member.lineUserId) {
+      if (!member.lineUserId || member.lineUserId !== profile.userId) {
         member.lineUserId = profile.userId;
         changed = true;
       }
       if (profile.pictureUrl && (!member.facePhotoUrl || member.facePhotoUrl.includes('unsplash'))) {
         member.facePhotoUrl = profile.pictureUrl;
+        changed = true;
+      }
+      // หากอยู่ในเซสชันแอดมิน ให้มอบสิทธิ์ admin ให้สมาชิกบัญชีนี้ทันที
+      if (this.isAdminSession() && !hasAdminRole(member)) {
+        member.roles = Array.from(new Set<UserRole>([...(member.roles || []), 'member', 'admin']));
+        member.role = 'admin';
         changed = true;
       }
       const wasDifferentUser = this.currentUserId !== member.id;
@@ -595,6 +672,8 @@ class DataService {
           this.firestoreUpdate('members', member.id, {
             lineUserId: member.lineUserId,
             facePhotoUrl: member.facePhotoUrl,
+            role: member.role,
+            roles: member.roles,
           });
         }
         if (typeof window !== 'undefined') {
@@ -606,11 +685,14 @@ class DataService {
 
     // 3. หากยังไม่เคยเป็นสมาชิก:
     // ห้ามคงสถานะ currentUserId เป็น demo account อื่น (เช่น mem-001) เพราะจะทำให้ระบบสับสน
+    // ยกเว้นกรณีอยู่ในเซสชันแอดมิน และ currentUserId คือ admin-001 ห้ามรีเซ็ตเป็น guest!
     if (this.currentUserId && DEMO_MEMBER_IDS.includes(this.currentUserId)) {
-      this.currentUserId = 'guest';
-      this.save();
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('nsw_data_updated'));
+      if (!this.isAdminSession() || this.currentUserId !== 'admin-001') {
+        this.currentUserId = 'guest';
+        this.save();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('nsw_data_updated'));
+        }
       }
     }
     return { member: null, isRegistered: false };
@@ -636,10 +718,15 @@ class DataService {
     if (db) {
       try {
         const { collection, getDocs, query, where } = await import('firebase/firestore');
+        // 3.1 ค้นหาด้วย lineUserId
         const q = query(collection(db, 'members'), where('lineUserId', '==', profile.userId));
         const snap = await getDocs(q);
         if (!snap.empty) {
           const remoteMem = snap.docs[0].data() as MemberProfile;
+          if (this.isAdminSession() && !hasAdminRole(remoteMem)) {
+            remoteMem.roles = Array.from(new Set<UserRole>([...(remoteMem.roles || []), 'member', 'admin']));
+            remoteMem.role = 'admin';
+          }
           if (!this.members.some((m) => m.id === remoteMem.id)) {
             this.members.unshift(remoteMem);
           }
@@ -649,6 +736,47 @@ class DataService {
             window.dispatchEvent(new Event('nsw_data_updated'));
           }
           return { member: remoteMem, isRegistered: true };
+        }
+
+        // 3.2 ค้นหาด้วย Smart lineId (เช่น narapat)
+        if (profile.displayName) {
+          const cleanName = profile.displayName.trim().toLowerCase();
+          const firstWord = cleanName.split(/[\s/\\_-]+/)[0].trim();
+          if (firstWord && firstWord.length >= 3) {
+            const qLineId = query(collection(db, 'members'), where('lineId', '==', firstWord));
+            const snapLineId = await getDocs(qLineId);
+            if (!snapLineId.empty) {
+              const remoteMem = snapLineId.docs[0].data() as MemberProfile;
+              remoteMem.lineUserId = profile.userId;
+              if (this.isAdminSession() && !hasAdminRole(remoteMem)) {
+                remoteMem.roles = Array.from(new Set<UserRole>([...(remoteMem.roles || []), 'member', 'admin']));
+                remoteMem.role = 'admin';
+              }
+              if (!this.members.some((m) => m.id === remoteMem.id)) {
+                this.members.unshift(remoteMem);
+              } else {
+                const idx = this.members.findIndex((m) => m.id === remoteMem.id);
+                if (idx !== -1) {
+                  this.members[idx].lineUserId = profile.userId;
+                  if (this.isAdminSession()) {
+                    this.members[idx].role = 'admin';
+                    this.members[idx].roles = remoteMem.roles;
+                  }
+                }
+              }
+              this.currentUserId = remoteMem.id;
+              this.save();
+              this.firestoreUpdate('members', remoteMem.id, { 
+                lineUserId: profile.userId,
+                role: remoteMem.role,
+                roles: remoteMem.roles,
+              });
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event('nsw_data_updated'));
+              }
+              return { member: remoteMem, isRegistered: true };
+            }
+          }
         }
       } catch (err) {
         console.warn('Direct Firestore query notice:', err);

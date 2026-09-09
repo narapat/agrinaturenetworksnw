@@ -376,7 +376,7 @@ export default function AdminPage() {
             แผงบริหารจัดการ & คัดกรองสมาชิก
           </h1>
           <p className="text-xs sm:text-sm text-stone-400 mt-1">
-            ผู้ดูแลระบบ: <b className="text-white">{currentUser?.fullName}</b>
+            ผู้ดูแลระบบ: <b className="text-white">{currentUser?.fullName || 'แอดมินเครือข่ายนครสวรรค์'}</b>
           </p>
         </div>
 

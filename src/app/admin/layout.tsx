@@ -20,24 +20,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     checkAdminAuth();
+    const handleUpdate = () => checkAdminAuth();
+    window.addEventListener('nsw_data_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('nsw_data_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
   }, []);
 
   const checkAdminAuth = () => {
     if (typeof window === 'undefined') return;
 
-    const sessionToken = sessionStorage.getItem(ADMIN_STORAGE_KEY) || localStorage.getItem(ADMIN_STORAGE_KEY);
+    const isAuthed = dataService.isAdminSession();
     const currentUser = dataService.getCurrentUser();
 
-    if (sessionToken === 'authenticated' && hasAdminRole(currentUser)) {
-      setIsAdminAuthenticated(true);
-    } else if (sessionToken === 'authenticated') {
-      // หากผู้ใช้ปัจจุบันมีสิทธิ์แอดมินอยู่แล้ว ให้ใช้บัญชีเดิมได้เลย
-      if (currentUser && hasAdminRole(currentUser)) {
-        setIsAdminAuthenticated(true);
+    if (isAuthed) {
+      if (currentUser && currentUser.id !== 'guest') {
+        if (!hasAdminRole(currentUser)) {
+          dataService.assignAdminRole(currentUser.id, true);
+        }
       } else {
         dataService.switchUser('admin-001');
-        setIsAdminAuthenticated(true);
       }
+      setIsAdminAuthenticated(true);
     } else {
       setIsAdminAuthenticated(false);
     }
@@ -49,14 +55,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setErrorMessage('');
 
     if (passcode === DEFAULT_PASSCODE || passcode === 'admin1234') {
-      // บันทึก Session Token
-      sessionStorage.setItem(ADMIN_STORAGE_KEY, 'authenticated');
-      localStorage.setItem(ADMIN_STORAGE_KEY, 'authenticated');
+      dataService.setAdminSession();
       const currentUser = dataService.getCurrentUser();
-      if (!currentUser || !hasAdminRole(currentUser)) {
+      if (currentUser && currentUser.id !== 'guest') {
+        dataService.assignAdminRole(currentUser.id, true);
+      } else {
         dataService.switchUser('admin-001');
       }
       setIsAdminAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
       window.location.reload();
     } else {
       setErrorMessage('รหัสผ่านแอดมินไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
@@ -64,10 +73,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem(ADMIN_STORAGE_KEY);
-    localStorage.removeItem(ADMIN_STORAGE_KEY);
-    dataService.switchUser('mem-001'); // สลับกลับเป็นสมาชิกทั่วไป
+    dataService.clearAdminSession();
+    dataService.switchUser('guest');
     setIsAdminAuthenticated(false);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
     router.push('/');
   };
 
@@ -172,7 +183,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="font-semibold text-stone-300">
-              สิทธิ์ผู้ดูแลระบบ: <b className="text-white">แอดมินเครือข่ายนครสวรรค์</b>
+              สิทธิ์ผู้ดูแลระบบ: <b className="text-white">{dataService.getCurrentUser()?.fullName || 'แอดมินเครือข่ายนครสวรรค์'}</b>
             </span>
           </div>
 
