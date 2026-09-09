@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { MemberProfile, hasAdminRole } from '@/types';
+import { MemberProfile, hasAdminRole, hasMemberRole } from '@/types';
 import { 
   ShoppingBag, 
   MapPin, 
@@ -20,7 +20,8 @@ import {
   Menu,
   X,
   Home,
-  UserPlus
+  UserPlus,
+  Sprout
 } from 'lucide-react';
 
 export default function Header() {
@@ -280,7 +281,7 @@ export default function Header() {
                     <div className="px-4 py-2 border-b border-stone-100">
                       <p className="text-xs text-stone-500 font-medium">สลับบทบาททดสอบระบบ</p>
                       <p className="text-sm font-bold text-stone-800 truncate">
-                        {currentUser?.fullName} ({currentUser && hasAdminRole(currentUser) && currentUser.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : currentUser && hasAdminRole(currentUser) ? '🛡️ แอดมิน' : '🌾 สมาชิกแปลง'})
+                        {currentUser?.fullName} ({currentUser && hasAdminRole(currentUser) && currentUser.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : currentUser && hasAdminRole(currentUser) ? '🛡️ แอดมิน' : currentUser?.farmId ? '🌾 สมาชิกแปลง' : '🌾 สมาชิก (ยังไม่มีแปลง)'})
                       </p>
                     </div>
                     <div className="py-1 max-h-60 overflow-y-auto">
@@ -317,7 +318,7 @@ export default function Header() {
                           <div className="flex-1 truncate">
                             <p className="truncate">{m.fullName}</p>
                             <span className="text-[10px] text-stone-400">
-                              {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมินเครือข่าย' : '🌾 สมาชิกแปลง'}
+                              {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมินเครือข่าย' : m.farmId ? '🌾 สมาชิกแปลง' : '🌾 สมาชิก (ยังไม่มีแปลง)'}
                             </span>
                           </div>
                           {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-600" />}
@@ -326,13 +327,24 @@ export default function Header() {
                     </div>
 
                     <div className="p-2 border-t border-stone-100">
-                      <Link
-                        href="/member/register"
-                        onClick={() => setShowUserMenu(false)}
-                        className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <span>+ สมัครสมาชิกแปลงใหม่</span>
-                      </Link>
+                      {currentUser && hasMemberRole(currentUser) && !currentUser.farmId ? (
+                        <Link
+                          href="/member/create-farm"
+                          onClick={() => setShowUserMenu(false)}
+                          className="w-full py-2 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                        >
+                          <Sprout className="w-3.5 h-3.5" />
+                          <span>+ สร้างแปลงกสิกรรมของคุณ</span>
+                        </Link>
+                      ) : (
+                        <Link
+                          href="/member/register"
+                          onClick={() => setShowUserMenu(false)}
+                          className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <span>+ สมัครสมาชิกแปลงใหม่</span>
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </>
@@ -503,15 +515,26 @@ export default function Header() {
                 </div>
               </div>
 
-              {/* Member Register CTA */}
-              <Link
-                href="/member/register"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 transition-all"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>+ สมัครสมาชิกแปลงใหม่ (ฟรี)</span>
-              </Link>
+              {/* Member Register / Create Farm CTA */}
+              {currentUser && hasMemberRole(currentUser) && !currentUser.farmId ? (
+                <Link
+                  href="/member/create-farm"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 transition-all"
+                >
+                  <Sprout className="w-4 h-4" />
+                  <span>+ สร้างแปลงกสิกรรมของคุณ</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/member/register"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full py-3 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 transition-all"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>+ สมัครสมาชิกแปลงใหม่ (ฟรี)</span>
+                </Link>
+              )}
 
               {/* Quick Role Switcher (ทดสอบระบบ) */}
               <div className="space-y-2 pt-2 border-t border-stone-100">
@@ -550,7 +573,7 @@ export default function Header() {
                       />
                       <span className="truncate flex-1">{m.fullName}</span>
                       <span className="text-[10px] text-stone-400 shrink-0">
-                        {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมิน' : '🌾 แปลง'}
+                        {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมิน' : m.farmId ? '🌾 แปลง' : '🌾 ยังไม่มีแปลง'}
                       </span>
                       {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
                     </button>

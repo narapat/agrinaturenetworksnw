@@ -74,17 +74,28 @@ export default function MemberDashboardPage() {
       router.replace('/member/register');
       return;
     }
-    setCurrentUser(user);
-    setIsLoadingAuth(false);
-    if (user && user.farmId) {
-      const f = dataService.getFarmById(user.farmId);
-      if (f) setFarm(f);
-      // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
-      setProducts(dataService.getProductsByFarmId(user.farmId, true));
-    } else {
-      setFarm(null);
-      setProducts([]);
+
+    // ตรวจสอบว่าสมาชิกสร้างฟาร์มแล้วหรือยัง
+    const userFarm = user.farmId 
+      ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
+      : dataService.getFarmByMemberId(user.id);
+
+    if (!userFarm) {
+      router.replace('/member/create-farm');
+      return;
     }
+
+    // ซิงค์ farmId ให้ตรงกันหากยังไม่ได้ผูก
+    if (user.farmId !== userFarm.id) {
+      user.farmId = userFarm.id;
+      dataService.updateMember(user.id, { farmId: userFarm.id });
+    }
+
+    setCurrentUser(user);
+    setFarm(userFarm);
+    // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
+    setProducts(dataService.getProductsByFarmId(userFarm.id, true));
+    setIsLoadingAuth(false);
   };
 
   const handleTogglePhone = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -483,6 +483,11 @@ class DataService {
     return farm ? this.sanitizeFarmForPublic(farm) : undefined;
   }
 
+  getFarmByMemberId(memberId: string): Farm | undefined {
+    const farm = this.farms.find((f) => f.memberId === memberId);
+    return farm ? this.sanitizeFarmForPublic(farm) : undefined;
+  }
+
   // สำหรับผู้ดูแลระบบดูพิกัดจริง (Internal Network Only)
   getInternalFarmById(id: string): Farm | undefined {
     return this.farms.find((f) => f.id === id);
@@ -805,6 +810,84 @@ class DataService {
     this.save();
     this.firestoreUpdate('farms', farmId, farm);
     return farm;
+  }
+
+  // สร้างแปลงกสิกรรมใหม่สำหรับสมาชิกที่ยังไม่มีแปลง
+  createFarm(
+    memberId: string,
+    farmData: {
+      farmName: string;
+      tagline?: string;
+      story: string;
+      district: string;
+      subdistrict: string;
+      photos?: string[];
+      practices?: string[];
+      coordinates?: { lat: number; lng: number };
+      phone?: string;
+      lineId?: string;
+      isPublicPhone?: boolean;
+      isPublicLine?: boolean;
+    }
+  ): Farm {
+    const member = this.members.find((m) => m.id === memberId);
+    const farmId = `farm-${Date.now()}`;
+    const newFarm: Farm = {
+      id: farmId,
+      memberId: memberId,
+      ownerName: member ? member.fullName : 'สมาชิกเครือข่าย',
+      farmName: farmData.farmName,
+      tagline: farmData.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
+      story: farmData.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์',
+      photos: farmData.photos && farmData.photos.length > 0 ? farmData.photos : [
+        'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
+      ],
+      district: farmData.district,
+      subdistrict: farmData.subdistrict,
+      internalCoordinates: farmData.coordinates || {
+        lat: 15.7 + Math.random() * 0.2,
+        lng: 100.0 + Math.random() * 0.2,
+      },
+      publicZone: {
+        name: `โซน ต.${farmData.subdistrict} อ.${farmData.district}`,
+        approxLat: 15.7 + Math.random() * 0.2,
+        approxLng: 100.0 + Math.random() * 0.2,
+        radiusKm: 4.0,
+      },
+      practices: farmData.practices && farmData.practices.length > 0 ? farmData.practices : ['กสิกรรมธรรมชาติ', 'ไร้สารเคมี 100%'],
+      isPublicPhone: farmData.isPublicPhone !== undefined ? farmData.isPublicPhone : (member?.isPublicPhone ?? false),
+      isPublicLine: farmData.isPublicLine !== undefined ? farmData.isPublicLine : (member?.isPublicLine ?? true),
+      phone: farmData.phone || member?.phone || '',
+      lineId: farmData.lineId || member?.lineId || '',
+      socials: {
+        lineId: farmData.lineId || member?.lineId || '',
+      },
+    };
+
+    this.farms.unshift(newFarm);
+    if (member) {
+      member.farmId = farmId;
+      this.firestoreUpdate('members', member.id, { farmId });
+    }
+    this.save();
+    this.firestoreSet('farms', farmId, newFarm);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return newFarm;
+  }
+
+  // อัปเดตข้อมูลสมาชิก
+  updateMember(memberId: string, updatedData: Partial<MemberProfile>): MemberProfile | null {
+    const member = this.members.find((m) => m.id === memberId);
+    if (!member) return null;
+    Object.assign(member, updatedData);
+    this.save();
+    this.firestoreUpdate('members', memberId, updatedData);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return member;
   }
 
   // ==================== ADMIN: CATEGORIES & MEMBERS ====================

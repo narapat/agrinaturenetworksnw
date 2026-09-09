@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { DISTRICTS_NSW } from '@/data/mockData';
+import { hasMemberRole } from '@/types';
 import ImageCropperModal from '@/components/ui/ImageCropperModal';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
 import { 
@@ -52,6 +53,21 @@ export default function MemberRegisterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+
+  useEffect(() => {
+    const user = dataService.getCurrentUser();
+    if (user && hasMemberRole(user)) {
+      const userFarm = user.farmId 
+        ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
+        : dataService.getFarmByMemberId(user.id);
+
+      if (userFarm) {
+        router.replace('/member/dashboard');
+      } else {
+        router.replace('/member/create-farm');
+      }
+    }
+  }, [router]);
 
   const practiceOptions = [
     'โคก หนอง นา',
