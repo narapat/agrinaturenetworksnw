@@ -7,13 +7,11 @@ import { dataService } from '@/services/dataService';
 import { hasAdminRole } from '@/types';
 import { ShieldCheck, Lock, ArrowLeft, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
-const ADMIN_STORAGE_KEY = 'nsw_admin_session_token';
-const DEFAULT_PASSCODE = 'agrinature2026'; // รหัสผ่านแอดมินเริ่มต้น
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [passcode, setPasscode] = useState<string>('');
   const [showPasscode, setShowPasscode] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -29,20 +27,37 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
   }, []);
 
-  const checkAdminAuth = () => {
+  const checkAdminAuth = async () => {
     if (typeof window === 'undefined') return;
 
-    const isAuthed = dataService.isAdminSession();
-    const currentUser = dataService.getCurrentUser();
-
-    if (isAuthed) {
-      if (currentUser && currentUser.id !== 'guest') {
-        if (!hasAdminRole(currentUser)) {
-          dataService.assignAdminRole(currentUser.id, true);
+    try {
+      const currentUser = dataService.getCurrentUser();
+      const lineUserId = currentUser?.lineUserId || '';
+      
+      const res = await fetch(`/api/admin/auth${lineUserId ? `?lineUserId=${encodeURIComponent(lineUserId)}` : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated) {
+          dataService.setAdminSession();
+          if (currentUser && currentUser.id !== 'guest') {
+            if (!hasAdminRole(currentUser)) {
+              dataService.assignAdminRole(currentUser.id, true);
+            }
+          } else {
+            dataService.switchUser('admin-001');
+          }
+          setIsAdminAuthenticated(true);
+          dataService.dispatchDataUpdated();
+          setIsLoading(false);
+          return;
         }
-      } else {
-        dataService.switchUser('admin-001');
       }
+    } catch (e) {
+      console.warn('Admin auth verify notice:', e);
+    }
+
+    // หาก server ไม่ผ่าน ให้ตรวจสอบ local session
+    if (dataService.isAdminSession()) {
       setIsAdminAuthenticated(true);
     } else {
       setIsAdminAuthenticated(false);
@@ -50,35 +65,54 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setIsLoading(false);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+    setIsSubmitting(true);
 
-    if (passcode === DEFAULT_PASSCODE || passcode === 'admin1234') {
-      dataService.setAdminSession();
+    try {
       const currentUser = dataService.getCurrentUser();
-      if (currentUser && currentUser.id !== 'guest') {
-        dataService.assignAdminRole(currentUser.id, true);
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          passcode: passcode.trim(),
+          lineUserId: currentUser?.lineUserId || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        dataService.setAdminSession();
+        const freshUser = dataService.getCurrentUser();
+        if (freshUser && freshUser.id !== 'guest') {
+          dataService.assignAdminRole(freshUser.id, true);
+        } else {
+          dataService.switchUser('admin-001');
+        }
+        setIsAdminAuthenticated(true);
+        dataService.dispatchDataUpdated();
+        window.location.reload();
       } else {
-        dataService.switchUser('admin-001');
+        setErrorMessage(data.message || 'รหัสผ่านแอดมินไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
       }
-      setIsAdminAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('nsw_data_updated'));
-      }
-      window.location.reload();
-    } else {
-      setErrorMessage('รหัสผ่านแอดมินไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+    } catch (err) {
+      console.error('Login error:', err);
+      setErrorMessage('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบรหัสผ่านได้');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE' });
+    } catch {}
     dataService.clearAdminSession();
     dataService.switchUser('guest');
     setIsAdminAuthenticated(false);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('nsw_data_updated'));
-    }
+    dataService.dispatchDataUpdated();
     router.push('/');
   };
 
@@ -147,10 +181,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
             <button
               type="submit"
-              className="w-full py-4 px-6 rounded-full bg-stone-900 hover:bg-stone-800 text-white font-bold text-base shadow-lg transition-all touch-target-big flex items-center justify-center gap-2"
+              disabled={isSubmitting}
+              className="w-full py-4 px-6 rounded-full bg-stone-900 hover:bg-stone-800 disabled:bg-stone-600 text-white font-bold text-base shadow-lg transition-all touch-target-big flex items-center justify-center gap-2"
             >
-              <KeyRound className="w-4 h-4 text-emerald-400" />
-              <span>เข้าสู่ระบบศูนย์แอดมิน</span>
+              {isSubmitting ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4 text-emerald-400" />
+                  <span>เข้าสู่ระบบศูนย์แอดมิน</span>
+                </>
+              )}
             </button>
           </form>
 

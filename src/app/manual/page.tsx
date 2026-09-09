@@ -387,7 +387,7 @@ export default function ManualPage() {
             </div>
 
             <p className="text-xs text-stone-500 text-center">
-              * รหัสผ่านแอดมินเริ่มต้นสำหรับการทดสอบ: <code>agrinature2026</code> หรือ <code>admin1234</code>
+              * ระบบยืนยันสิทธิ์แอดมินเครือข่าย: ผู้ดูแลระบบสามารถเข้าสู่ระบบด้วยรหัสผ่านเฉพาะแอดมิน หรือเข้าสู่ระบบผ่าน LINE ที่ได้รับการแต่งตั้งสิทธิ์
             </p>
           </div>
 

@@ -563,6 +563,7 @@ class DataService {
     try {
       sessionStorage.removeItem('nsw_admin_session_token');
       localStorage.removeItem('nsw_admin_session_token');
+      fetch('/api/admin/auth', { method: 'DELETE' }).catch(() => {});
     } catch {}
   }
 
