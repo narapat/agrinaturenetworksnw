@@ -22,7 +22,9 @@ import {
   Check,
   LogOut,
   Laptop,
-  KeyRound
+  KeyRound,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 
 export default function ManualPage() {
@@ -462,11 +464,42 @@ export default function ManualPage() {
             </div>
           </div>
 
-          {/* Feature Card 3: Admin Security & Sign Out */}
+          {/* Feature Card 3: Standard SKU Management & Cascade Reassign */}
           <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
             <div className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-sm flex items-center justify-center shrink-0">
                 3
+              </span>
+              <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
+                การบริหารจัดการชนิดผลผลิตกลาง (Standard SKU) & การันตีผลผลิตไม่สูญหาย
+              </h2>
+            </div>
+
+            <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+              แอดมินสามารถกำหนดหมวดหมู่และชนิดผลผลิตมาตรฐานของเครือข่าย เพื่อให้สมาชิกใช้จับคู่ตอนลงทะเบียนสินค้า พร้อมระบบความปลอดภัยป้องกันข้อมูลตกหล่น 100%:
+            </p>
+
+            <div className="max-w-xs mx-auto rounded-3xl overflow-hidden border-4 border-stone-800 shadow-2xl bg-black">
+              <img
+                src="/screenshots/08_admin_sku.png"
+                alt="การจัดการชนิดผลผลิตกลาง Standard SKU"
+                className="w-full h-auto object-cover"
+              />
+            </div>
+
+            <div className="bg-stone-50 rounded-2xl p-4 space-y-2.5 text-xs sm:text-sm text-stone-700">
+              <p>• <strong>ปุ่ม "✏️ แก้ไขชนิดผลผลิต":</strong> ปรับเปลี่ยนชื่อ, ไอคอน Emoji, หมวดหมู่หลัก (6 กลุ่ม) และคำอธิบาย โดยระบบ <em>Cascade Auto-Sync</em> จะวนลูปอัปเดตข้อมูลไปยังผลผลิตของสมาชิกที่ผูกอยู่ด้วยอัตโนมัติทันที</p>
+              <p>• <strong>ปุ่ม "🗑️ ลบพร้อมโยกย้าย (Reassign / Merge)":</strong> หากหมวดหมู่นั้นมีผลผลิตของเกษตรกรผูกอยู่ ระบบจะแจ้งเตือนและให้เลือก SKU ปลายทางเพื่อโยกย้ายผลผลิตทั้งหมดไปรวม รับประกันว่าผลผลิตของสมาชิกจะไม่สูญหายหรือกลายเป็นสินค้าไร้หมวดหมู่เด็ดขาด</p>
+              <p>• <strong>ปุ่ม "เปิดใช้ / ปิดรับใหม่":</strong> กรณีปิดรับสินค้าใหม่ สมาชิกจะไม่สามารถเลือกหมวดนี้ตอนลงสินค้าเพิ่มได้ แต่ผลผลิตเดิมที่วางขายอยู่แล้วจะยังคงแสดงในหน้ารวมตลาดสาธารณะอย่างครบถ้วนจนกว่าจะขายหมด</p>
+              <p>• <strong>ตัวกรองและค้นหา:</strong> มีช่องค้นหาชื่อชนิดผลผลิต และปุ่มกรองตาม 6 หมวดหมู่หลัก (ผลผลิตสด, แปรรูป, ปัจจัยการผลิต, เมล็ดพันธุ์, อุปกรณ์, สมาร์ทฟาร์ม) เพื่อความสะดวกรวดเร็ว</p>
+            </div>
+          </div>
+
+          {/* Feature Card 4: Admin Security & Sign Out */}
+          <div className="bg-white rounded-3xl p-5 sm:p-8 border border-stone-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                4
               </span>
               <h2 className={`${getTextClass('subtitle')} text-lg sm:text-xl font-bold text-stone-900`}>
                 ระบบความปลอดภัยเซิร์ฟเวอร์ & การออกจากระบบแอดมิน (Sign Out)

@@ -127,6 +127,36 @@ async function main() {
       }
     },
     {
+      name: '08_admin_sku.png',
+      url: `${BASE_URL}/admin`,
+      setup: async (p, passcode) => {
+        await p.evaluate(async (pass) => {
+          localStorage.removeItem('nsw_user_logged_out');
+          sessionStorage.removeItem('nsw_user_logged_out');
+          localStorage.setItem('nsw_admin_session_token', 'authenticated');
+          sessionStorage.setItem('nsw_admin_session_token', 'authenticated');
+          localStorage.setItem('nsw_current_user_v1', 'admin-001');
+          await fetch('/api/admin/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ passcode: pass })
+          }).catch(() => {});
+        }, passcode);
+      },
+      action: async (p) => {
+        await p.evaluate(() => {
+          const buttons = Array.from(document.querySelectorAll('button'));
+          const catBtn = buttons.find(b => b.textContent && b.textContent.includes('จัดการหมวดหมู่'));
+          if (catBtn) catBtn.click();
+        });
+        await new Promise(r => setTimeout(r, 800));
+        await p.evaluate(() => {
+          window.scrollTo(0, 580);
+        });
+        await new Promise(r => setTimeout(r, 800));
+      }
+    },
+    {
       name: '09_rich_menu.png',
       url: `${BASE_URL}/admin/rich-menu`,
       setup: async (p, passcode) => {
@@ -156,6 +186,10 @@ async function main() {
     if (t.setup) {
       await t.setup(page, PASSCODE);
       await page.goto(t.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    }
+
+    if (t.action) {
+      await t.action(page);
     }
 
     // Wait a brief moment for layout/animations/images to settle
