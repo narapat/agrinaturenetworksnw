@@ -161,7 +161,8 @@ export const hasAdminRole = (user: MemberProfile | null | undefined): boolean =>
 
 export const hasMemberRole = (user: MemberProfile | null | undefined): boolean => {
   if (!user) return false;
+  if (user.role === 'guest') return false;
   if (user.role === 'member' || user.role === 'admin') return true;
-  if (user.roles && user.roles.includes('member')) return true;
-  return true;
+  if (user.roles && (user.roles.includes('member') || user.roles.includes('admin'))) return true;
+  return false;
 };

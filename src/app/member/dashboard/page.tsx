@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { MemberProfile, Farm, Product } from '@/types';
+import { MemberProfile, Farm, Product, hasMemberRole } from '@/types';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
 import { 
@@ -21,7 +22,6 @@ import {
   Sparkles,
   ChevronRight,
   UserCheck,
-  Sprout,
   Edit3,
   Trash2,
   EyeOff,
@@ -31,8 +31,10 @@ import {
 } from 'lucide-react';
 
 export default function MemberDashboardPage() {
+  const router = useRouter();
   const { fontSize, setFontSize, getTextClass } = useFontSize();
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [farm, setFarm] = useState<Farm | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [showAssistModal, setShowAssistModal] = useState(false);
@@ -68,7 +70,12 @@ export default function MemberDashboardPage() {
 
   const loadData = () => {
     const user = dataService.getCurrentUser();
+    if (!user || !hasMemberRole(user)) {
+      router.replace('/member/register');
+      return;
+    }
     setCurrentUser(user);
+    setIsLoadingAuth(false);
     if (user && user.farmId) {
       const f = dataService.getFarmById(user.farmId);
       if (f) setFarm(f);
@@ -151,80 +158,11 @@ export default function MemberDashboardPage() {
     }, 500);
   };
 
-  if (!currentUser) {
+  if (isLoadingAuth || !currentUser) {
     return (
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6">
-        {/* Welcome Card */}
-        <div className="bg-white rounded-3xl p-8 sm:p-12 border border-stone-200 shadow-sm text-center space-y-6">
-          <div className="w-20 h-20 mx-auto rounded-full bg-brand-50 border-2 border-brand-200 flex items-center justify-center text-brand-700 shadow-inner">
-            <Sprout className="w-10 h-10" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="px-3.5 py-1 rounded-full bg-brand-100/80 text-brand-800 text-xs font-bold">
-              เครือข่ายกสิกรรมธรรมชาติ จังหวัดนครสวรรค์
-            </span>
-            <h1 className={`${getTextClass('title')} text-2xl sm:text-3xl font-black text-stone-900`}>
-              ยินดีต้อนรับสู่เครือข่ายกสิกรรมธรรมชาติ
-            </h1>
-            <p className="text-stone-600 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">
-              ท่านเข้าสู่ระบบในฐานะบุคคลทั่วไป (ยังไม่ได้ลงทะเบียนสมาชิกแปลง) สมัครสมาชิกเพียงครั้งเดียวเพื่อนำผลผลิต วัตถุดิบ และปัจจัยการผลิตมาร่วมรวบรวมและแบ่งปันกันในเครือข่าย
-            </p>
-          </div>
-
-          {/* Value highlights */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left max-w-xl mx-auto py-2">
-            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-100 flex items-start gap-3">
-              <span className="text-xl">🪵</span>
-              <div>
-                <p className="font-bold text-stone-800 text-sm">รวมผลผลิต & ปัจจัยการผลิต</p>
-                <p className="text-xs text-stone-500">ถ่านไบโอชาร์, น้ำส้มควันไม้, ปุ๋ยหมัก, กล้วย, เมล็ดพันธุ์</p>
-              </div>
-            </div>
-            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-100 flex items-start gap-3">
-              <span className="text-xl">🛡️</span>
-              <div>
-                <p className="font-bold text-stone-800 text-sm">ปลอดภัย 100% (Anti-Scam)</p>
-                <p className="text-xs text-stone-500">ซ่อนเบอร์โทรศัพท์และพิกัดบ้านจริงจากมิจฉาชีพ</p>
-              </div>
-            </div>
-            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-100 flex items-start gap-3">
-              <span className="text-xl">🤝</span>
-              <div>
-                <p className="font-bold text-stone-800 text-sm">เกื้อกูล 15 อำเภอ</p>
-                <p className="text-xs text-stone-500">จับคู่สินค้า ขยายช่องทางจำหน่ายและแบ่งปันในนครสวรรค์</p>
-              </div>
-            </div>
-            <div className="p-4 rounded-2xl bg-stone-50 border border-stone-100 flex items-start gap-3">
-              <span className="text-xl">👵</span>
-              <div>
-                <p className="font-bold text-stone-800 text-sm">มีระบบแอดมินช่วยคีย์แทน</p>
-                <p className="text-xs text-stone-500">สำหรับผู้สูงอายุที่ไม่ถนัดพิมพ์ในสมาร์ทโฟน</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="pt-4 space-y-3 max-w-md mx-auto">
-            <Link
-              href="/member/register"
-              className="w-full py-4 px-6 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-black text-lg shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 transition-all touch-target-big"
-            >
-              <Plus className="w-6 h-6" />
-              <span>สมัครสมาชิกแปลงของคุณทันที (ลงทะเบียนฟรี)</span>
-            </Link>
-
-            <button
-              onClick={() => {
-                dataService.switchUser('mem-001');
-                window.location.reload();
-              }}
-              className="w-full py-3 px-4 rounded-2xl border border-stone-300 hover:bg-stone-50 text-stone-600 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors"
-            >
-              <span>🌿 ทดลองดูหน้าจัดการแปลงตัวอย่าง (Demo: ลุงสมชาย)</span>
-            </button>
-          </div>
-        </div>
+      <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
+        <p className="text-stone-500 text-sm font-medium">กำลังตรวจสอบข้อมูลสมาชิก...</p>
       </div>
     );
   }
