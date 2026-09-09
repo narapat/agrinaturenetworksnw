@@ -36,6 +36,29 @@ class LiffService {
         this.liffInstance = liff;
         this.isInitialized = true;
 
+        // จัดการกรณี deep linking liff.state เพียงครั้งเดียว และลบ query string ออกจาก URL ทันที
+        const urlParams = new URLSearchParams(window.location.search);
+        const liffState = urlParams.get('liff.state');
+        if (liffState) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('liff.state');
+          cleanUrl.searchParams.delete('liff.referrer');
+          window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
+
+          const target = decodeURIComponent(liffState);
+          if (target.startsWith('/') && target !== window.location.pathname) {
+            window.location.replace(target);
+            return true;
+          }
+        }
+
+        // ล้าง liff.referrer ออกจาก URL ป้องกันลูป
+        if (urlParams.has('liff.referrer')) {
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.searchParams.delete('liff.referrer');
+          window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
+        }
+
         // ตรวจสอบสถานะการ Login
         if (liff.isLoggedIn()) {
           try {
@@ -52,11 +75,11 @@ class LiffService {
               sessionStorage.setItem('nsw_line_profile', JSON.stringify(this.currentProfile));
             } catch {}
 
-            // ตรวจสอบกับระบบสมาชิกเครือข่าย
-            const { member, isRegistered } = dataService.loginWithLineProfile(this.currentProfile);
+            // ตรวจสอบกับระบบสมาชิกเครือข่าย (รอ Firestore sync เพื่อให้ได้ข้อมูลจริงล่าสุด)
+            const { member, isRegistered } = await dataService.loginWithLineProfileAsync(this.currentProfile);
 
             if (isRegistered && member) {
-              // กรณีเป็นสมาชิกแล้ว: ถ้ามีบันทึกปลายทางไว้ หรืออยู่ในหน้าลงทะเบียน ให้พาไปหน้าแปลง
+              // กรณีเป็นสมาชิกแล้ว: ถ้ามีบันทึกปลายทางไว้จากการกดปุ่มเข้าสู่ระบบ ให้พาไปหน้าแปลง
               const savedRedirect = sessionStorage.getItem('nsw_auth_redirect');
               if (savedRedirect) {
                 sessionStorage.removeItem('nsw_auth_redirect');
@@ -69,35 +92,16 @@ class LiffService {
                   : savedRedirect;
 
                 if (window.location.pathname !== target) {
-                  window.location.href = target;
+                  window.location.replace(target);
                 }
               }
             } else {
-              // กรณีล็อกอินผ่าน LINE สำเร็จ แต่ยังไม่เคยลงทะเบียนสมาชิก:
-              // ถ้าผู้ใช้พยายามเข้าหน้าแดชบอร์ด ให้พาไปหน้าลงทะเบียนพร้อมส่งค่า LINE ไปด้วย
-              if (window.location.pathname === '/member/dashboard' || window.location.pathname === '/member/create-farm') {
-                window.location.href = '/member/register?from_line=1';
-              }
-              // แจ้งเตือนคอมโพเนนต์ต่างๆ ให้ทราบว่ามีโปรไฟล์ LINE เชื่อมต่ออยู่
+              // ยังไม่เคยลงทะเบียน: แจ้งเตือนคอมโพเนนต์ต่างๆ ให้ทราบว่ามีโปรไฟล์ LINE เชื่อมต่ออยู่
+              // ปล่อยให้แต่ละหน้า (เช่น dashboard) จัดการ router.replace เอง ไม่ใช้ window.location.href ใน init
               window.dispatchEvent(new Event('nsw_data_updated'));
             }
           } catch (profileErr) {
             console.warn('LIFF: Could not fetch profile despite isLoggedIn = true:', profileErr);
-          }
-        } else {
-          // หากผู้ใช้เข้ามาผ่านลิงก์ที่มี ?liff.referrer ในเบราว์เซอร์ภายนอก (ไม่ใช่ใน LINE app)
-          const params = new URLSearchParams(window.location.search);
-          if (params.has('liff.referrer') && !liff.isInClient()) {
-            console.log('LIFF: Detected liff.referrer in external browser, initiating LINE OAuth login...');
-            window.history.replaceState({}, document.title, window.location.pathname);
-            sessionStorage.setItem('nsw_auth_redirect', '/member/dashboard');
-            try {
-              const redirectUri = window.location.origin + '/member/dashboard';
-              liff.login({ redirectUri });
-            } catch (loginErr) {
-              liff.login();
-            }
-            return false;
           }
         }
 
@@ -129,7 +133,7 @@ class LiffService {
           const profile = this.currentProfile || (await this.liffInstance.getProfile());
           if (profile) {
             this.currentProfile = profile;
-            const { member, isRegistered } = dataService.loginWithLineProfile(profile);
+            const { member, isRegistered } = await dataService.loginWithLineProfileAsync(profile);
             if (isRegistered && member) {
               const farm = member.farmId 
                 ? (dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id))

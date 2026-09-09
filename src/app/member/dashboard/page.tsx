@@ -71,24 +71,20 @@ export default function MemberDashboardPage() {
     let isMounted = true;
 
     async function checkAuthAndLoad() {
-      let user = dataService.getCurrentUser();
-      if (user && hasMemberRole(user)) {
-        if (isMounted) processUserFarm(user);
-        return;
-      }
-
-      // ถ้ายังไม่พบสิทธิ์สมาชิก อาจกำลัง redirect กลับมาจาก LINE Login ให้รอ LIFF init
       try {
-        await liffService.init();
+        await Promise.all([
+          dataService.ensureFirestoreSync(),
+          liffService.init(),
+        ]);
       } catch (err) {
-        console.warn('LIFF init in dashboard notice:', err);
+        console.warn('Dashboard auth init notice:', err);
       }
 
       if (!isMounted) return;
 
-      user = dataService.getCurrentUser();
+      const user = dataService.getCurrentUser();
       if (!user || !hasMemberRole(user)) {
-        router.replace('/member/register');
+        router.replace('/member/register?from_line=1');
         return;
       }
 

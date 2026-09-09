@@ -62,8 +62,24 @@ export default function MemberRegisterPage() {
 
   useEffect(() => {
     const checkUserAndLine = () => {
+      const profile = liffService.getProfile();
+      if (profile) {
+        setLineProfile(profile);
+        setFullName((prev) => prev || profile.displayName || '');
+        setLineId((prev) => prev || profile.displayName || '');
+        if (profile.pictureUrl) {
+          setFacePhotoUrl((prev) => (prev.includes('unsplash') ? profile.pictureUrl! : prev));
+        }
+      }
+
       const user = dataService.getCurrentUser();
+      // ถ้ามี user อยู่แล้ว ตรวจสอบว่าตรงกับ LINE Profile หรือไม่
       if (user && hasMemberRole(user)) {
+        // หากผู้ใช้เชื่อมต่อ LINE มา แต่ user ในระบบไม่ใช่บัญชีที่ผูกกับ LINE นี้ (เช่น demo account) ห้ามเด้งหนี
+        if (profile && user.lineUserId && user.lineUserId !== profile.userId) {
+          return;
+        }
+
         const userFarm = user.farmId 
           ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
           : dataService.getFarmByMemberId(user.id);
@@ -75,21 +91,12 @@ export default function MemberRegisterPage() {
         }
         return;
       }
-
-      // ตรวจสอบข้อมูล LINE ที่เชื่อมต่อเข้ามา
-      const profile = liffService.getProfile();
-      if (profile) {
-        setLineProfile(profile);
-        setFullName((prev) => prev || profile.displayName || '');
-        setLineId((prev) => prev || profile.displayName || '');
-        if (profile.pictureUrl) {
-          setFacePhotoUrl((prev) => (prev.includes('unsplash') ? profile.pictureUrl! : prev));
-        }
-      }
     };
 
     checkUserAndLine();
-    liffService.init().then(() => checkUserAndLine());
+    dataService.ensureFirestoreSync().then(() => {
+      liffService.init().then(() => checkUserAndLine());
+    });
 
     window.addEventListener('nsw_data_updated', checkUserAndLine);
     window.addEventListener('storage', checkUserAndLine);

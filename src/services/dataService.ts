@@ -60,6 +60,7 @@ class DataService {
   private news: NewsEvent[] = [];
   private currentUserId: string = 'guest'; // ค่าเริ่มต้น: ผู้เข้าชมทั่วไป (หากเข้าผ่าน LINE ยังไม่เป็นสมาชิก)
   private isFirestoreSynced: boolean = false;
+  private syncPromise: Promise<void> | null = null;
 
   constructor() {
     this.init();
@@ -183,6 +184,17 @@ class DataService {
   }
 
   // ==================== FIRESTORE REAL-TIME SYNC ====================
+
+  /**
+   * รับประกันว่าข้อมูลจาก Cloud Firestore ถูกซิงค์เรียบร้อยแล้ว
+   */
+  async ensureFirestoreSync(): Promise<void> {
+    if (typeof window === 'undefined' || !db) return;
+    if (this.isFirestoreSynced) return;
+    if (this.syncPromise) return this.syncPromise;
+    this.syncPromise = this.syncWithFirestore();
+    return this.syncPromise;
+  }
 
   /**
    * ซิงค์ข้อมูลกับ Cloud Firestore แบบ 2 ทาง (Auto-seed ครั้งแรก และดึงข้อมูลล่าสุด)
@@ -592,8 +604,58 @@ class DataService {
       return { member, isRegistered: true };
     }
 
-    // 3. หากยังไม่เคยเป็นสมาชิก: ไม่สร้างบัญชีจำลอง แต่ส่งกลับสถานะว่ายังไม่ได้ลงทะเบียนสมาชิก
+    // 3. หากยังไม่เคยเป็นสมาชิก:
+    // ห้ามคงสถานะ currentUserId เป็น demo account อื่น (เช่น mem-001) เพราะจะทำให้ระบบสับสน
+    if (this.currentUserId && DEMO_MEMBER_IDS.includes(this.currentUserId)) {
+      this.currentUserId = 'guest';
+      this.save();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+    }
     return { member: null, isRegistered: false };
+  }
+
+  // เข้าสู่ระบบด้วย LINE Profile แบบ Async โดยรับประกันว่าข้อมูลจาก Firestore ถูกซิงค์แล้ว
+  async loginWithLineProfileAsync(profile: {
+    userId: string;
+    displayName: string;
+    pictureUrl?: string;
+    statusMessage?: string;
+  }): Promise<{ member: MemberProfile | null; isRegistered: boolean }> {
+    // 1. รอซิงค์ข้อมูลจาก Cloud Firestore ให้สมบูรณ์ก่อน
+    await this.ensureFirestoreSync();
+
+    // 2. ตรวจสอบในหน่วยความจำ
+    const res = this.loginWithLineProfile(profile);
+    if (res.isRegistered && res.member) {
+      return res;
+    }
+
+    // 3. ป้องกันกรณี Firestore มีข้อมูลสมาชิกใหม่แต่ยังไม่ได้รวมเข้า this.members
+    if (db) {
+      try {
+        const { collection, getDocs, query, where } = await import('firebase/firestore');
+        const q = query(collection(db, 'members'), where('lineUserId', '==', profile.userId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const remoteMem = snap.docs[0].data() as MemberProfile;
+          if (!this.members.some((m) => m.id === remoteMem.id)) {
+            this.members.unshift(remoteMem);
+          }
+          this.currentUserId = remoteMem.id;
+          this.save();
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('nsw_data_updated'));
+          }
+          return { member: remoteMem, isRegistered: true };
+        }
+      } catch (err) {
+        console.warn('Direct Firestore query notice:', err);
+      }
+    }
+
+    return res;
   }
 
   updateFontSizePreference(userId: string, size: FontSizePref) {
