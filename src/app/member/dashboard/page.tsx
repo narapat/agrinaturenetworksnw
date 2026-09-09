@@ -184,20 +184,23 @@ export default function MemberDashboardPage() {
   const handleSaveFarm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!farm) return;
-    dataService.updateFarm(farm.id, {
+    const updated = dataService.updateFarm(farm.id, {
       farmName: editFarmName.trim() || farm.farmName,
       tagline: editTagline.trim(),
       story: editStory.trim(),
       district: editDistrict,
       subdistrict: editSubdistrict.trim(),
-      photos: editPhotos.length > 0 ? editPhotos : farm.photos,
+      photos: [...editPhotos],
     });
+    if (updated) {
+      setFarm({ ...updated });
+    }
     setFarmSaveSuccess(true);
     setTimeout(() => {
       setFarmSaveSuccess(false);
       setShowEditFarmModal(false);
       loadData();
-    }, 800);
+    }, 600);
   };
 
   const handleConfirmDelete = () => {
@@ -401,7 +404,7 @@ export default function MemberDashboardPage() {
           </div>
 
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 leading-relaxed">
-            🔒 <b>ซ่อนเบอร์โทรศัพท์เป็นค่าเริ่มต้น</b> ป้องกันมิจฉาชีพและแก๊งคอลเซ็นเตอร์ 100% สลับเปิด-ปิดได้ด้านล่าง
+            🔒 <b>ซ่อนเบอร์โทรศัพท์เป็นค่าเริ่มต้น</b> เพื่อความเป็นส่วนตัวและความปลอดภัย สลับเปิด-ปิดได้ด้านล่าง
           </div>
 
           <div className="space-y-2.5 pt-1">

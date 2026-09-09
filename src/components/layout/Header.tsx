@@ -582,7 +582,7 @@ export default function Header() {
                   <Sprout className="w-4 h-4" />
                   <span>+ สร้างแปลงกสิกรรมของคุณ</span>
                 </Link>
-              ) : (
+              ) : !currentUser ? (
                 <Link
                   href="/member/register"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -591,21 +591,23 @@ export default function Header() {
                   <UserPlus className="w-4 h-4" />
                   <span>+ สมัครสมาชิกแปลงใหม่ (ฟรี)</span>
                 </Link>
-              )}
+              ) : null}
 
               {/* Quick Actions & Auth */}
               <div className="space-y-2 pt-2 border-t border-stone-100">
-                {/* LINE Login CTA */}
-                <button
-                  type="button"
-                  onClick={handleLineLogin}
-                  className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-                >
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-                    <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
-                  </svg>
-                  <span>เข้าสู่ระบบด้วย LINE</span>
-                </button>
+                {/* LINE Login CTA (แสดงเฉพาะเมื่อยังไม่ได้เข้าสู่ระบบ) */}
+                {!currentUser && (
+                  <button
+                    type="button"
+                    onClick={handleLineLogin}
+                    className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
+                    </svg>
+                    <span>เข้าสู่ระบบด้วย LINE</span>
+                  </button>
+                )}
 
                 {/* Dedicated Demo Page Link */}
                 <Link

@@ -546,13 +546,13 @@ class DataService {
     return member;
   }
 
-  // เข้าสู่ระบบหรือผูกบัญชีด้วยข้อมูลจาก LINE Profile (LINE Login / LIFF)
+  // ตรวจสอบหรือเข้าสู่ระบบด้วยข้อมูลจาก LINE Profile (LINE Login / LIFF)
   loginWithLineProfile(profile: {
     userId: string;
     displayName: string;
     pictureUrl?: string;
     statusMessage?: string;
-  }): { member: MemberProfile; isNew: boolean } {
+  }): { member: MemberProfile | null; isRegistered: boolean } {
     // 1. ค้นหาสมาชิกเดิมที่มี lineUserId ตรงกัน
     let member = this.members.find((m) => m.lineUserId === profile.userId);
 
@@ -560,8 +560,8 @@ class DataService {
     if (!member && profile.displayName) {
       member = this.members.find(
         (m) =>
-          (m.lineId && (m.lineId === profile.displayName || m.lineId === profile.userId)) ||
-          m.fullName.toLowerCase() === profile.displayName.toLowerCase()
+          (m.lineId && (m.lineId.trim().toLowerCase() === profile.displayName.trim().toLowerCase() || m.lineId === profile.userId)) ||
+          m.fullName.trim().toLowerCase() === profile.displayName.trim().toLowerCase()
       );
     }
 
@@ -575,54 +575,25 @@ class DataService {
         member.facePhotoUrl = profile.pictureUrl;
         changed = true;
       }
+      const wasDifferentUser = this.currentUserId !== member.id;
       this.currentUserId = member.id;
-      this.save();
-      if (changed) {
-        this.firestoreUpdate('members', member.id, {
-          lineUserId: member.lineUserId,
-          facePhotoUrl: member.facePhotoUrl,
-        });
+      if (changed || wasDifferentUser) {
+        this.save();
+        if (changed) {
+          this.firestoreUpdate('members', member.id, {
+            lineUserId: member.lineUserId,
+            facePhotoUrl: member.facePhotoUrl,
+          });
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('nsw_data_updated'));
+        }
       }
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new Event('nsw_data_updated'));
-      }
-      return { member, isNew: false };
+      return { member, isRegistered: true };
     }
 
-    // 3. หากยังไม่เคยเป็นสมาชิก สร้างบัญชีสมาชิกใหม่จาก LINE Profile ให้ทันที
-    const memberId = `mem-line-${profile.userId.slice(-6)}`;
-    const newMember: MemberProfile = {
-      id: memberId,
-      lineUserId: profile.userId,
-      fullName: profile.displayName || 'สมาชิกกสิกรรมธรรมชาติ',
-      facePhotoUrl:
-        profile.pictureUrl ||
-        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop&crop=faces',
-      role: 'member',
-      roles: ['member'],
-      status: 'pending',
-      fontSizePref: 'normal',
-      phone: '',
-      lineId: profile.displayName || '',
-      isPublicPhone: false,
-      isPublicLine: true,
-      isPublicSocials: true,
-      socials: { lineId: profile.displayName || '' },
-      delegationStatus: 'none',
-      farmId: '', // ยังไม่มีแปลง -> ระบบจะพาไปหน้า /member/create-farm
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-
-    this.members.unshift(newMember);
-    this.currentUserId = memberId;
-    this.save();
-    this.firestoreSet('members', newMember.id, newMember);
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('nsw_data_updated'));
-    }
-
-    return { member: newMember, isNew: true };
+    // 3. หากยังไม่เคยเป็นสมาชิก: ไม่สร้างบัญชีจำลอง แต่ส่งกลับสถานะว่ายังไม่ได้ลงทะเบียนสมาชิก
+    return { member: null, isRegistered: false };
   }
 
   updateFontSizePreference(userId: string, size: FontSizePref) {
@@ -688,6 +659,7 @@ class DataService {
     subdistrict: string;
     phone: string;
     lineId: string;
+    lineUserId?: string;
     isPublicPhone: boolean;
     isPublicLine: boolean;
     practices: string[];
@@ -733,9 +705,11 @@ class DataService {
 
     const newMember: MemberProfile = {
       id: memberId,
+      lineUserId: data.lineUserId || '',
       fullName: data.fullName,
       facePhotoUrl: data.facePhotoUrl,
       role: 'member',
+      roles: ['member'],
       status: 'pending', // ต้องให้แอดมินเครือข่ายตรวจสอบและอนุมัติก่อน
       fontSizePref: 'normal',
       phone: data.phone,
@@ -920,6 +894,9 @@ class DataService {
 
     this.save();
     this.firestoreUpdate('farms', farmId, farm);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
     return farm;
   }
 

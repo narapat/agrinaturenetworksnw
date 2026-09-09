@@ -41,13 +41,25 @@ export default function FarmDetailPage() {
 
   useEffect(() => {
     if (!farmId) return;
-    const f = dataService.getFarmById(farmId);
-    if (!f) {
-      router.push('/farms');
-      return;
-    }
-    setFarm(f);
-    setProducts(dataService.getProductsByFarmId(farmId));
+
+    const loadFarm = () => {
+      const f = dataService.getFarmById(farmId);
+      if (!f) {
+        router.push('/farms');
+        return;
+      }
+      setFarm({ ...f });
+      setProducts(dataService.getProductsByFarmId(farmId));
+    };
+
+    loadFarm();
+
+    window.addEventListener('nsw_data_updated', loadFarm);
+    window.addEventListener('storage', loadFarm);
+    return () => {
+      window.removeEventListener('nsw_data_updated', loadFarm);
+      window.removeEventListener('storage', loadFarm);
+    };
   }, [farmId, router]);
 
   // Slideshow Auto-Cycle (ภาพวนโชว์ไปเรื่อยๆ)
@@ -60,6 +72,13 @@ export default function FarmDetailPage() {
 
     return () => clearInterval(interval);
   }, [farm?.photos, isPaused]);
+
+  // Keep currentSlideIndex in valid range when photos change
+  useEffect(() => {
+    if (farm?.photos && currentSlideIndex >= farm.photos.length) {
+      setCurrentSlideIndex(0);
+    }
+  }, [farm?.photos, currentSlideIndex]);
 
   if (!farm) return null;
 
@@ -103,27 +122,39 @@ export default function FarmDetailPage() {
           onTouchStart={() => setIsPaused(true)}
           onTouchEnd={() => setIsPaused(false)}
         >
-          {/* Images Stack with Smooth Cross-Fade (แสดงทีละรูป) */}
-          {farm.photos.map((photoUrl, idx) => (
-            <div
-              key={idx}
-              className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-                idx === currentSlideIndex ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
-              }`}
-            >
-              <img
-                src={photoUrl}
-                alt={`${farm.farmName} ภาพที่ ${idx + 1}`}
-                className="w-full h-full object-cover"
-              />
+          {/* Images Stack with Smooth Cross-Fade (แสดงทีละรูป) หรือ Empty Case */}
+          {farm.photos && farm.photos.length > 0 ? (
+            farm.photos.map((photoUrl, idx) => (
+              <div
+                key={idx}
+                className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                  idx === currentSlideIndex ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
+                }`}
+              >
+                <img
+                  src={photoUrl}
+                  alt={`${farm.farmName} ภาพที่ ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ))
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-stone-800 to-stone-900 text-stone-300 p-6 text-center select-none z-10">
+              <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-3 backdrop-blur-xs">
+                <Camera className="w-8 h-8 text-emerald-400" />
+              </div>
+              <p className="font-bold text-base sm:text-lg text-white">ยังไม่มีรูปภาพแปลงกสิกรรม</p>
+              <p className="text-xs sm:text-sm text-stone-400 mt-1 max-w-sm">
+                เจ้าของแปลงสามารถอัปโหลดรูปภาพบรรยากาศแปลงและผลผลิตได้ในหน้าแปลงของฉัน
+              </p>
             </div>
-          ))}
+          )}
 
           {/* Top Gradient & Dark Overlay for Text Legibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-black/20 z-15 pointer-events-none"></div>
 
           {/* Top-Right Slideshow Controls & Counter */}
-          {farm.photos.length > 1 && (
+          {farm.photos && farm.photos.length > 1 && (
             <div className="absolute top-4 right-4 z-25 flex items-center gap-2">
               <button
                 type="button"
@@ -142,7 +173,7 @@ export default function FarmDetailPage() {
           )}
 
           {/* Previous / Next Arrow Buttons */}
-          {farm.photos.length > 1 && (
+          {farm.photos && farm.photos.length > 1 && (
             <>
               <button
                 type="button"

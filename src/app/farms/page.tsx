@@ -16,17 +16,28 @@ export default function FarmsDirectoryPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
-    let list = dataService.getPublicFarms(selectedDistrict);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (f) =>
-          f.farmName.toLowerCase().includes(q) ||
-          f.ownerName.toLowerCase().includes(q) ||
-          f.story.toLowerCase().includes(q)
-      );
-    }
-    setFarms(list);
+    const refreshFarms = () => {
+      let list = dataService.getPublicFarms(selectedDistrict);
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        list = list.filter(
+          (f) =>
+            f.farmName.toLowerCase().includes(q) ||
+            f.ownerName.toLowerCase().includes(q) ||
+            f.story.toLowerCase().includes(q)
+        );
+      }
+      setFarms([...list]);
+    };
+
+    refreshFarms();
+
+    window.addEventListener('nsw_data_updated', refreshFarms);
+    window.addEventListener('storage', refreshFarms);
+    return () => {
+      window.removeEventListener('nsw_data_updated', refreshFarms);
+      window.removeEventListener('storage', refreshFarms);
+    };
   }, [selectedDistrict, searchQuery]);
 
   return (

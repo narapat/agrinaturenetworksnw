@@ -13,16 +13,17 @@ export interface LineUserProfile {
 
 class LiffService {
   private liffInstance: any = null;
+  private isInitialized: boolean = false;
   private isInitializing: boolean = false;
   private initPromise: Promise<boolean> | null = null;
   private currentProfile: LineUserProfile | null = null;
 
   /**
-   * เริ่มต้นการเชื่อมต่อ LINE LIFF SDK
+   * เริ่มต้นการเชื่อมต่อ LINE LIFF SDK (ป้องกันการเรียกซ้ำ 100%)
    */
   async init(): Promise<boolean> {
     if (typeof window === 'undefined') return false;
-    if (this.liffInstance) return true;
+    if (this.isInitialized && this.liffInstance) return true;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = (async () => {
@@ -33,6 +34,7 @@ class LiffService {
 
         await liff.init({ liffId: LIFF_ID });
         this.liffInstance = liff;
+        this.isInitialized = true;
 
         // ตรวจสอบสถานะการ Login
         if (liff.isLoggedIn()) {
@@ -45,34 +47,48 @@ class LiffService {
               statusMessage: profile.statusMessage,
             };
 
-            // ซิงค์เข้ากับระบบสมาชิก dataService อัตโนมัติ
-            const { member } = dataService.loginWithLineProfile(this.currentProfile);
+            // บันทึกลง sessionStorage เพื่อให้หน้าลงทะเบียนดึงไปแสดงผล/พรีฟิลข้อมูลได้ทันที
+            try {
+              sessionStorage.setItem('nsw_line_profile', JSON.stringify(this.currentProfile));
+            } catch {}
 
-            // ตรวจสอบหน้าปลายทางที่บันทึกไว้ใน session
-            const savedRedirect = sessionStorage.getItem('nsw_auth_redirect');
-            if (savedRedirect) {
-              sessionStorage.removeItem('nsw_auth_redirect');
-              const farm = member.farmId 
-                ? (dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id))
-                : dataService.getFarmByMemberId(member.id);
+            // ตรวจสอบกับระบบสมาชิกเครือข่าย
+            const { member, isRegistered } = dataService.loginWithLineProfile(this.currentProfile);
 
-              let target = savedRedirect;
-              if (savedRedirect === '/member/dashboard') {
-                target = farm ? '/member/dashboard' : '/member/create-farm';
+            if (isRegistered && member) {
+              // กรณีเป็นสมาชิกแล้ว: ถ้ามีบันทึกปลายทางไว้ หรืออยู่ในหน้าลงทะเบียน ให้พาไปหน้าแปลง
+              const savedRedirect = sessionStorage.getItem('nsw_auth_redirect');
+              if (savedRedirect) {
+                sessionStorage.removeItem('nsw_auth_redirect');
+                const farm = member.farmId 
+                  ? (dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id))
+                  : dataService.getFarmByMemberId(member.id);
+
+                const target = savedRedirect === '/member/dashboard'
+                  ? (farm ? '/member/dashboard' : '/member/create-farm')
+                  : savedRedirect;
+
+                if (window.location.pathname !== target) {
+                  window.location.href = target;
+                }
               }
-              if (window.location.pathname !== target) {
-                window.location.replace(target);
+            } else {
+              // กรณีล็อกอินผ่าน LINE สำเร็จ แต่ยังไม่เคยลงทะเบียนสมาชิก:
+              // ถ้าผู้ใช้พยายามเข้าหน้าแดชบอร์ด ให้พาไปหน้าลงทะเบียนพร้อมส่งค่า LINE ไปด้วย
+              if (window.location.pathname === '/member/dashboard' || window.location.pathname === '/member/create-farm') {
+                window.location.href = '/member/register?from_line=1';
               }
+              // แจ้งเตือนคอมโพเนนต์ต่างๆ ให้ทราบว่ามีโปรไฟล์ LINE เชื่อมต่ออยู่
+              window.dispatchEvent(new Event('nsw_data_updated'));
             }
           } catch (profileErr) {
             console.warn('LIFF: Could not fetch profile despite isLoggedIn = true:', profileErr);
           }
         } else {
-          // หากผู้ใช้เข้ามาผ่านลิงก์ที่มี ?liff.referrer แสดงว่าเปิดผ่านภายนอกและ LIFF ดีดกลับมา
+          // หากผู้ใช้เข้ามาผ่านลิงก์ที่มี ?liff.referrer ในเบราว์เซอร์ภายนอก (ไม่ใช่ใน LINE app)
           const params = new URLSearchParams(window.location.search);
           if (params.has('liff.referrer') && !liff.isInClient()) {
-            console.log('LIFF: Detected liff.referrer, initiating LINE OAuth login...');
-            // ล้าง liff.referrer ออกจาก URL history เพื่อป้องกันการ redirect วนซ้ำ
+            console.log('LIFF: Detected liff.referrer in external browser, initiating LINE OAuth login...');
             window.history.replaceState({}, document.title, window.location.pathname);
             sessionStorage.setItem('nsw_auth_redirect', '/member/dashboard');
             try {
@@ -82,16 +98,6 @@ class LiffService {
               liff.login();
             }
             return false;
-          }
-        }
-
-        // จัดการ deep-link (liff.state)
-        const urlParams = new URLSearchParams(window.location.search);
-        const liffState = urlParams.get('liff.state');
-        if (liffState) {
-          const target = decodeURIComponent(liffState);
-          if (target.startsWith('/') && target !== window.location.pathname) {
-            window.location.replace(target);
           }
         }
 
@@ -119,14 +125,20 @@ class LiffService {
 
       if (this.liffInstance) {
         if (this.liffInstance.isLoggedIn()) {
-          // ถ้าล็อกอินอยู่แล้ว นำทางไปหน้าที่ต้องการทันที
-          const user = dataService.getCurrentUser();
-          if (user && user.role === 'member') {
-            const farm = user.farmId 
-              ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
-              : dataService.getFarmByMemberId(user.id);
-            if (redirectPath === '/member/dashboard') {
+          // ถ้าล็อกอินอยู่แล้ว
+          const profile = this.currentProfile || (await this.liffInstance.getProfile());
+          if (profile) {
+            this.currentProfile = profile;
+            const { member, isRegistered } = dataService.loginWithLineProfile(profile);
+            if (isRegistered && member) {
+              const farm = member.farmId 
+                ? (dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id))
+                : dataService.getFarmByMemberId(member.id);
               window.location.href = farm ? '/member/dashboard' : '/member/create-farm';
+              return;
+            } else {
+              // ยังไม่ได้เป็นสมาชิก -> ไปหน้าลงทะเบียน
+              window.location.href = '/member/register?from_line=1';
               return;
             }
           }
@@ -161,6 +173,10 @@ class LiffService {
         this.liffInstance.logout();
       }
       this.currentProfile = null;
+      try {
+        sessionStorage.removeItem('nsw_line_profile');
+        sessionStorage.removeItem('nsw_auth_redirect');
+      } catch {}
       dataService.switchUser('guest');
       window.location.href = '/';
     } catch (err) {
@@ -179,7 +195,17 @@ class LiffService {
   }
 
   getProfile(): LineUserProfile | null {
-    return this.currentProfile;
+    if (this.currentProfile) return this.currentProfile;
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = sessionStorage.getItem('nsw_line_profile');
+        if (stored) {
+          this.currentProfile = JSON.parse(stored);
+          return this.currentProfile;
+        }
+      } catch {}
+    }
+    return null;
   }
 }
 

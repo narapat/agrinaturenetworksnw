@@ -54,9 +54,14 @@ export default function MemberRegisterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCropperOpen, setIsCropperOpen] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [lineProfile, setLineProfile] = useState<{
+    userId: string;
+    displayName: string;
+    pictureUrl?: string;
+  } | null>(null);
 
   useEffect(() => {
-    const checkUser = () => {
+    const checkUserAndLine = () => {
       const user = dataService.getCurrentUser();
       if (user && hasMemberRole(user)) {
         const userFarm = user.farmId 
@@ -68,17 +73,29 @@ export default function MemberRegisterPage() {
         } else {
           router.replace('/member/create-farm');
         }
+        return;
+      }
+
+      // ตรวจสอบข้อมูล LINE ที่เชื่อมต่อเข้ามา
+      const profile = liffService.getProfile();
+      if (profile) {
+        setLineProfile(profile);
+        setFullName((prev) => prev || profile.displayName || '');
+        setLineId((prev) => prev || profile.displayName || '');
+        if (profile.pictureUrl) {
+          setFacePhotoUrl((prev) => (prev.includes('unsplash') ? profile.pictureUrl! : prev));
+        }
       }
     };
 
-    checkUser();
-    liffService.init().then(() => checkUser());
+    checkUserAndLine();
+    liffService.init().then(() => checkUserAndLine());
 
-    window.addEventListener('nsw_data_updated', checkUser);
-    window.addEventListener('storage', checkUser);
+    window.addEventListener('nsw_data_updated', checkUserAndLine);
+    window.addEventListener('storage', checkUserAndLine);
     return () => {
-      window.removeEventListener('nsw_data_updated', checkUser);
-      window.removeEventListener('storage', checkUser);
+      window.removeEventListener('nsw_data_updated', checkUserAndLine);
+      window.removeEventListener('storage', checkUserAndLine);
     };
   }, [router]);
 
@@ -122,6 +139,7 @@ export default function MemberRegisterPage() {
       subdistrict: subdistrict.trim() || 'เมือง',
       phone: phone.trim(),
       lineId: lineId.trim() || phone.trim(),
+      lineUserId: lineProfile?.userId || undefined,
       trainingCourse: trainingCourse.trim(),
       trainingLocation: trainingLocation.trim(),
       isPublicPhone,
@@ -163,30 +181,68 @@ export default function MemberRegisterPage() {
           </p>
         </div>
 
-        {/* LINE Login CTA for Existing Members */}
-        <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-[#06C755] flex items-center justify-center text-white shrink-0 shadow-sm">
-              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+        {/* LINE Connection / Login Status */}
+        {lineProfile ? (
+          <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-green-50 to-emerald-50 border-2 border-[#06C755]/40 rounded-3xl shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in">
+            <div className="flex items-center gap-3.5">
+              {lineProfile.pictureUrl ? (
+                <img
+                  src={lineProfile.pictureUrl}
+                  alt={lineProfile.displayName}
+                  className="w-12 h-12 rounded-full border-2 border-[#06C755] object-cover shadow-sm shrink-0"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-[#06C755] flex items-center justify-center text-white shrink-0 shadow-sm">
+                  <UserCheck className="w-6 h-6" />
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-[#06C755] text-white text-[11px] font-bold inline-flex items-center gap-1">
+                    <Check className="w-3 h-3" /> เชื่อมต่อ LINE สำเร็จ
+                  </span>
+                  <span className="text-sm font-bold text-stone-900">
+                    สวัสดีคุณ {lineProfile.displayName}
+                  </span>
+                </div>
+                <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                  ระบบตรวจพบว่าคุณยังไม่ได้ลงทะเบียนสมาชิกเครือข่าย กรุณากรอกข้อมูลด้านล่างเพื่อสร้างบัญชีและแปลง ระบบจะผูกบัญชี LINE นี้เข้ากับข้อมูลสมาชิกให้โดยอัตโนมัติครับ
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => liffService.logout()}
+              className="text-xs font-semibold text-stone-500 hover:text-rose-600 underline shrink-0 cursor-pointer self-end sm:self-center"
+            >
+              สลับบัญชี LINE อื่น
+            </button>
+          </div>
+        ) : (
+          <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-[#06C755] flex items-center justify-center text-white shrink-0 shadow-sm">
+                <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                  <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-stone-900 text-sm">เคยลงทะเบียนหรือมีบัญชีเครือข่ายแล้ว?</h3>
+                <p className="text-xs text-stone-600">หากเปิดผ่านเบราว์เซอร์ปกติ กดเข้าสู่ระบบด้วย LINE เพื่อเชื่อมต่อบัญชีเดิมของคุณ</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => liffService.login('/member/dashboard')}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0 cursor-pointer"
+            >
+              <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                 <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
               </svg>
-            </div>
-            <div>
-              <h3 className="font-bold text-stone-900 text-sm">เคยลงทะเบียนหรือมีบัญชีเครือข่ายแล้ว?</h3>
-              <p className="text-xs text-stone-600">หากเปิดผ่านเบราว์เซอร์ปกติ กดเข้าสู่ระบบด้วย LINE เพื่อเชื่อมต่อบัญชีเดิมของคุณ</p>
-            </div>
+              <span>เข้าสู่ระบบด้วย LINE</span>
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => liffService.login('/member/dashboard')}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0 cursor-pointer"
-          >
-            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
-              <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
-            </svg>
-            <span>เข้าสู่ระบบด้วย LINE</span>
-          </button>
-        </div>
+        )}
 
         {/* Anti-Scam Notice */}
         <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-emerald-950">
@@ -194,8 +250,7 @@ export default function MemberRegisterPage() {
           <div className="space-y-1">
             <p className="font-bold">นโยบายความปลอดภัยและป้องกันมิจฉาชีพ:</p>
             <p className="text-emerald-800 leading-relaxed">
-              ระบบจะไม่เปิดเผยเบอร์โทรศัพท์สู่สาธารณะเป็นค่าเริ่มต้น และพิกัดแปลงจะแสดงผลเฉพาะระดับโซนรัศมี (ไม่ใช่พิกัดบ้านจริง) 
-              เพื่อให้เกษตรกรปลอดภัยจากแก๊งคอลเซ็นเตอร์ 100%
+              ระบบจะไม่เปิดเผยเบอร์โทรศัพท์สู่สาธารณะเป็นค่าเริ่มต้น และพิกัดแปลงจะแสดงผลเฉพาะระดับโซนรัศมี (ไม่ใช่พิกัดบ้านจริง)
             </p>
           </div>
         </div>
