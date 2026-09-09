@@ -21,7 +21,10 @@ import {
   X,
   Home,
   UserPlus,
-  Sprout
+  Sprout,
+  LogOut,
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 
 export default function Header() {
@@ -277,74 +280,109 @@ export default function Header() {
                     onClick={() => setShowUserMenu(false)} 
                     aria-hidden="true" 
                   />
-                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-stone-200 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-stone-200 py-2.5 z-50 animate-in fade-in slide-in-from-top-2">
+                    {/* Header profile info */}
                     <div className="px-4 py-2 border-b border-stone-100">
-                      <p className="text-xs text-stone-500 font-medium">สลับบทบาททดสอบระบบ</p>
-                      <p className="text-sm font-bold text-stone-800 truncate">
-                        {currentUser?.fullName} ({currentUser && hasAdminRole(currentUser) && currentUser.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : currentUser && hasAdminRole(currentUser) ? '🛡️ แอดมิน' : currentUser?.farmId ? '🌾 สมาชิกแปลง' : '🌾 สมาชิก (ยังไม่มีแปลง)'})
-                      </p>
-                    </div>
-                    <div className="py-1 max-h-60 overflow-y-auto">
-                      {/* Guest Switcher Option */}
-                      <button
-                        onClick={() => handleSwitchUser('guest')}
-                        className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-stone-50 transition-colors ${
-                          !currentUser ? 'bg-stone-100 font-bold text-stone-900' : 'text-stone-600'
-                        }`}
-                      >
-                        <div className="w-6 h-6 rounded-full bg-stone-200 text-stone-600 flex items-center justify-center font-bold text-[10px]">
-                          ผช
-                        </div>
-                        <div className="flex-1 truncate">
-                          <p className="truncate">บุคคลทั่วไป (Guest)</p>
-                          <span className="text-[10px] text-stone-400">ยังไม่ลงทะเบียนแปลง</span>
-                        </div>
-                        {!currentUser && <Check className="w-3.5 h-3.5 text-brand-600" />}
-                      </button>
-
-                      {demoMembers.map((m) => (
-                        <button
-                          key={m.id}
-                          onClick={() => handleSwitchUser(m.id)}
-                          className={`w-full text-left px-4 py-2 text-xs flex items-center gap-2.5 hover:bg-brand-50 transition-colors ${
-                            currentUser?.id === m.id ? 'bg-brand-50/80 font-bold text-brand-800' : 'text-stone-700'
-                          }`}
-                        >
+                      {currentUser ? (
+                        <div className="flex items-center gap-3">
                           <img
-                            src={m.facePhotoUrl}
-                            alt={m.fullName}
-                            className="w-6 h-6 rounded-full object-cover"
+                            src={currentUser.facePhotoUrl}
+                            alt={currentUser.fullName}
+                            className="w-10 h-10 rounded-full object-cover border border-stone-200"
                           />
                           <div className="flex-1 truncate">
-                            <p className="truncate">{m.fullName}</p>
-                            <span className="text-[10px] text-stone-400">
-                              {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมินเครือข่าย' : m.farmId ? '🌾 สมาชิกแปลง' : '🌾 สมาชิก (ยังไม่มีแปลง)'}
+                            <p className="text-sm font-bold text-stone-900 truncate">{currentUser.fullName}</p>
+                            <span className="inline-block text-[10px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md">
+                              {hasAdminRole(currentUser) && currentUser.roles?.includes('member')
+                                ? '🛡️ แอดมิน & 🌾 แปลง'
+                                : hasAdminRole(currentUser)
+                                ? '🛡️ แอดมินเครือข่าย'
+                                : currentUser.farmId
+                                ? '🌾 สมาชิกแปลง'
+                                : '🌾 สมาชิก (ยังไม่มีแปลง)'}
                             </span>
                           </div>
-                          {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-600" />}
-                        </button>
-                      ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-bold text-stone-900">ผู้เยี่ยมชมเครือข่าย (Guest)</p>
+                          <p className="text-xs text-stone-500">เข้าสู่ระบบเพื่อจัดการแปลงและผลผลิต</p>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="p-2 border-t border-stone-100">
-                      {currentUser && hasMemberRole(currentUser) && !currentUser.farmId ? (
-                        <Link
-                          href="/member/create-farm"
-                          onClick={() => setShowUserMenu(false)}
-                          className="w-full py-2 px-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-                        >
-                          <Sprout className="w-3.5 h-3.5" />
-                          <span>+ สร้างแปลงกสิกรรมของคุณ</span>
-                        </Link>
+                    <div className="p-2 space-y-1">
+                      {/* If Guest: Show LINE Login & Register */}
+                      {!currentUser ? (
+                        <>
+                          <a
+                            href="https://liff.line.me/2011512009-Zjd5Loph"
+                            className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
+                          >
+                            <MessageSquare className="w-4 h-4 fill-white" />
+                            <span>เข้าสู่ระบบด้วย LINE</span>
+                          </a>
+
+                          <Link
+                            href="/member/register"
+                            onClick={() => setShowUserMenu(false)}
+                            className="w-full py-2.5 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <UserPlus className="w-4 h-4" />
+                            <span>สมัครสมาชิกแปลงใหม่</span>
+                          </Link>
+                        </>
                       ) : (
-                        <Link
-                          href="/member/register"
-                          onClick={() => setShowUserMenu(false)}
-                          className="w-full py-2 px-3 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                        >
-                          <span>+ สมัครสมาชิกแปลงใหม่</span>
-                        </Link>
+                        /* If Logged in: Show Farm Dashboard / Admin Center / Sign Out */
+                        <>
+                          <Link
+                            href="/member/dashboard"
+                            onClick={() => setShowUserMenu(false)}
+                            className="w-full py-2.5 px-3 rounded-xl hover:bg-brand-50 text-stone-800 hover:text-brand-800 text-xs sm:text-sm font-bold flex items-center gap-2.5 transition-colors"
+                          >
+                            <User className="w-4 h-4 text-brand-600" />
+                            <span>แปลงของฉัน (Dashboard)</span>
+                          </Link>
+
+                          {hasAdminRole(currentUser) && (
+                            <Link
+                              href="/admin"
+                              onClick={() => setShowUserMenu(false)}
+                              className="w-full py-2.5 px-3 rounded-xl hover:bg-rose-50 text-stone-800 hover:text-rose-800 text-xs sm:text-sm font-bold flex items-center gap-2.5 transition-colors"
+                            >
+                              <ShieldCheck className="w-4 h-4 text-rose-600" />
+                              <span>ศูนย์แอดมิน (Admin Center)</span>
+                            </Link>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSwitchUser('guest');
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full py-2 px-3 rounded-xl hover:bg-stone-100 text-stone-500 hover:text-stone-800 text-xs font-semibold flex items-center gap-2 transition-colors text-left"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            <span>ออกจากระบบ (Sign Out)</span>
+                          </button>
+                        </>
                       )}
+                    </div>
+
+                    {/* Dedicated Demo Selector Link */}
+                    <div className="p-2 border-t border-stone-100">
+                      <Link
+                        href="/demo"
+                        onClick={() => setShowUserMenu(false)}
+                        className="w-full py-2 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold flex items-center justify-between transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span>เลือกบัญชีทดสอบระบบ (Demo Mode)</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-stone-400" />
+                      </Link>
                     </div>
                   </div>
                 </>
@@ -536,49 +574,45 @@ export default function Header() {
                 </Link>
               )}
 
-              {/* Quick Role Switcher (ทดสอบระบบ) */}
+              {/* Quick Actions & Auth */}
               <div className="space-y-2 pt-2 border-t border-stone-100">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-semibold text-stone-500">สลับบทบาททดสอบระบบ</span>
-                  <span className="text-[10px] text-stone-400">Demo Profiles</span>
-                </div>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  <button
-                    onClick={() => handleSwitchUser('guest')}
-                    className={`w-full text-left p-2 rounded-xl text-xs flex items-center gap-2.5 transition-colors ${
-                      !currentUser ? 'bg-stone-200 text-stone-900 font-bold' : 'bg-stone-50 text-stone-600 hover:bg-stone-100'
-                    }`}
-                  >
-                    <div className="w-6 h-6 rounded-full bg-stone-300 text-stone-700 flex items-center justify-center font-bold text-[10px] shrink-0">
-                      ผช
-                    </div>
-                    <span className="truncate flex-1">บุคคลทั่วไป (Guest)</span>
-                    {!currentUser && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
-                  </button>
+                {/* LINE Login CTA */}
+                <a
+                  href="https://liff.line.me/2011512009-Zjd5Loph"
+                  className="w-full py-2.5 px-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors"
+                >
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
+                  </svg>
+                  <span>เข้าสู่ระบบด้วย LINE</span>
+                </a>
 
-                  {demoMembers.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleSwitchUser(m.id)}
-                      className={`w-full text-left p-2 rounded-xl text-xs flex items-center gap-2.5 transition-colors ${
-                        currentUser?.id === m.id 
-                          ? 'bg-brand-100/70 text-brand-900 font-bold' 
-                          : 'bg-stone-50 text-stone-700 hover:bg-stone-100'
-                      }`}
-                    >
-                      <img
-                        src={m.facePhotoUrl}
-                        alt={m.fullName}
-                        className="w-6 h-6 rounded-full object-cover shrink-0"
-                      />
-                      <span className="truncate flex-1">{m.fullName}</span>
-                      <span className="text-[10px] text-stone-400 shrink-0">
-                        {hasAdminRole(m) && m.roles?.includes('member') ? '🛡️ แอดมิน & 🌾 แปลง' : hasAdminRole(m) ? '🛡️ แอดมิน' : m.farmId ? '🌾 แปลง' : '🌾 ยังไม่มีแปลง'}
-                      </span>
-                      {currentUser?.id === m.id && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
-                    </button>
-                  ))}
-                </div>
+                {/* Dedicated Demo Page Link */}
+                <Link
+                  href="/demo"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100/80 text-amber-900 font-semibold text-xs flex items-center justify-between border border-amber-200/60 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>เลือกบัญชีทดสอบระบบ (Demo Mode)</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-amber-600" />
+                </Link>
+
+                {/* Logout Button if Logged In */}
+                {currentUser && (
+                  <button
+                    onClick={() => {
+                      handleSwitchUser('guest');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full py-2 px-3 rounded-xl text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>ออกจากระบบ (สลับเป็นบุคคลทั่วไป)</span>
+                  </button>
+                )}
               </div>
 
             </div>

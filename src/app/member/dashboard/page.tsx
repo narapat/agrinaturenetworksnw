@@ -8,6 +8,8 @@ import { dataService } from '@/services/dataService';
 import { MemberProfile, Farm, Product, hasMemberRole } from '@/types';
 import { DISTRICTS_NSW } from '@/data/mockData';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
+import ImageCropperModal from '@/components/ui/ImageCropperModal';
+import FarmSlideshow from '@/components/ui/FarmSlideshow';
 import { 
   Plus, 
   Shield, 
@@ -40,6 +42,12 @@ export default function MemberDashboardPage() {
   const [showAssistModal, setShowAssistModal] = useState(false);
   const [assistNote, setAssistNote] = useState('');
   const [assistSuccess, setAssistSuccess] = useState(false);
+
+  // Profile Photo Edit State
+  const [selectedFaceFile, setSelectedFaceFile] = useState<File | null>(null);
+  const [isFaceCropperOpen, setIsFaceCropperOpen] = useState(false);
+  const [profileUpdateToast, setProfileUpdateToast] = useState(false);
+  const faceFileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Edit Farm Modal State
   const [showEditFarmModal, setShowEditFarmModal] = useState(false);
@@ -169,6 +177,15 @@ export default function MemberDashboardPage() {
     }, 500);
   };
 
+  const handleFaceCropConfirm = (croppedUrl: string) => {
+    if (!currentUser) return;
+    dataService.updateMember(currentUser.id, { facePhotoUrl: croppedUrl });
+    setCurrentUser({ ...currentUser, facePhotoUrl: croppedUrl });
+    window.dispatchEvent(new Event('nsw_data_updated'));
+    setProfileUpdateToast(true);
+    setTimeout(() => setProfileUpdateToast(false), 3500);
+  };
+
   if (isLoadingAuth || !currentUser) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 space-y-4">
@@ -181,13 +198,47 @@ export default function MemberDashboardPage() {
   return (
     <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-4 sm:space-y-6 overflow-hidden">
       
+      {/* Toast Notification: Profile Picture Updated */}
+      {profileUpdateToast && (
+        <div className="fixed top-20 right-4 sm:right-8 z-50 p-4 bg-emerald-600 text-white rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+          <Check className="w-5 h-5 text-white shrink-0" />
+          <div>
+            <p className="text-sm font-bold">อัพเดทรูปโปรไฟล์สำเร็จ!</p>
+            <p className="text-xs text-emerald-100">รูปใหม่ของคุณได้รับการบันทึกและแสดงผลแล้วครับ</p>
+          </div>
+        </div>
+      )}
+
       {/* Top Welcome Header */}
       <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-stone-200 shadow-sm flex flex-col sm:flex-row items-center gap-4 sm:gap-6 overflow-hidden w-full">
-        <div className="relative w-16 h-16 sm:w-24 sm:h-24 rounded-full overflow-hidden border-3 border-brand-100 shadow-md shrink-0">
-          <img
-            src={currentUser.facePhotoUrl}
-            alt={currentUser.fullName}
-            className="w-full h-full object-cover"
+        {/* Profile Avatar with Camera Overlay */}
+        <div className="relative group shrink-0">
+          <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-3 border-brand-200 shadow-md">
+            <img
+              src={currentUser.facePhotoUrl}
+              alt={currentUser.fullName}
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => faceFileInputRef.current?.click()}
+            className="absolute bottom-0 right-0 p-2 rounded-full bg-brand-600 hover:bg-brand-700 text-white shadow-md border-2 border-white transition-all hover:scale-110 active:scale-95 touch-target"
+            title="กดเพื่อเปลี่ยนรูปโปรไฟล์ของคุณ"
+          >
+            <Camera className="w-3.5 h-3.5" />
+          </button>
+          <input
+            ref={faceFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files[0]) {
+                setSelectedFaceFile(e.target.files[0]);
+                setIsFaceCropperOpen(true);
+              }
+            }}
           />
         </div>
 
@@ -213,25 +264,35 @@ export default function MemberDashboardPage() {
             แปลง: <b className="text-stone-800">{farm?.farmName || 'ยังไม่ได้ระบุแปลง'}</b> ({farm?.district})
           </p>
 
-          {farm && (
-            <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <button
-                type="button"
-                onClick={handleOpenEditFarm}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-brand-50 text-stone-700 hover:text-brand-800 text-xs font-bold border border-stone-200 hover:border-brand-300 transition-colors"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-brand-600" />
-                <span>✏️ แก้ไขข้อมูลแปลง & รูปภาพ</span>
-              </button>
-              <Link
-                href={`/farms/${farm.id}`}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-xs font-bold border border-stone-200 transition-colors"
-              >
-                <span>🌿 ดูหน้าแปลงสาธารณะ</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-          )}
+          <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+            <button
+              type="button"
+              onClick={() => faceFileInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 text-xs font-bold border border-brand-200 transition-colors"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>เปลี่ยนรูปโปรไฟล์</span>
+            </button>
+            {farm && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleOpenEditFarm}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-brand-50 text-stone-700 hover:text-brand-800 text-xs font-bold border border-stone-200 hover:border-brand-300 transition-colors"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-brand-600" />
+                  <span>✏️ ข้อมูลแปลง & รูปภาพ</span>
+                </button>
+                <Link
+                  href={`/farms/${farm.id}`}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-600 text-xs font-bold border border-stone-200 transition-colors"
+                >
+                  <span>🌿 ดูหน้าแปลงสาธารณะ</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+              </>
+            )}
+          </div>
 
           {currentUser.status === 'pending' && (
             <p className="text-[11px] sm:text-xs text-amber-700 bg-amber-50 p-2 rounded-xl border border-amber-200 mt-1.5 font-medium">
@@ -249,6 +310,50 @@ export default function MemberDashboardPage() {
           <span>+ เพิ่มผลผลิตใหม่</span>
         </Link>
       </div>
+
+      {/* Farm Photos Showcase with Auto-Rotating Slideshow */}
+      {farm && (
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm overflow-hidden p-4 sm:p-6 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-700 flex items-center justify-center shrink-0">
+                <ImageIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-stone-900 text-base sm:text-lg">
+                  รูปภาพบรรยากาศแปลง {farm.farmName} ({farm.photos?.length || 0} รูป)
+                </h2>
+                <p className="text-xs text-stone-500">
+                  {farm.photos && farm.photos.length > 1 
+                    ? 'แสดงทีละรูปและหมุนเปลี่ยนไปเรื่อยๆ อัตโนมัติในหน้าแปลงสาธารณะ' 
+                    : 'อัพโหลดรูปบรรยากาศแปลงเพิ่มเติม เพื่อให้ระบบหมุนแสดงภาพสวยงาม'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleOpenEditFarm}
+              className="px-3 py-1.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              <span>+ เพิ่ม/แก้ไขรูปแปลง</span>
+            </button>
+          </div>
+
+          <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-900">
+            <FarmSlideshow
+              photos={farm.photos || []}
+              farmName={farm.farmName}
+              aspectRatioClass="aspect-21/9 sm:aspect-3/1"
+              autoPlayInterval={3500}
+              showControls={farm.photos && farm.photos.length > 1}
+              showIndicators={farm.photos && farm.photos.length > 1}
+              showBadge={farm.photos && farm.photos.length > 1}
+              showPlayPause={farm.photos && farm.photos.length > 1}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Grid: Anti-Scam Privacy Settings & Admin Assistance Card */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -699,6 +804,18 @@ export default function MemberDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Member Profile Photo Cropper Modal */}
+      <ImageCropperModal
+        isOpen={isFaceCropperOpen}
+        onClose={() => {
+          setIsFaceCropperOpen(false);
+          setSelectedFaceFile(null);
+        }}
+        file={selectedFaceFile}
+        onConfirm={handleFaceCropConfirm}
+        aspectRatio={1}
+      />
 
     </div>
   );

@@ -150,6 +150,30 @@ export default function MemberRegisterPage() {
           </p>
         </div>
 
+        {/* LINE Login CTA for Existing Members */}
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border border-emerald-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-[#06C755] flex items-center justify-center text-white shrink-0 shadow-sm">
+              <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-stone-900 text-sm">เคยลงทะเบียนหรือมีบัญชีเครือข่ายแล้ว?</h3>
+              <p className="text-xs text-stone-600">หากเปิดผ่านเบราว์เซอร์ปกติ กดเข้าสู่ระบบด้วย LINE เพื่อเชื่อมต่อบัญชีเดิมของคุณ</p>
+            </div>
+          </div>
+          <a
+            href="https://liff.line.me/2011512009-Zjd5Loph"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xs transition-colors shrink-0"
+          >
+            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+              <path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.122.303.079.777.039 1.085l-.171 1.027c-.053.303-.242 1.186 1.039.645 1.281-.54 6.91-4.069 9.428-6.967 1.739-1.909 2.672-3.834 2.672-5.99z"/>
+            </svg>
+            <span>เข้าสู่ระบบด้วย LINE</span>
+          </a>
+        </div>
+
         {/* Anti-Scam Notice */}
         <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-emerald-950">
           <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />

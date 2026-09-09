@@ -53,6 +53,16 @@ export default function RootLayout({
                     document.documentElement.setAttribute('data-font-size', 'normal');
                     document.documentElement.style.fontSize = '16px';
                   }
+
+                  // Handle LINE LIFF deep-linking (liff.state)
+                  var params = new URLSearchParams(window.location.search);
+                  var liffState = params.get('liff.state');
+                  if (liffState) {
+                    var target = decodeURIComponent(liffState);
+                    if (target.charAt(0) === '/' && target !== window.location.pathname) {
+                      window.location.replace(target);
+                    }
+                  }
                 } catch(e) {}
               })();
             `,

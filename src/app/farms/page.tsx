@@ -6,6 +6,7 @@ import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { Farm, Product } from '@/types';
 import { DISTRICTS_NSW } from '@/data/mockData';
+import FarmSlideshow from '@/components/ui/FarmSlideshow';
 import { MapPin, ArrowRight, ShieldCheck, Sprout, Search } from 'lucide-react';
 
 export default function FarmsDirectoryPage() {
@@ -86,27 +87,26 @@ export default function FarmsDirectoryPage() {
               key={farm.id}
               className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-brand-300 transition-all flex flex-col group"
             >
-              {/* Farm Photo */}
-              <Link href={`/farms/${farm.id}`} className="block relative aspect-16/9 overflow-hidden bg-stone-100">
-                <img
-                  src={farm.photos[0]}
-                  alt={farm.farmName}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              {/* Farm Photo Slideshow */}
+              <div className="relative aspect-16/9 overflow-hidden bg-stone-100">
+                <FarmSlideshow
+                  photos={farm.photos}
+                  farmName={farm.farmName}
+                  aspectRatioClass="aspect-16/9"
+                  autoPlayInterval={4000}
+                  showControls={farm.photos.length > 1}
+                  showIndicators={farm.photos.length > 1}
+                  showBadge={farm.photos.length > 1}
+                  overlayChildren={
+                    <div className="absolute top-3 left-3 pointer-events-none">
+                      <span className="px-3 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-xs flex items-center gap-1 shadow-xs">
+                        <MapPin className="w-3 h-3 text-brand-400" />
+                        <span>{farm.district}</span>
+                      </span>
+                    </div>
+                  }
                 />
-                <div className="absolute top-3 left-3">
-                  <span className="px-3 py-1 rounded-full bg-black/60 text-white text-xs font-bold backdrop-blur-xs flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-brand-400" />
-                    <span>{farm.district}</span>
-                  </span>
-                </div>
-                {farm.photos && farm.photos.length > 1 && (
-                  <div className="absolute bottom-2.5 right-2.5">
-                    <span className="px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px] font-bold backdrop-blur-xs flex items-center gap-1">
-                      📷 {farm.photos.length} รูป
-                    </span>
-                  </div>
-                )}
-              </Link>
+              </div>
 
               {/* Farm Details */}
               <div className="p-6 flex-1 flex flex-col justify-between space-y-4">

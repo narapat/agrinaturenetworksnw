@@ -193,6 +193,16 @@ export default function AdminPage() {
       setRoleFeedback({ type: 'error', text: 'ไม่สามารถถอนสิทธิ์ผู้ดูแลระบบหลัก (admin-001) ได้' });
       return;
     }
+
+    // Safeguard: Protect real users from accidental modification by demo testers
+    const isRealUser = !['mem-001', 'mem-002', 'mem-003', 'mem-004', 'mem-005', 'admin-001'].includes(target.id);
+    if (isRealUser) {
+      const confirmed = window.confirm(
+        `⚠️ คำเตือนความปลอดภัย:\nคุณ "${target.fullName}" เป็นสมาชิกจริงในระบบ (ไม่ใช่บัญชีตัวอย่าง)\n\nการเปลี่ยนสิทธิ์จะมีผลต่อผู้ใช้จริง คุณยืนยันว่าต้องการดำเนินการต่อใช่หรือไม่?`
+      );
+      if (!confirmed) return;
+    }
+
     const success = dataService.assignAdminRole(memberId, makeAdmin);
     if (success) {
       setRoleFeedback({
@@ -395,6 +405,17 @@ export default function AdminPage() {
           >
             <span>📱 ภาพริชเมนู LINE</span>
           </Link>
+        </div>
+      </div>
+
+      {/* Safeguard Notice for Admins */}
+      <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-amber-950">
+        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div className="space-y-0.5">
+          <p className="font-bold">⚠️ ข้อควรระวังความปลอดภัยในการจัดการระบบ:</p>
+          <p className="text-amber-800 leading-relaxed">
+            สำหรับการทดสอบระบบ โปรดทดสอบกับบัญชีตัวอย่าง (Demo Profiles) เท่านั้น <b>ไม่ควรแก้ไขหรือลบข้อมูลสมาชิกจริง</b> เพื่อไม่ให้กระทบต่อการใช้งานของเกษตรกรในเครือข่าย
+          </p>
         </div>
       </div>
 
@@ -699,6 +720,15 @@ export default function AdminPage() {
                         <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
                           ✓ อนุมัติแล้ว
                         </span>
+                        {!['mem-001', 'mem-002', 'mem-003', 'mem-004', 'mem-005', 'admin-001'].includes(member.id) ? (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
+                            👤 สมาชิกจริง
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-medium border border-stone-200">
+                            🧪 ตัวอย่าง (Demo)
+                          </span>
+                        )}
                       </div>
                     </div>
 
