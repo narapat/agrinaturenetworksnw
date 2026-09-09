@@ -18,6 +18,17 @@ export const DISTRICTS_NSW = [
   'ไพศาลี',
 ];
 
+export const FARM_PRACTICE_OPTIONS = [
+  'โคก หนอง นา',
+  'เตาเผาไบโอชาร์ 1,000°C',
+  'น้ำส้มควันไม้ไร้ทาร์',
+  'ปุ๋ยหมักโบกาฉิ / จุลินทรีย์ IMO',
+  'ป่า 3 อย่าง ประโยชน์ 4 อย่าง',
+  'อนุรักษ์เมล็ดพันธุ์พื้นบ้าน',
+  'กล้วยและไม้ผลอินทรีย์',
+  'ไข่ไก่อารมณ์ดี',
+];
+
 export const INITIAL_CATEGORY_TAGS: CategoryTag[] = [
   {
     id: 'biochar',

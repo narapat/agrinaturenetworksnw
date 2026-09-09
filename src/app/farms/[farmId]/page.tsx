@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { Farm, Product } from '@/types';
+import { Farm, Product, MemberProfile } from '@/types';
+import { FARM_PRACTICE_OPTIONS } from '@/data/mockData';
 import { 
   ArrowLeft, 
   MapPin, 
@@ -22,7 +23,10 @@ import {
   ChevronLeft,
   Camera,
   Play,
-  Pause
+  Pause,
+  Edit3,
+  Check,
+  X
 } from 'lucide-react';
 
 export default function FarmDetailPage() {
@@ -33,7 +37,14 @@ export default function FarmDetailPage() {
 
   const [farm, setFarm] = useState<Farm | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
+
+  // Practices Edit State for Owner
+  const [isEditingPractices, setIsEditingPractices] = useState(false);
+  const [selectedPractices, setSelectedPractices] = useState<string[]>([]);
+  const [isSavingPractices, setIsSavingPractices] = useState(false);
+  const [savePracticesSuccess, setSavePracticesSuccess] = useState(false);
 
   // Auto-rotating Slideshow State
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
@@ -50,6 +61,8 @@ export default function FarmDetailPage() {
       }
       setFarm({ ...f });
       setProducts(dataService.getProductsByFarmId(farmId));
+      setSelectedPractices(f.practices ? [...f.practices] : []);
+      setCurrentUser(dataService.getCurrentUser());
     };
 
     loadFarm();
@@ -82,6 +95,33 @@ export default function FarmDetailPage() {
 
   if (!farm) return null;
 
+  const isOwner = currentUser && farm && (currentUser.id === farm.memberId || currentUser.role === 'admin');
+
+  const handleTogglePractice = (opt: string) => {
+    setSelectedPractices((prev) =>
+      prev.includes(opt) ? prev.filter((p) => p !== opt) : [...prev, opt]
+    );
+  };
+
+  const handleSavePractices = () => {
+    if (!farm) return;
+    setIsSavingPractices(true);
+    const updated = dataService.updateFarm(farm.id, {
+      practices: [...selectedPractices],
+    });
+    if (updated) {
+      setFarm({ ...updated });
+    }
+    setTimeout(() => {
+      setIsSavingPractices(false);
+      setSavePracticesSuccess(true);
+      setTimeout(() => {
+        setSavePracticesSuccess(false);
+        setIsEditingPractices(false);
+      }, 1200);
+    }, 300);
+  };
+
   const handleShareLine = () => {
     const url = encodeURIComponent(window.location.href);
     const text = encodeURIComponent(`แปลงกสิกรรมธรรมชาติ: ${farm.farmName} (${farm.district}) จ.นครสวรรค์`);
@@ -102,14 +142,69 @@ export default function FarmDetailPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
-      {/* Back Button */}
-      <Link
-        href="/farms"
-        className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-sm transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>กลับไปรายชื่อแปลง</span>
-      </Link>
+      {/* Back Button & Owner Controls Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link
+          href="/farms"
+          className="inline-flex items-center gap-2 text-stone-600 hover:text-stone-900 font-semibold text-sm transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>กลับไปรายชื่อแปลง</span>
+        </Link>
+
+        {isOwner && (
+          <Link
+            href="/member/dashboard"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200 transition-colors"
+          >
+            <span>🌿 หน้าจัดการแปลงของฉัน</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        )}
+      </div>
+
+      {/* Owner Alert Banner when Logged In */}
+      {isOwner && (
+        <div className="p-4 rounded-2xl sm:rounded-3xl bg-emerald-50 border border-emerald-200/90 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                <span>🌿 ท่านกำลังดูหน้าแปลงของท่านในฐานะเจ้าของแปลง</span>
+                <span className="px-2 py-0.5 rounded-md bg-emerald-200/70 text-emerald-800 text-[10px] font-black">
+                  เจ้าของแปลง
+                </span>
+              </p>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                ท่านสามารถแก้ไขวิถีและศาสตร์ของแปลงได้ที่ส่วนด้านล่าง หรือไปที่หน้าจัดการสมาชิก
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditingPractices(true);
+                const el = document.getElementById('farm-practices-section');
+                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+              className="px-3.5 py-2 rounded-xl bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100/60 text-xs font-bold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>✏️ แก้ไขศาสตร์ในแปลง</span>
+            </button>
+            <Link
+              href="/member/dashboard"
+              className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors flex items-center gap-1"
+            >
+              <span>ไปที่แดชบอร์ด</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Farm Header Card */}
       <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
@@ -280,20 +375,113 @@ export default function FarmDetailPage() {
             </div>
 
             {/* Practices */}
-            <div>
-              <h3 className="text-sm font-bold text-stone-900 mb-2">
-                องค์ความรู้ & ศาสตร์ที่นำมาปรับใช้ในแปลง:
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {farm.practices.map((p, idx) => (
-                  <span
-                    key={idx}
-                    className="px-3 py-1.5 rounded-xl bg-stone-100 text-stone-700 text-xs sm:text-sm font-semibold border border-stone-200"
+            <div id="farm-practices-section" className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-stone-50 border border-stone-200/80 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-stone-900">
+                    องค์ความรู้ & ศาสตร์ที่นำมาปรับใช้ในแปลง:
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    วิถีและศาสตร์กสิกรรมธรรมชาติที่ปฏิบัติจริงในแปลง
+                  </p>
+                </div>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingPractices(!isEditingPractices)}
+                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    🌿 {p}
-                  </span>
-                ))}
+                    <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{isEditingPractices ? 'ปิดการแก้ไข' : '✏️ แก้ไขศาสตร์ในแปลง'}</span>
+                  </button>
+                )}
               </div>
+
+              {isOwner && isEditingPractices ? (
+                <div className="space-y-4 pt-3 border-t border-stone-200/70 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs sm:text-sm font-bold text-stone-900">
+                      5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
+                    </label>
+                    <span className="text-[11px] text-stone-500">
+                      เลือกแล้ว {selectedPractices.length} ข้อ
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
+                    {FARM_PRACTICE_OPTIONS.map((opt) => {
+                      const isSelected = selectedPractices.includes(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => handleTogglePractice(opt)}
+                          className={`p-3 rounded-2xl border text-left text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-98 ${
+                            isSelected
+                              ? 'border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900 shadow-xs'
+                              : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                          }`}
+                        >
+                          <span className={`text-base leading-none shrink-0 ${isSelected ? 'text-emerald-600 font-black' : 'text-stone-400'}`}>
+                            {isSelected ? '✓' : '+'}
+                          </span>
+                          <span className="leading-snug">{opt}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleSavePractices}
+                      disabled={isSavingPractices}
+                      className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {isSavingPractices ? (
+                        <span>กำลังบันทึก...</span>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>💾 บันทึกศาสตร์แปลง</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPractices(farm.practices || []);
+                        setIsEditingPractices(false);
+                      }}
+                      className="px-3 py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-100 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      ยกเลิก
+                    </button>
+                    {savePracticesSuccess && (
+                      <span className="text-xs text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        บันทึกข้อมูลเรียบร้อยแล้ว
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {farm.practices && farm.practices.length > 0 ? (
+                    farm.practices.map((p, idx) => (
+                      <span
+                        key={idx}
+                        className="px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs sm:text-sm font-semibold border border-stone-200/90 flex items-center gap-1.5 shadow-xs"
+                      >
+                        <span className="text-emerald-600">🌿</span>
+                        <span>{p}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-xs text-stone-400 italic">ยังไม่ได้ระบุวิถีและศาสตร์ในแปลง</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Zone Map Safe Visualizer */}

@@ -7,7 +7,7 @@ import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
 import { liffService } from '@/services/liffService';
 import { MemberProfile, Farm, Product, hasMemberRole } from '@/types';
-import { DISTRICTS_NSW } from '@/data/mockData';
+import { DISTRICTS_NSW, FARM_PRACTICE_OPTIONS } from '@/data/mockData';
 import FarmPhotoUploader from '@/components/ui/FarmPhotoUploader';
 import ImageCropperModal from '@/components/ui/ImageCropperModal';
 import FarmSlideshow from '@/components/ui/FarmSlideshow';
@@ -58,6 +58,9 @@ export default function MemberDashboardPage() {
   const [editDistrict, setEditDistrict] = useState('');
   const [editSubdistrict, setEditSubdistrict] = useState('');
   const [editPhotos, setEditPhotos] = useState<string[]>([]);
+  const [editPractices, setEditPractices] = useState<string[]>([]);
+  const [isSavingPractices, setIsSavingPractices] = useState(false);
+  const [practicesSavedToast, setPracticesSavedToast] = useState(false);
   const [farmSaveSuccess, setFarmSaveSuccess] = useState(false);
 
   // Delete Product Confirmation Modal State
@@ -128,6 +131,7 @@ export default function MemberDashboardPage() {
 
     setCurrentUser(user);
     setFarm(userFarm);
+    setEditPractices(userFarm.practices ? [...userFarm.practices] : []);
     // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
     setProducts(dataService.getProductsByFarmId(userFarm.id, true));
     setIsLoadingAuth(false);
@@ -138,6 +142,29 @@ export default function MemberDashboardPage() {
     if (user && hasMemberRole(user)) {
       processUserFarm(user);
     }
+  };
+
+  const handleTogglePractice = (item: string) => {
+    setEditPractices((prev) =>
+      prev.includes(item) ? prev.filter((p) => p !== item) : [...prev, item]
+    );
+  };
+
+  const handleSavePracticesDirect = () => {
+    if (!farm) return;
+    setIsSavingPractices(true);
+    const updated = dataService.updateFarm(farm.id, {
+      practices: [...editPractices],
+    });
+    if (updated) {
+      setFarm({ ...updated });
+    }
+    setTimeout(() => {
+      setIsSavingPractices(false);
+      setPracticesSavedToast(true);
+      setTimeout(() => setPracticesSavedToast(false), 3500);
+      loadData();
+    }, 300);
   };
 
   const handleTogglePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,6 +205,7 @@ export default function MemberDashboardPage() {
     setEditDistrict(farm.district);
     setEditSubdistrict(farm.subdistrict);
     setEditPhotos(farm.photos ? [...farm.photos] : []);
+    setEditPractices(farm.practices ? [...farm.practices] : []);
     setShowEditFarmModal(true);
   };
 
@@ -191,6 +219,7 @@ export default function MemberDashboardPage() {
       district: editDistrict,
       subdistrict: editSubdistrict.trim(),
       photos: [...editPhotos],
+      practices: [...editPractices],
     });
     if (updated) {
       setFarm({ ...updated });
@@ -389,6 +418,72 @@ export default function MemberDashboardPage() {
               showBadge={farm.photos && farm.photos.length > 1}
               showPlayPause={farm.photos && farm.photos.length > 1}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 5. Natural Agriculture Practices Section (วิถีและศาสตร์ที่ทำในแปลง) */}
+      {farm && (
+        <div id="farm-practices-section" className="bg-white rounded-2xl sm:rounded-3xl border border-stone-200 shadow-sm p-4 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="font-bold text-stone-900 text-base sm:text-lg">
+                  5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
+                </h2>
+                <p className="text-xs text-stone-500">
+                  เลือกศาสตร์และวิถีกสิกรรมธรรมชาติที่ปฏิบัติจริงในแปลง กดเลือกและบันทึกได้ทันที
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleSavePracticesDirect}
+              disabled={isSavingPractices}
+              className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center justify-center gap-1.5 shrink-0"
+            >
+              {isSavingPractices ? (
+                <span>กำลังบันทึก...</span>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  <span>💾 บันทึกวิถีและศาสตร์</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {practicesSavedToast && (
+            <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs sm:text-sm font-bold text-emerald-900 flex items-center gap-2 animate-in fade-in">
+              <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>บันทึกข้อมูลวิถีและศาสตร์ที่ทำในแปลงสำเร็จแล้ว! ข้อมูลจะอัพเดตในหน้าแปลงทันที</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+            {FARM_PRACTICE_OPTIONS.map((opt) => {
+              const isSelected = editPractices.includes(opt);
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => handleTogglePractice(opt)}
+                  className={`p-3 sm:p-4 rounded-2xl border text-left text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-98 ${
+                    isSelected
+                      ? 'border-2 border-emerald-600 bg-emerald-50/70 text-emerald-900 shadow-xs'
+                      : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                  }`}
+                >
+                  <span className={`text-base leading-none shrink-0 ${isSelected ? 'text-emerald-600 font-black' : 'text-stone-400'}`}>
+                    {isSelected ? '✓' : '+'}
+                  </span>
+                  <span className="leading-snug">{opt}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -764,6 +859,35 @@ export default function MemberDashboardPage() {
                   onChange={(e) => setEditStory(e.target.value)}
                   className="w-full p-3 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 ></textarea>
+              </div>
+
+              {/* 5. Practices in Modal */}
+              <div className="space-y-2 p-3 sm:p-4 rounded-2xl bg-stone-50 border border-stone-200">
+                <label className="block text-xs font-bold text-stone-700">
+                  5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {FARM_PRACTICE_OPTIONS.map((opt) => {
+                    const isSelected = editPractices.includes(opt);
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => handleTogglePractice(opt)}
+                        className={`p-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                          isSelected
+                            ? 'border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900 shadow-xs'
+                            : 'border border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
+                        }`}
+                      >
+                        <span className={`text-sm leading-none shrink-0 ${isSelected ? 'text-emerald-600 font-black' : 'text-stone-400'}`}>
+                          {isSelected ? '✓' : '+'}
+                        </span>
+                        <span className="truncate">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Multi-Photo Farm Uploader */}
