@@ -120,4 +120,95 @@ describe('Data Privacy, Leakage Prevention & Role RBAC Tests', () => {
       dataService.updateContactPrivacy(memberId, false, false);
     });
   });
+
+  describe('5. SKU Management, Editing, and Reassignment (Zero Product Loss)', () => {
+    it('updateCategoryTag should update SKU details and cascade to attached products', () => {
+      const categories = dataService.getCategories();
+      const testCat = categories[0];
+      expect(testCat).toBeDefined();
+
+      const origName = testCat.name;
+      const updated = dataService.updateCategoryTag(testCat.id, {
+        name: 'กล้วยน้ำว้าทองคำพระราชทาน',
+        icon: '🍌✨',
+      });
+
+      expect(updated).toBeDefined();
+      expect(updated?.name).toBe('กล้วยน้ำว้าทองคำพระราชทาน');
+      expect(updated?.icon).toBe('🍌✨');
+
+      // Verify cascade update on products attached to this SKU
+      const attachedProducts = dataService.getPublicProducts().filter((p) => p.skuTagId === testCat.id);
+      if (attachedProducts.length > 0) {
+        for (const p of attachedProducts) {
+          expect(p.skuTagName).toBe('กล้วยน้ำว้าทองคำพระราชทาน');
+        }
+      }
+
+      // Revert name back to original
+      dataService.updateCategoryTag(testCat.id, { name: origName, icon: testCat.icon });
+    });
+
+    it('deleteCategoryTagWithReassign should migrate products to target SKU before deletion', () => {
+      // Step A: Create a temporary SKU
+      const tempSku = dataService.addCategoryTag({
+        name: 'ผลผลิตทดสอบชั่วคราว',
+        icon: '🧪',
+        category: 'raw',
+        description: 'หมวดทดสอบสำหรับการลบและโยกย้าย',
+        isActive: true,
+      });
+      expect(tempSku.id).toBeDefined();
+
+      // Step B: Attach a product to this temp SKU
+      const products = dataService.getPublicProducts();
+      expect(products.length).toBeGreaterThan(0);
+      const testProd = products[0];
+      const origSkuTagId = testProd.skuTagId;
+      const origSkuTagName = testProd.skuTagName;
+
+      dataService.updateProduct(testProd.id, {
+        skuTagId: tempSku.id,
+        skuTagName: tempSku.name,
+      });
+
+      const pInfo = dataService.getProductCountBySku(tempSku.id);
+      expect(pInfo.count).toBeGreaterThanOrEqual(1);
+
+      // Step C: Delete tempSku and reassign to another SKU (e.g. origSkuTagId)
+      const res = dataService.deleteCategoryTagWithReassign(tempSku.id, origSkuTagId);
+      expect(res.success).toBe(true);
+      expect(res.reassignedCount).toBeGreaterThanOrEqual(1);
+
+      // Verify tempSku is removed from categories
+      const remainingCats = dataService.getCategories();
+      expect(remainingCats.some((c) => c.id === tempSku.id)).toBe(false);
+
+      // Verify product was migrated to origSkuTagId
+      const checkProd = dataService.getRawProductById(testProd.id);
+      expect(checkProd?.skuTagId).toBe(origSkuTagId);
+      expect(checkProd?.skuTagName).toBe(origSkuTagName);
+    });
+
+    it('getGroupedSKUs should keep inactive SKUs visible if they still have active products', () => {
+      const categories = dataService.getCategories();
+      const activeCatWithProducts = categories.find((c) => {
+        const count = dataService.getProductCountBySku(c.id).count;
+        return count > 0 && c.isActive;
+      });
+
+      expect(activeCatWithProducts).toBeDefined();
+
+      // Toggle to inactive (ปิดรับชั่วคราว)
+      dataService.toggleCategoryStatus(activeCatWithProducts!.id);
+
+      // Check grouped SKUs in market
+      const grouped = dataService.getGroupedSKUs();
+      const stillInMarket = grouped.some((g) => g.skuTagId === activeCatWithProducts!.id);
+      expect(stillInMarket).toBe(true);
+
+      // Toggle back to active
+      dataService.toggleCategoryStatus(activeCatWithProducts!.id);
+    });
+  });
 });

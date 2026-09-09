@@ -3,6 +3,7 @@ import {
   Farm,
   Product,
   CategoryTag,
+  ProductCategory,
   AuditLog,
   NewsEvent,
   NewsStatus,
@@ -438,10 +439,11 @@ class DataService {
     const groupsMap = new Map<string, SKUGroup>();
 
     this.categories.forEach((cat) => {
-      if (!cat.isActive) return;
-
       const prodsForSku = activeProducts.filter((p) => p.skuTagId === cat.id);
       if (prodsForSku.length === 0) return;
+      // หากหมวดหมู่นั้นถูกปิดชั่วคราว แต่ยังมีสินค้าของเกษตรกรคงค้างอยู่ ให้ยังคงแสดงในตลาดเพื่อไม่ให้สินค้าสูญหาย
+      // จะข้ามก็ต่อเมื่อหมวดหมู่นั้นปิดใช้งานและไม่มีสินค้าใดๆ ผูกอยู่
+      if (!cat.isActive && prodsForSku.length === 0) return;
 
       const farmIds = new Set(prodsForSku.map((p) => p.farmId));
       const districts = Array.from(new Set(prodsForSku.map((p) => p.district)));
@@ -1202,7 +1204,146 @@ class DataService {
       cat.isActive = !cat.isActive;
       this.save();
       this.firestoreUpdate('categories', catId, { isActive: cat.isActive });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
     }
+  }
+
+  getCategoryName(category: ProductCategory): string {
+    switch (category) {
+      case 'smartfarm':
+        return 'สมาร์ทฟาร์ม (Smart Farm)';
+      case 'tool':
+        return 'อุปกรณ์ เครื่องมือ';
+      case 'byproduct':
+        return 'ปัจจัยการผลิต/By-product';
+      case 'seed':
+        return 'เมล็ดพันธุ์/กิ่งพันธุ์';
+      case 'processed':
+        return 'แปรรูป';
+      case 'raw':
+      default:
+        return 'ผลผลิตสด';
+    }
+  }
+
+  getProductCountBySku(skuTagId: string): { count: number; farmCount: number } {
+    const prods = this.products.filter((p) => p.skuTagId === skuTagId);
+    const farmIds = new Set(prods.map((p) => p.farmId));
+    return { count: prods.length, farmCount: farmIds.size };
+  }
+
+  updateCategoryTag(catId: string, updates: Partial<Omit<CategoryTag, 'id'>>): CategoryTag | null {
+    const cat = this.categories.find((c) => c.id === catId);
+    if (!cat) return null;
+
+    Object.assign(cat, updates);
+
+    // Cascade update to all attached products if name or category changed
+    if (updates.name || updates.category) {
+      this.products.forEach((p) => {
+        if (p.skuTagId === catId) {
+          if (updates.name) p.skuTagName = updates.name;
+          if (updates.category) {
+            p.category = updates.category;
+            p.categoryName = this.getCategoryName(updates.category);
+          }
+          this.firestoreUpdate('products', p.id, {
+            skuTagName: p.skuTagName,
+            category: p.category,
+            categoryName: p.categoryName,
+          });
+        }
+      });
+    }
+
+    this.save();
+    this.firestoreUpdate('categories', catId, { ...cat });
+
+    // บันทึก Audit Log เพื่อความโปร่งใส
+    const currentUser = this.getCurrentUser();
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      action: 'update_sku',
+      performedByAdminId: currentUser?.id || 'admin-001',
+      performedByAdminName: currentUser?.fullName || 'แอดมินเครือข่าย',
+      targetMemberId: '-',
+      targetMemberName: '-',
+      targetFarmName: '-',
+      details: `แก้ไขข้อมูลชนิดผลผลิต (SKU): "${cat.name}" (${this.getCategoryName(cat.category)})`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    };
+    this.auditLogs.unshift(newLog);
+    this.firestoreSet('auditLogs', newLog.id, newLog);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return cat;
+  }
+
+  deleteCategoryTagWithReassign(
+    sourceCatId: string,
+    targetCatId?: string
+  ): { success: boolean; reassignedCount: number; deletedName: string } {
+    const catIndex = this.categories.findIndex((c) => c.id === sourceCatId);
+    if (catIndex === -1) return { success: false, reassignedCount: 0, deletedName: '' };
+
+    const deletedCat = this.categories[catIndex];
+    const deletedName = deletedCat.name;
+    const affectedProds = this.products.filter((p) => p.skuTagId === sourceCatId);
+
+    // If there are affected products and targetCatId is provided, reassign them!
+    let reassignedCount = 0;
+    if (targetCatId && targetCatId !== sourceCatId) {
+      const targetCat = this.categories.find((c) => c.id === targetCatId);
+      if (targetCat) {
+        affectedProds.forEach((p) => {
+          p.skuTagId = targetCat.id;
+          p.skuTagName = targetCat.name;
+          p.category = targetCat.category;
+          p.categoryName = this.getCategoryName(targetCat.category);
+          this.firestoreUpdate('products', p.id, {
+            skuTagId: p.skuTagId,
+            skuTagName: p.skuTagName,
+            category: p.category,
+            categoryName: p.categoryName,
+          });
+          reassignedCount++;
+        });
+      }
+    }
+
+    // Remove source category
+    this.categories.splice(catIndex, 1);
+    this.save();
+    this.firestoreDelete('categories', sourceCatId);
+
+    // บันทึก Audit Log เพื่อความโปร่งใส
+    const currentUser = this.getCurrentUser();
+    const targetCat = targetCatId ? this.categories.find((c) => c.id === targetCatId) : null;
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      action: 'delete_sku',
+      performedByAdminId: currentUser?.id || 'admin-001',
+      performedByAdminName: currentUser?.fullName || 'แอดมินเครือข่าย',
+      targetMemberId: '-',
+      targetMemberName: '-',
+      targetFarmName: '-',
+      details: reassignedCount > 0
+        ? `ลบชนิดผลผลิต "${deletedName}" และโยกย้ายผลผลิต ${reassignedCount} รายการไปยัง "${targetCat?.name || targetCatId}"`
+        : `ลบชนิดผลผลิต "${deletedName}" (ไม่มีผลผลิตตกค้าง)`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    };
+    this.auditLogs.unshift(newLog);
+    this.firestoreSet('auditLogs', newLog.id, newLog);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+
+    return { success: true, reassignedCount, deletedName };
   }
 
   getPendingMembers(): MemberProfile[] {
