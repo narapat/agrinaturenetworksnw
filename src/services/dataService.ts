@@ -40,6 +40,16 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'nsw_current_user_v1',
 };
 
+// รายชื่อบัญชีทดสอบระบบ (Demo Profiles) เท่านั้น - ห้ามแสดงสมาชิกจริงที่ลงทะเบียนใหม่
+export const DEMO_MEMBER_IDS = [
+  'mem-001', // ลุงสมชาย
+  'mem-002', // ป้าปราณี
+  'mem-003', // ครูบุญชู
+  'mem-004', // พี่ชัยณรงค์
+  'mem-005', // น้องกานต์
+  'admin-001', // นพรัตน์ แอดมิน
+];
+
 // State Helper with LocalStorage + Firebase Firestore sync
 class DataService {
   private members: MemberProfile[] = [];
@@ -509,7 +519,17 @@ class DataService {
     return user || null;
   }
 
+  // ดึงเฉพาะบัญชีทดสอบระบบ (Demo Profiles) เท่านั้น ห้ามส่งสมาชิกจริง
+  getDemoMembers(): MemberProfile[] {
+    return this.members.filter((m) => DEMO_MEMBER_IDS.includes(m.id));
+  }
+
   switchUser(userId: string) {
+    // ป้องกันความปลอดภัย: อนุญาตให้สลับเฉพาะบัญชีทดสอบหรือ guest เท่านั้น ห้ามสลับไปยังบัญชีสมาชิกจริง
+    if (userId !== 'guest' && !DEMO_MEMBER_IDS.includes(userId)) {
+      console.warn('Security: Cannot switch to non-demo member account via demo switcher');
+      return;
+    }
     this.currentUserId = userId;
     this.save();
   }

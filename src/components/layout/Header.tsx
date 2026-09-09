@@ -28,7 +28,7 @@ export default function Header() {
   const pathname = usePathname();
   const { fontSize, setFontSize } = useFontSize();
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
-  const [allMembers, setAllMembers] = useState<MemberProfile[]>([]);
+  const [demoMembers, setDemoMembers] = useState<MemberProfile[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showFontMenu, setShowFontMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -37,7 +37,7 @@ export default function Header() {
     const refreshHeaderUser = () => {
       const user = dataService.getCurrentUser();
       setCurrentUser(user);
-      setAllMembers(dataService.getAllMembers());
+      setDemoMembers(dataService.getDemoMembers());
     };
 
     refreshHeaderUser();
@@ -302,7 +302,7 @@ export default function Header() {
                         {!currentUser && <Check className="w-3.5 h-3.5 text-brand-600" />}
                       </button>
 
-                      {allMembers.map((m) => (
+                      {demoMembers.map((m) => (
                         <button
                           key={m.id}
                           onClick={() => handleSwitchUser(m.id)}
@@ -556,7 +556,7 @@ export default function Header() {
                     {!currentUser && <Check className="w-3.5 h-3.5 text-brand-700 shrink-0" />}
                   </button>
 
-                  {allMembers.map((m) => (
+                  {demoMembers.map((m) => (
                     <button
                       key={m.id}
                       onClick={() => handleSwitchUser(m.id)}
