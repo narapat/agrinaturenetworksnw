@@ -206,6 +206,16 @@ class DataService {
    */
   async ensureFirestoreSync(force: boolean = false): Promise<void> {
     if (typeof window === 'undefined' || !db) return;
+    const now = Date.now();
+
+    // ถ้าเคยซิงค์แล้ว และไม่ใช่การบังคับรีเฟรช ให้ใช้ข้อมูลเดิม (ไม่ยิงซ้ำ)
+    if (!force && this.isFirestoreSynced) return;
+
+    // ระบบ Debounce: แม้จะ force แต่ถ้าเพิ่งซิงค์ไปไม่ถึง 3 วินาที ให้ข้ามเพื่อไม่ให้ยิง Firestore ซ้ำซ้อน
+    if (force && (now - this.lastSyncTimestamp < 3000)) {
+      return;
+    }
+
     if (force) {
       this.isFirestoreSynced = false;
       this.syncPromise = null;
@@ -277,6 +287,13 @@ class DataService {
             }
             return { ...remoteM, ...localM, status: 'approved' };
           }
+          // จุดสำคัญ: ถ้าสมาชิกถูกปฏิเสธ (rejected) ในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
+          if (localM.status === 'rejected') {
+            if (remoteM.status !== 'rejected') {
+              this.firestoreUpdate('members', localM.id, { status: 'rejected' });
+            }
+            return { ...remoteM, ...localM, status: 'rejected' };
+          }
           return { ...localM, ...remoteM };
         });
 
@@ -288,11 +305,11 @@ class DataService {
 
         // ===================================================================
         // 🌟 AUTO-RESCUE: ตรวจจับสมาชิกที่สมัครไว้ในเครื่อง (LocalStorage) 
-        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น สมัครไว้ก่อนหน้าแล้วเน็ตหลุด)
+        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เฉพาะสถานะ pending เท่านั้น)
         // ส่งขึ้น Cloud Firestore ทันทีอัตโนมัติ เพื่อให้แอดมินมองเห็นและอนุมัติได้
         // ===================================================================
         const unuploadedMembers = this.members.filter(
-          (m) => !DEMO_MEMBER_IDS.includes(m.id) && !remoteMemMap.has(m.id)
+          (m) => !DEMO_MEMBER_IDS.includes(m.id) && m.status === 'pending' && !remoteMemMap.has(m.id)
         );
 
         for (const localM of unuploadedMembers) {
@@ -394,13 +411,13 @@ class DataService {
               this.categories.push(rc);
             }
           }
-        }
-
-        for (const initCat of INITIAL_CATEGORY_TAGS) {
-          if (!this.categories.some((c) => c.id === initCat.id)) {
-            this.categories.push(initCat);
+        } else {
+          for (const initCat of INITIAL_CATEGORY_TAGS) {
+            if (!this.categories.some((c) => c.id === initCat.id)) {
+              this.categories.push(initCat);
+            }
+            this.firestoreSet('categories', initCat.id, initCat);
           }
-          this.firestoreSet('categories', initCat.id, initCat);
         }
       } catch (err) {
         console.warn('Firestore sync [categories] notice:', err);
@@ -1548,6 +1565,81 @@ class DataService {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('nsw_data_updated'));
       }
+    }
+  }
+
+  getRejectedMembers(): MemberProfile[] {
+    return this.members.filter((m) => m.status === 'rejected');
+  }
+
+  rejectMember(admin: MemberProfile, memberId: string, reason?: string) {
+    const member = this.members.find((m) => m.id === memberId);
+    if (member) {
+      member.status = 'rejected';
+
+      const farm = this.farms.find((f) => f.id === member.farmId);
+      const adminId = admin?.id || 'admin-001';
+      const adminName = admin?.fullName || 'แอดมินเครือข่าย';
+
+      const newLog: AuditLog = {
+        id: `log-${Date.now()}`,
+        action: 'reject_member',
+        performedByAdminId: adminId,
+        performedByAdminName: adminName,
+        targetMemberId: member.id,
+        targetMemberName: member.fullName,
+        targetFarmName: farm?.farmName || 'แปลงที่ถูกปฏิเสธ',
+        details: `แอดมิน ${adminName} ปฏิเสธการอนุมัติสมาชิก ${member.fullName} (${farm?.farmName || ''}) ${reason ? `เหตุผล: ${reason}` : ''}`,
+        timestamp: new Date().toLocaleString('th-TH'),
+      };
+      this.auditLogs.unshift(newLog);
+      this.save();
+
+      this.firestoreUpdate('members', memberId, { status: 'rejected' });
+      this.firestoreSet('auditLogs', newLog.id, newLog);
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+    }
+  }
+
+  deleteMemberPermanently(admin: MemberProfile, memberId: string) {
+    const member = this.members.find((m) => m.id === memberId);
+    if (!member) return;
+
+    const farmId = member.farmId;
+    const adminId = admin?.id || 'admin-001';
+    const adminName = admin?.fullName || 'แอดมินเครือข่าย';
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      action: 'reject_member',
+      performedByAdminId: adminId,
+      performedByAdminName: adminName,
+      targetMemberId: member.id,
+      targetMemberName: member.fullName,
+      targetFarmName: 'ลบข้อมูลถาวร',
+      details: `แอดมิน ${adminName} ลบข้อมูลสมาชิก ${member.fullName} และแปลงที่ผูกอยู่ออกจากระบบอย่างถาวร`,
+      timestamp: new Date().toLocaleString('th-TH'),
+    };
+    this.auditLogs.unshift(newLog);
+    this.firestoreSet('auditLogs', newLog.id, newLog);
+
+    this.members = this.members.filter((m) => m.id !== memberId);
+    if (farmId) {
+      this.farms = this.farms.filter((f) => f.id !== farmId && f.memberId !== memberId);
+      this.products = this.products.filter((p) => p.farmId !== farmId);
+    }
+    this.save();
+
+    this.firestoreDelete('members', memberId);
+    if (farmId) {
+      this.firestoreDelete('farms', farmId);
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
     }
   }
 

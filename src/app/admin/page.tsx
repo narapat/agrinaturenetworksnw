@@ -35,15 +35,18 @@ import {
   Filter,
   ArrowRight,
   Tag,
-  RefreshCw
+  RefreshCw,
+  XCircle,
+  RotateCcw
 } from 'lucide-react';
 
 export default function AdminPage() {
   const { getTextClass } = useFontSize();
-  const [activeTab, setActiveTab] = useState<'pending' | 'roles' | 'news' | 'assist' | 'categories' | 'logs'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'rejected' | 'roles' | 'news' | 'assist' | 'categories' | 'logs'>('pending');
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
 
   const [pendingMembers, setPendingMembers] = useState<MemberProfile[]>([]);
+  const [rejectedMembers, setRejectedMembers] = useState<MemberProfile[]>([]);
   const [allMembers, setAllMembers] = useState<MemberProfile[]>([]);
   const [categories, setCategories] = useState<CategoryTag[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
@@ -139,6 +142,7 @@ export default function AdminPage() {
   const loadData = () => {
     setCurrentUser(dataService.getCurrentUser());
     setPendingMembers(dataService.getPendingMembers());
+    setRejectedMembers(dataService.getRejectedMembers());
     setAllMembers(dataService.getAllMembers());
     setCategories(dataService.getCategories());
     setAuditLogs(dataService.getAuditLogs());
@@ -167,6 +171,62 @@ export default function AdminPage() {
           createdAt: '' 
         };
     dataService.approveMember(adminUser, memberId);
+    loadData();
+  };
+
+  const handleReject = (memberId: string) => {
+    if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการ "ไม่อนุมัติ" สมาชิกท่านนี้? (ข้อมูลจะถูกย้ายไปที่แท็บ "ไม่อนุมัติ / คัดกรองออก")')) {
+      return;
+    }
+    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
+      || dataService.getAllMembers().find((m) => m.role === 'admin')
+      || currentUser
+      || { 
+          id: 'admin-001', 
+          fullName: 'แอดมินเครือข่าย', 
+          role: 'admin' as const, 
+          status: 'approved' as const, 
+          fontSizePref: 'normal' as const, 
+          phone: '', 
+          lineId: '', 
+          isPublicPhone: false, 
+          isPublicLine: false, 
+          isPublicSocials: false, 
+          socials: {}, 
+          delegationStatus: 'none' as const, 
+          farmId: 'farm-001', 
+          facePhotoUrl: '', 
+          createdAt: '' 
+        };
+    dataService.rejectMember(adminUser, memberId);
+    loadData();
+  };
+
+  const handlePermanentDelete = (memberId: string, memberName: string) => {
+    if (!confirm(`⚠️ ยืนยันการ "ลบข้อมูลถาวร" ของ "${memberName}" หรือไม่?\n\nข้อมูลสมาชิก แปลง และสินค้าทั้งหมดจะถูกลบออกจากระบบและ Cloud Firestore อย่างถาวร ไม่สามารถกู้คืนได้!`)) {
+      return;
+    }
+    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
+      || dataService.getAllMembers().find((m) => m.role === 'admin')
+      || currentUser
+      || { 
+          id: 'admin-001', 
+          fullName: 'แอดมินเครือข่าย', 
+          role: 'admin' as const, 
+          status: 'approved' as const, 
+          fontSizePref: 'normal' as const, 
+          phone: '', 
+          lineId: '', 
+          isPublicPhone: false, 
+          isPublicLine: false, 
+          isPublicSocials: false, 
+          socials: {}, 
+          delegationStatus: 'none' as const, 
+          farmId: 'farm-001', 
+          facePhotoUrl: '', 
+          createdAt: '' 
+        };
+    dataService.deleteMemberPermanently(adminUser, memberId);
     loadData();
   };
 
@@ -519,6 +579,12 @@ export default function AdminPage() {
             <div className="text-lg font-black text-emerald-400">{pendingMembers.length}</div>
             <div className="text-[10px] text-stone-400">รออนุมัติ</div>
           </div>
+          {rejectedMembers.length > 0 && (
+            <div className="px-3.5 py-2 rounded-2xl bg-rose-500/20 text-center border border-rose-500/30">
+              <div className="text-lg font-black text-rose-400">{rejectedMembers.length}</div>
+              <div className="text-[10px] text-stone-400">ไม่อนุมัติ</div>
+            </div>
+          )}
           <div className="px-3.5 py-2 rounded-2xl bg-white/10 text-center">
             <div className="text-lg font-black text-emerald-300">{allMembers.filter((m) => hasAdminRole(m)).length}</div>
             <div className="text-[10px] text-stone-400">แอดมิน</div>
@@ -564,6 +630,18 @@ export default function AdminPage() {
         >
           <UserCheck className="w-4 h-4" />
           <span>อนุมัติสมาชิกใหม่ ({pendingMembers.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('rejected')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all ${
+            activeTab === 'rejected'
+              ? 'bg-rose-700 text-white shadow-sm'
+              : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200'
+          }`}
+        >
+          <XCircle className={`w-4 h-4 ${activeTab === 'rejected' ? 'text-white' : 'text-rose-500'}`} />
+          <span>ไม่อนุมัติ / คัดออก ({rejectedMembers.length})</span>
         </button>
 
         <button
@@ -698,10 +776,20 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <div className="shrink-0 flex gap-2">
+                      <div className="shrink-0 flex items-center gap-2">
                         <button
+                          type="button"
+                          onClick={() => handleReject(member.id)}
+                          className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          title="ไม่อนุมัติและย้ายไปแท็บไม่อนุมัติ"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span className="hidden sm:inline">ไม่อนุมัติ</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleApprove(member.id)}
-                          className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-brand-600/20 transition-all"
+                          className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-brand-600/20 transition-all cursor-pointer"
                         >
                           <Check className="w-4 h-4" />
                           <span>อนุมัติสมาชิก</span>
@@ -729,6 +817,121 @@ export default function AdminPage() {
                         <span>📞 {member.phone}</span>
                         {member.lineId && <span>LINE: {member.lineId}</span>}
                       </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ================= TAB 1.5: REJECTED MEMBERS (สมาชิกที่ไม่อนุมัติ/คัดกรองออก) ================= */}
+      {activeTab === 'rejected' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+            <div>
+              <p className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-rose-600" />
+                <span>รายชื่อผู้สมัครที่ไม่อนุมัติ หรือถูกคัดกรองออก</span>
+              </p>
+              <p className="text-xs text-stone-500 mt-0.5">
+                สมาชิกในกลุ่มนี้จะไม่สามารถเข้าถึงหน้าแปลงของฉันและสินค้าจะไม่แสดงผลสาธารณะ สามารถเปลี่ยนสถานะเป็นอนุมัติ หรือลบข้อมูลถาวรได้
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRefreshFirestore}
+              disabled={isSyncing}
+              className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'กำลังดึงข้อมูล...' : '🔄 รีเฟรชข้อมูล'}</span>
+            </button>
+          </div>
+
+          {rejectedMembers.length === 0 ? (
+            <div className="p-10 text-center bg-white rounded-3xl border border-stone-200 text-stone-500 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-stone-100 text-stone-400 flex items-center justify-center mx-auto">
+                <Check className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <p className="text-base font-bold text-stone-700">ไม่มีสมาชิกที่ถูกปฏิเสธหรือไม่อนุมัติ</p>
+              <p className="text-xs text-stone-400 max-w-md mx-auto">
+                เมื่อท่านกดปุ่ม "ไม่อนุมัติ" ในแท็บอนุมัติสมาชิก รายชื่อจะถูกแยกมาแสดงที่นี่โดยอัตโนมัติ
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {rejectedMembers.map((member) => {
+                const farm = dataService.getFarmById(member.farmId);
+                return (
+                  <div
+                    key={member.id}
+                    className="bg-white p-5 rounded-3xl border border-rose-200/80 shadow-xs space-y-3 relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 bg-rose-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl">
+                      ไม่อนุมัติ
+                    </div>
+
+                    <div className="flex items-start justify-between gap-4 pt-1">
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <img
+                          src={member.facePhotoUrl}
+                          alt={member.fullName}
+                          className="w-16 h-16 rounded-2xl object-cover border-2 border-rose-200 shrink-0 opacity-80"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-stone-900 text-base truncate">
+                            {member.fullName}
+                          </h4>
+                          <p className="text-xs text-stone-600 truncate font-medium">
+                            แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
+                          </p>
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            📍 อ.{farm?.district} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ข้อมูลประวัติการอบรม */}
+                    <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200/80 text-xs space-y-1">
+                      <div className="text-stone-700 space-y-0.5">
+                        <p>
+                          <span className="font-semibold text-stone-500">• หลักสูตร: </span>
+                          <span className="font-medium text-stone-900">{member.trainingCourse || 'ไม่ได้ระบุ'}</span>
+                        </p>
+                        <p>
+                          <span className="font-semibold text-stone-500">• ศูนย์: </span>
+                          <span className="font-medium text-stone-900">{member.trainingLocation || 'ไม่ได้ระบุ'}</span>
+                        </p>
+                      </div>
+                      <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500 font-medium">
+                        <span>📞 {member.phone}</span>
+                        {member.lineId && <span>LINE: {member.lineId}</span>}
+                      </div>
+                    </div>
+
+                    {/* Actions: Approve (Restore) & Permanent Delete */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                      <button
+                        type="button"
+                        onClick={() => handlePermanentDelete(member.id, member.fullName)}
+                        className="px-3.5 py-2 bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border border-stone-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="ลบข้อมูลออกจากระบบและ Cloud Firestore ถาวร"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>ลบข้อมูลถาวร</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleApprove(member.id)}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
+                        title="เปลี่ยนสถานะเป็นอนุมัติการเป็นสมาชิก"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>เปลี่ยนเป็นอนุมัติสมาชิก</span>
+                      </button>
                     </div>
                   </div>
                 );

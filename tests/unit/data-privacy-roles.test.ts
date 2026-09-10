@@ -211,4 +211,57 @@ describe('Data Privacy, Leakage Prevention & Role RBAC Tests', () => {
       dataService.toggleCategoryStatus(activeCatWithProducts!.id);
     });
   });
+
+  describe('6. Member Approval, Rejection, and Permanent Deletion', () => {
+    it('rejectMember should update status to rejected, separate into getRejectedMembers, and write audit log', async () => {
+      // Step A: Register a new test member
+      const regResult = await dataService.registerNewMember({
+        fullName: 'ทดสอบ ไม่อนุมัติ',
+        phone: '0819998888',
+        district: 'โกรกพระ',
+        subdistrict: 'บางประมุง',
+        farmName: 'สวนทดสอบไม่อนุมัติ',
+        story: 'เรื่องราวแปลงทดสอบ',
+        lineId: 'testrejectline',
+        isPublicPhone: true,
+        isPublicLine: true,
+        practices: ['กสิกรรมธรรมชาติ'],
+        trainingCourse: 'พัฒนากสิกรรมธรรมชาติสู่ระบบเศรษฐกิจพอเพียง',
+        trainingLocation: 'ศูนย์กสิกรรมธรรมชาตินครสวรรค์',
+        facePhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+      });
+
+      const newMember = regResult.member;
+      expect(newMember.status).toBe('pending');
+      expect(dataService.getPendingMembers().some((m) => m.id === newMember.id)).toBe(true);
+      expect(dataService.getRejectedMembers().some((m) => m.id === newMember.id)).toBe(false);
+
+      // Step B: Reject member
+      const admin = dataService.getAllMembers().find((m) => m.role === 'admin')!;
+      dataService.rejectMember(admin, newMember.id, 'รูปถ่ายไม่ชัดเจน');
+
+      // Step C: Verify separated into rejectedMembers and removed from pending
+      expect(dataService.getPendingMembers().some((m) => m.id === newMember.id)).toBe(false);
+      const rejectedList = dataService.getRejectedMembers();
+      expect(rejectedList.some((m) => m.id === newMember.id)).toBe(true);
+      const rejected = rejectedList.find((m) => m.id === newMember.id);
+      expect(rejected?.status).toBe('rejected');
+
+      // Step D: Verify Audit Log
+      const logs = dataService.getAuditLogs();
+      const rejectLog = logs.find((l) => l.action === 'reject_member' && l.targetMemberId === newMember.id);
+      expect(rejectLog).toBeDefined();
+      expect(rejectLog?.details).toContain('ปฏิเสธการอนุมัติสมาชิก');
+
+      // Step E: Re-approve the member
+      dataService.approveMember(admin, newMember.id);
+      expect(dataService.getRejectedMembers().some((m) => m.id === newMember.id)).toBe(false);
+      expect(dataService.getMemberById(newMember.id)?.status).toBe('approved');
+
+      // Step F: Delete permanently
+      dataService.deleteMemberPermanently(admin, newMember.id);
+      expect(dataService.getMemberById(newMember.id)).toBeUndefined();
+      expect(dataService.getFarmById(newMember.farmId)).toBeUndefined();
+    });
+  });
 });

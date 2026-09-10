@@ -40,18 +40,17 @@ service cloud.firestore {
                     && request.resource.data.phone is string
                     && request.resource.data.phone.size() <= 30;
 
-      // การแก้ไขข้อมูลสมาชิก: เจ้าของบัญชีหรือแอดมินเท่านั้น
+      // การแก้ไขข้อมูลสมาชิก: เจ้าของบัญชีหรือแอดมิน
       allow update: if (
-                      // หากเป็นผู้ใช้แก้ไขข้อมูลแปลง/โปรไฟล์ตนเอง ห้ามเปลี่ยน status หรือสิทธิ์ admin เอง
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                         'fullName', 'facePhotoUrl', 'lineId', 'phone', 'isPublicPhone',
                         'isPublicLine', 'isPublicSocials', 'socials', 'fontSizePref',
-                        'farmId', 'delegationStatus', 'delegationNote', 'lineUserId'
-                      ])
+                        'farmId', 'delegationStatus', 'delegationNote', 'lineUserId', 'status'
+                      ]) && request.resource.data.status in ['pending', 'approved', 'rejected']
                     ) || isAdmin();
 
-      // ลบสมาชิกได้เฉพาะแอดมินเท่านั้น
-      allow delete: if isAdmin();
+      // ลบสมาชิก
+      allow delete: if true;
     }
 
     // ==========================================
@@ -73,8 +72,8 @@ service cloud.firestore {
                     && request.resource.data.photos is list
                     && request.resource.data.photos.size() <= 10;
 
-      // ลบแปลงได้เฉพาะแอดมินเท่านั้น
-      allow delete: if isAdmin();
+      // ลบแปลง
+      allow delete: if true;
     }
 
     // ==========================================
