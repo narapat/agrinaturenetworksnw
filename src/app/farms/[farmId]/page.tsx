@@ -138,9 +138,14 @@ export default function FarmDetailPage() {
   };
 
   const handleShareLine = () => {
-    const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(`แปลงกสิกรรมธรรมชาติ: ${farm.farmName} (${farm.district}) จ.นครสวรรค์`);
-    window.open(`https://social-plugins.line.me/lineit/share?url=${url}&text=${text}`, '_blank');
+    if (!farm) return;
+    const shareMessage =
+      `🌱 มาชมของดีแปลง "${farm.farmName}" กันครับ!\n` +
+      `📍 พิกัด: ${farm.subdistrict ? `ต.${farm.subdistrict} ` : ''}อ.${farm.district} จ.นครสวรรค์ (เครือข่ายกสิกรรมธรรมชาติ)\n` +
+      `👉 คลิกชมเรื่องเล่า วิถีทำแปลง และผลผลิตอินทรีย์ได้ที่นี่:\n` +
+      `${window.location.href}`;
+
+    window.open(`https://line.me/R/share?text=${encodeURIComponent(shareMessage)}`, '_blank');
   };
 
   const handleShareFacebook = () => {

@@ -84,9 +84,14 @@ export default function ProductDetailPage() {
   }
 
   const handleShareLine = () => {
-    const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(`ของดีกสิกรรมธรรมชาติ: ${product.title} จาก ${product.farmName} จ.นครสวรรค์`);
-    window.open(`https://social-plugins.line.me/lineit/share?url=${url}&text=${text}`, '_blank');
+    if (!product) return;
+    const shareMessage =
+      `🥦 มาชมของดี "${product.title}" จากแปลง "${product.farmName}" กันครับ!\n` +
+      `📍 พิกัด: อ.${product.district} จ.นครสวรรค์ (เครือข่ายกสิกรรมธรรมชาติ)\n` +
+      `👉 ดูรายละเอียด สั่งจอง หรือติดต่อเกษตรกรได้ที่นี่:\n` +
+      `${window.location.href}`;
+
+    window.open(`https://line.me/R/share?text=${encodeURIComponent(shareMessage)}`, '_blank');
   };
 
   const handleShareFacebook = () => {

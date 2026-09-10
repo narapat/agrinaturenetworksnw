@@ -19,9 +19,13 @@ export default function NewsPage() {
   }, []);
 
   const handleShareLine = (item: NewsEvent) => {
-    const url = encodeURIComponent(window.location.href);
-    const text = encodeURIComponent(`📢 ข่าวสารเครือข่ายกสิกรรมธรรมชาตินครสวรรค์: ${item.title}\nวันที่: ${item.date} ณ ${item.location}`);
-    window.open(`https://social-plugins.line.me/lineit/share?url=${url}&text=${text}`, '_blank');
+    const shareMessage =
+      `📢 ขอเชิญร่วมกิจกรรม "${item.title}"\n` +
+      `📅 วันที่: ${item.date}${item.time ? ` (${item.time})` : ''}\n` +
+      `📍 สถานที่: ${item.location} (อ.${item.district} จ.นครสวรรค์)\n` +
+      `👉 อ่านรายละเอียดเพิ่มเติมได้ที่นี่:\n` +
+      `${window.location.href}`;
+    window.open(`https://line.me/R/share?text=${encodeURIComponent(shareMessage)}`, '_blank');
   };
 
   const handleShareFacebook = () => {
