@@ -5,6 +5,7 @@ import Header from '@/components/layout/Header';
 import BottomNav from '@/components/layout/BottomNav';
 import { Analytics } from '@vercel/analytics/next';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import GoogleAnalytics from '@/components/analytics/GoogleAnalytics';
 
 export const metadata: Metadata = {
   title: 'เครือข่ายกสิกรรมธรรมชาติ จังหวัดนครสวรรค์ | Agri-Nature Network Nakhon Sawan',
@@ -70,6 +71,7 @@ export default function RootLayout({
           <BottomNav />
           <Analytics />
           <SpeedInsights />
+          <GoogleAnalytics />
         </FontSizeProvider>
       </body>
     </html>
