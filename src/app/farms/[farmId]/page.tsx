@@ -59,10 +59,20 @@ export default function FarmDetailPage() {
         router.push('/farms');
         return;
       }
+
+      // 🌟 กฎความปลอดภัย: ตรวจสอบว่าสมาชิกเจ้าของแปลงได้รับการอนุมัติแล้วหรือยัง
+      const member = dataService.getMemberById(f.memberId);
+      const user = dataService.getCurrentUser();
+      const isOwnerOrAdmin = user && (user.id === f.memberId || user.role === 'admin');
+      if (member && member.status !== 'approved' && !isOwnerOrAdmin) {
+        router.push('/farms');
+        return;
+      }
+
       setFarm({ ...f });
       setProducts(dataService.getProductsByFarmId(farmId));
       setSelectedPractices(f.practices ? [...f.practices] : []);
-      setCurrentUser(dataService.getCurrentUser());
+      setCurrentUser(user);
     };
 
     loadFarm();

@@ -264,4 +264,71 @@ describe('Data Privacy, Leakage Prevention & Role RBAC Tests', () => {
       expect(dataService.getFarmById(newMember.farmId)).toBeUndefined();
     });
   });
+
+  describe('7. Farm & Product Public Visibility Strictly Requires Approved Member Status', () => {
+    it('getPublicFarms() must exclude farms belonging to pending or rejected members', () => {
+      const publicFarms = dataService.getPublicFarms();
+      const allMembers = dataService.getAllMembers();
+
+      for (const farm of publicFarms) {
+        const owner = allMembers.find((m) => m.id === farm.memberId);
+        expect(owner).toBeDefined();
+        expect(owner?.status).toBe('approved');
+      }
+
+      // mem-004 is pending by default in mock data, so farm-004 must NOT be public
+      const farm004 = publicFarms.find((f) => f.id === 'farm-004');
+      expect(farm004).toBeUndefined();
+    });
+
+    it('newly registered pending farm must be hidden publicly until approved by admin', async () => {
+      const reg = await dataService.registerNewMember({
+        fullName: 'นายทดสอบ การมองเห็น',
+        phone: '0891234567',
+        district: 'ชุมแสง',
+        subdistrict: 'เกยไชย',
+        farmName: 'แปลงทดสอบการมองเห็น',
+        story: 'เรื่องราวแปลงทดสอบ',
+        lineId: 'test_vis',
+        isPublicPhone: true,
+        isPublicLine: true,
+        practices: ['โคก หนอง นา'],
+        trainingCourse: 'ศาสตร์พระราชา',
+        trainingLocation: 'ศพช. ชุมแสง',
+        facePhotoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400',
+      });
+
+      const memberId = reg.member.id;
+      const farmId = reg.member.farmId;
+
+      // 1. As pending member, farm must NOT be in public farms
+      let publicFarms = dataService.getPublicFarms();
+      expect(publicFarms.some((f) => f.id === farmId)).toBe(false);
+
+      // 2. Admin approves member -> farm becomes visible in public farms
+      const admin = dataService.getAllMembers().find((m) => m.role === 'admin')!;
+      dataService.approveMember(admin, memberId);
+
+      publicFarms = dataService.getPublicFarms();
+      expect(publicFarms.some((f) => f.id === farmId)).toBe(true);
+
+      // 3. Admin rejects member -> farm immediately disappears from public farms
+      dataService.rejectMember(admin, memberId, 'ทดสอบปฏิเสธ');
+      publicFarms = dataService.getPublicFarms();
+      expect(publicFarms.some((f) => f.id === farmId)).toBe(false);
+
+      // Cleanup
+      dataService.deleteMemberPermanently(admin, memberId);
+    });
+
+    it('getPublicProducts() must only return products from approved farms', () => {
+      const publicProducts = dataService.getPublicProducts();
+      const publicFarms = dataService.getPublicFarms();
+      const publicFarmIds = new Set(publicFarms.map((f) => f.id));
+
+      for (const prod of publicProducts) {
+        expect(publicFarmIds.has(prod.farmId)).toBe(true);
+      }
+    });
+  });
 });

@@ -141,13 +141,8 @@ class DataService {
         }
       }
 
-      // ปรับปรุงข้อมูลแปลงให้สมบูรณ์และซ่อมแซมแปลงของสมาชิกที่ยังไม่มีใน this.farms
+      // ปรับปรุงข้อมูลแปลงให้สมบูรณ์
       this.farms = this.farms.map((f) => this.normalizeFarm(f));
-      for (const m of this.members) {
-        if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
-          this.repairMissingUserFarm(m);
-        }
-      }
 
       // Ensure all news have status field properly initialized and new sample events exist
       for (const initN of INITIAL_NEWS) {
@@ -383,16 +378,13 @@ class DataService {
               this.farms.push(rf);
             }
           }
+
+          // ลบแปลงชั่วคราว/ตกค้างที่ไม่มีใน Firestore และไม่ใช่ INITIAL_FARMS
+          const initialFarmIds = new Set(INITIAL_FARMS.map((f) => f.id));
+          this.farms = this.farms.filter((f) => remoteFarmMap.has(f.id) || initialFarmIds.has(f.id));
         }
       } catch (err) {
         console.warn('Firestore sync [farms] notice:', err);
-      }
-
-      // ตรวจสอบความสมบูรณ์รอบสอง: หากยังมีสมาชิกที่มี farmId แต่ไม่พบใน this.farms ให้ซ่อมแซมทันที
-      for (const m of this.members) {
-        if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
-          this.repairMissingUserFarm(m);
-        }
       }
 
       // 3. ซิงค์ Products (ตลาดเครือข่าย)
@@ -621,9 +613,18 @@ class DataService {
    * ดึงรายการผลผลิตสาธารณะทั้งหมด (ปลอดภัยจากมิจฉาชีพ)
    */
   getPublicProducts(filters?: { district?: string; category?: string; status?: string }): Product[] {
-    // กรองสินค้าสถานะ 'hidden' (ไม่แสดง) ออกจากตลาด e-Catalog สาธารณะ 100%
+    const approvedMemberIds = new Set(
+      this.members.filter((m) => m.status === 'approved').map((m) => m.id)
+    );
+    const approvedFarmIds = new Set(
+      this.farms
+        .filter((f) => f.memberId && approvedMemberIds.has(f.memberId))
+        .map((f) => f.id)
+    );
+
+    // กรองสินค้าสถานะ 'hidden' (ไม่แสดง) และสินค้าของแปลงที่ยังไม่ได้รับการอนุมัติ ออกจากตลาด e-Catalog สาธารณะ 100%
     let result = this.products
-      .filter((p) => p.status !== 'hidden')
+      .filter((p) => p.status !== 'hidden' && (!p.farmId || approvedFarmIds.has(p.farmId)))
       .map((p) => this.sanitizeProductForPublic(p));
 
     if (filters?.district && filters.district !== 'ทั้งหมด') {
@@ -709,7 +710,15 @@ class DataService {
   // ==================== FARM & DIRECTORY ====================
 
   getPublicFarms(district?: string): Farm[] {
-    let result = this.farms.map((f) => this.sanitizeFarmForPublic(f));
+    // 🌟 กฎความปลอดภัย: ฟาร์มจะแสดงสู่สาธารณะก็ต่อเมื่อสมาชิกเจ้าของแปลงได้รับการอนุมัติแล้วเท่านั้น (status === 'approved')
+    const approvedMemberIds = new Set(
+      this.members.filter((m) => m.status === 'approved').map((m) => m.id)
+    );
+
+    let result = this.farms
+      .filter((f) => f.memberId && approvedMemberIds.has(f.memberId))
+      .map((f) => this.sanitizeFarmForPublic(f));
+
     if (district && district !== 'ทั้งหมด') {
       result = result.filter((f) => f.district === district);
     }

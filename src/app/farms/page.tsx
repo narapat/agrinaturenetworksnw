@@ -89,6 +89,17 @@ export default function FarmsDirectoryPage() {
 
       </div>
 
+      {/* Count & Network Verification Badge */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm text-stone-500 px-1">
+        <p>
+          พบทั้งหมด <b className="text-stone-800">{farms.length}</b> แปลง {selectedDistrict !== 'ทั้งหมด' ? `ใน อ.${selectedDistrict}` : ''}
+        </p>
+        <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-semibold border border-emerald-200">
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span>แปลงที่ได้รับการรับรองจากเครือข่าย</span>
+        </span>
+      </div>
+
       {/* Farms Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {farms.map((farm) => {

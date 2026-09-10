@@ -112,23 +112,12 @@ export default function MemberDashboardPage() {
 
   const processUserFarm = (user: MemberProfile) => {
     // ตรวจสอบว่าสมาชิกสร้างฟาร์มแล้วหรือยัง
-    let userFarm = user.farmId 
+    const userFarm = user.farmId 
       ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
       : dataService.getFarmByMemberId(user.id);
 
-    // หากสมาชิกมี farmId หรือเป็นสมาชิกที่เคยสมัครแล้ว แต่ตัวแปลงยังซิงค์ไม่ลงมา (เช่น ติด Firestore Rules)
-    // ให้ทำการกู้คืน/สร้างโครงแปลงในเครื่องทันที เพื่อไม่ให้เตะผู้ใช้ไปหน้าสร้างแปลงใหม่
-    if (!userFarm && (user.farmId || user.role === 'member')) {
-      userFarm = dataService.repairMissingUserFarm(user);
-    }
-
-    if (!userFarm) {
-      router.replace('/member/create-farm');
-      return;
-    }
-
-    // ซิงค์ farmId ให้ตรงกันหากยังไม่ได้ผูก
-    if (user.farmId !== userFarm.id) {
+    // ซิงค์ farmId ให้ตรงกันหากแปลงมีอยู่จริง
+    if (userFarm && user.farmId !== userFarm.id) {
       user.farmId = userFarm.id;
       dataService.updateMember(user.id, { farmId: userFarm.id });
     }
@@ -142,7 +131,7 @@ export default function MemberDashboardPage() {
       if (!lineProf) {
         setIsLineGateRequired(true);
         setCurrentUser(user);
-        setFarm(userFarm);
+        setFarm(userFarm || null);
         setIsLoadingAuth(false);
         return;
       }
@@ -163,10 +152,16 @@ export default function MemberDashboardPage() {
     }
 
     setCurrentUser(user);
-    setFarm(userFarm);
-    setEditPractices(userFarm.practices ? [...userFarm.practices] : []);
-    // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
-    setProducts(dataService.getProductsByFarmId(userFarm.id, true));
+    if (userFarm) {
+      setFarm(userFarm);
+      setEditPractices(userFarm.practices ? [...userFarm.practices] : []);
+      // ส่ง includeHidden: true เพื่อให้เจ้าของแปลงเห็นผลผลิตที่ซ่อนอยู่ได้ในหน้าแดชบอร์ด
+      setProducts(dataService.getProductsByFarmId(userFarm.id, true));
+    } else {
+      setFarm(null);
+      setEditPractices([]);
+      setProducts([]);
+    }
     setIsLoadingAuth(false);
   };
 
@@ -464,7 +459,7 @@ export default function MemberDashboardPage() {
           </div>
           
           <p className="text-xs sm:text-sm font-semibold text-stone-500">
-            แปลง: <b className="text-stone-800">{farm?.farmName || 'ยังไม่ได้ระบุแปลง'}</b> ({farm?.district})
+            แปลง: <b className="text-stone-800">{farm?.farmName || 'ยังไม่มีข้อมูลแปลงในระบบ'}</b> {farm?.district ? `(${farm.district})` : ''}
           </p>
 
           <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2">
@@ -504,15 +499,51 @@ export default function MemberDashboardPage() {
           )}
         </div>
 
-        {/* Quick Add Product Button */}
-        <Link
-          href="/member/add-product"
-          className="w-full sm:w-auto px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 shrink-0 touch-target-big transition-colors"
-        >
-          <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span>+ เพิ่มผลผลิตใหม่</span>
-        </Link>
+        {/* Quick Add Product Button (only if farm exists) */}
+        {farm ? (
+          <Link
+            href="/member/add-product"
+            className="w-full sm:w-auto px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm sm:text-base shadow-md shadow-brand-600/20 flex items-center justify-center gap-2 shrink-0 touch-target-big transition-colors"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>+ เพิ่มผลผลิตใหม่</span>
+          </Link>
+        ) : (
+          <Link
+            href="/member/create-farm"
+            className="w-full sm:w-auto px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 shrink-0 touch-target-big transition-colors"
+          >
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>+ สร้างแปลงกสิกรรม</span>
+          </Link>
+        )}
       </div>
+
+      {/* Missing Farm Notice Card (ถ้ายังไม่มีข้อมูลแปลงในระบบ) */}
+      {!farm && (
+        <div className="bg-amber-50 border-2 border-dashed border-amber-300 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-center space-y-4 shadow-sm">
+          <div className="w-16 h-16 mx-auto bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center shadow-inner">
+            <AlertCircle className="w-8 h-8" />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h2 className="text-xl sm:text-2xl font-bold text-amber-950">
+              ยังไม่พบข้อมูลแปลงกสิกรรมของท่านในระบบ
+            </h2>
+            <p className="text-stone-600 text-xs sm:text-sm leading-relaxed">
+              บัญชีสมาชิกของท่านเชื่อมต่อแล้ว แต่ยังไม่มีรายละเอียดแปลงกสิกรรมธรรมชาติ (หรืออาจกำลังอยู่ระหว่างการสร้าง) เพื่อให้แปลงของท่านปรากฏในเครือข่าย กรุณากดสร้างข้อมูลแปลงด้านล่างครับ
+            </p>
+          </div>
+          <div className="pt-2">
+            <Link
+              href="/member/create-farm"
+              className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base shadow-md hover:shadow-lg transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              <span>+ สร้างข้อมูลแปลงกสิกรรมทันที</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Farm Photos Showcase with Auto-Rotating Slideshow */}
       {farm && (
