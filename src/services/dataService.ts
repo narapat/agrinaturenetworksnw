@@ -192,11 +192,24 @@ class DataService {
 
   // ==================== FIRESTORE REAL-TIME SYNC ====================
 
+  private lastSyncTimestamp: number = 0;
+
+  public getLastSyncTime(): string {
+    if (!this.lastSyncTimestamp) return 'ยังไม่ได้ซิงค์';
+    const d = new Date(this.lastSyncTimestamp);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} น.`;
+  }
+
   /**
    * รับประกันว่าข้อมูลจาก Cloud Firestore ถูกซิงค์เรียบร้อยแล้ว
+   * @param force หากเป็น true จะบังคับดึงข้อมูลสดจาก Cloud Firestore ใหม่ทันที
    */
-  async ensureFirestoreSync(): Promise<void> {
+  async ensureFirestoreSync(force: boolean = false): Promise<void> {
     if (typeof window === 'undefined' || !db) return;
+    if (force) {
+      this.isFirestoreSynced = false;
+      this.syncPromise = null;
+    }
     if (this.isFirestoreSynced) return;
     if (this.syncPromise) return this.syncPromise;
     this.syncPromise = this.syncWithFirestore();
@@ -204,76 +217,131 @@ class DataService {
   }
 
   /**
-   * ซิงค์ข้อมูลกับ Cloud Firestore แบบ 2 ทาง (Auto-seed ครั้งแรก และดึงข้อมูลล่าสุด)
+   * บีบอัดภาพ Base64 Data URL ให้ปลอดภัย ป้องกันชนเพดาน 1 MB ของ Firestore
+   */
+  private async compressDataUrlSafe(dataUrl: string, maxDim: number = 400, quality: number = 0.75): Promise<string> {
+    if (typeof window === 'undefined' || !dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 200000) {
+      return dataUrl;
+    }
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * ซิงค์ข้อมูลกับ Cloud Firestore แบบแยกอิสระแต่ละคอลเลกชัน
+   * ป้องกันปัญหาคอลเลกชันใดคอลเลกชันหนึ่งขัดข้องแล้วดึงข้อมูลสมาชิกไม่สำเร็จ
    */
   private async syncWithFirestore() {
     if (typeof window === 'undefined' || !db || this.isFirestoreSynced) return;
+
     try {
-      const productsSnap = await getDocs(collection(db, 'products'));
-
-      if (productsSnap.empty) {
-        // ครั้งแรก: นำข้อมูลเริ่มต้น Seed เข้าสู่ Cloud Firestore อัตโนมัติ
-        console.log('🌾 Initializing Cloud Firestore seed data for Agri-Nature Nakhon Sawan...');
-        for (const p of INITIAL_PRODUCTS) {
-          await setDoc(doc(db, 'products', p.id), this.cleanForFirestore(p));
-        }
-        for (const m of INITIAL_MEMBERS) {
-          await setDoc(doc(db, 'members', m.id), this.cleanForFirestore(m));
-        }
-        for (const f of INITIAL_FARMS) {
-          await setDoc(doc(db, 'farms', f.id), this.cleanForFirestore(f));
-        }
-        for (const c of INITIAL_CATEGORY_TAGS) {
-          await setDoc(doc(db, 'categories', c.id), this.cleanForFirestore(c));
-        }
-        for (const n of INITIAL_NEWS) {
-          await setDoc(doc(db, 'news', n.id), this.cleanForFirestore(n));
-        }
-        for (const l of INITIAL_AUDIT_LOGS) {
-          await setDoc(doc(db, 'auditLogs', l.id), this.cleanForFirestore(l));
-        }
-        console.log('✅ Firestore seed completed!');
-      } else {
-        // ดึงข้อมูลจริงล่าสุดจาก Cloud Firestore ซิงค์เข้าเครื่องแบบผสาน (Merge) เพื่อไม่ให้ทับสถานะที่แอดมินอนุมัติไปแล้ว
-        const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
-        if (remoteProds.length > 0) {
-          const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
-          this.products = this.products.map((localP) => {
-            const remoteP = remoteProdMap.get(localP.id);
-            return remoteP ? { ...remoteP, ...localP } : localP;
-          });
-          for (const rp of remoteProds) {
-            if (!this.products.some((p) => p.id === rp.id)) {
-              this.products.push(rp);
-            }
-          }
-        }
-
+      // 1. ซิงค์ Members (สำคัญที่สุดสำหรับระบบแอดมินและสมาชิก)
+      try {
         const membersSnap = await getDocs(collection(db, 'members'));
-        if (!membersSnap.empty) {
-          const remoteMembers = membersSnap.docs.map((d) => d.data() as MemberProfile);
-          const remoteMemMap = new Map(remoteMembers.map((m) => [m.id, m]));
+        const remoteMembers = !membersSnap.empty ? membersSnap.docs.map((d) => d.data() as MemberProfile) : [];
+        const remoteMemMap = new Map(remoteMembers.map((m) => [m.id, m]));
 
-          this.members = this.members.map((localM) => {
-            const remoteM = remoteMemMap.get(localM.id);
-            if (!remoteM) return localM;
-            // จุดสำคัญ: ถ้าสมาชิกได้รับการอนุมัติในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
-            if (localM.status === 'approved') {
-              if (remoteM.status !== 'approved') {
-                this.firestoreUpdate('members', localM.id, { status: 'approved' });
-              }
-              return { ...remoteM, ...localM, status: 'approved' };
+        this.members = this.members.map((localM) => {
+          const remoteM = remoteMemMap.get(localM.id);
+          if (!remoteM) return localM;
+          // จุดสำคัญ: ถ้าสมาชิกได้รับการอนุมัติในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
+          if (localM.status === 'approved') {
+            if (remoteM.status !== 'approved') {
+              this.firestoreUpdate('members', localM.id, { status: 'approved' });
             }
-            return { ...localM, ...remoteM };
-          });
+            return { ...remoteM, ...localM, status: 'approved' };
+          }
+          return { ...localM, ...remoteM };
+        });
 
-          for (const rm of remoteMembers) {
-            if (!this.members.some((m) => m.id === rm.id)) {
-              this.members.push(rm);
-            }
+        for (const rm of remoteMembers) {
+          if (!this.members.some((m) => m.id === rm.id)) {
+            this.members.push(rm);
           }
         }
 
+        // ===================================================================
+        // 🌟 AUTO-RESCUE: ตรวจจับสมาชิกที่สมัครไว้ในเครื่อง (LocalStorage) 
+        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น สมัครไว้ก่อนหน้าแล้วเน็ตหลุด)
+        // ส่งขึ้น Cloud Firestore ทันทีอัตโนมัติ เพื่อให้แอดมินมองเห็นและอนุมัติได้
+        // ===================================================================
+        const unuploadedMembers = this.members.filter(
+          (m) => !DEMO_MEMBER_IDS.includes(m.id) && !remoteMemMap.has(m.id)
+        );
+
+        for (const localM of unuploadedMembers) {
+          try {
+            console.log(`[Auto-Rescue] Syncing unuploaded local member ${localM.id} (${localM.fullName}) to Cloud Firestore...`);
+            const cleanPhone = (localM.phone || '').trim().replace(/[^\d+-, ]/g, '').slice(0, 20);
+            
+            let safePhoto = localM.facePhotoUrl;
+            if (safePhoto && safePhoto.length > 500000 && typeof window !== 'undefined') {
+              try {
+                safePhoto = await this.compressDataUrlSafe(safePhoto, 400, 0.75);
+              } catch {}
+            }
+
+            const sanitizedMember: MemberProfile = {
+              ...localM,
+              phone: cleanPhone,
+              facePhotoUrl: safePhoto,
+            };
+
+            await this.firestoreSet('members', localM.id, sanitizedMember);
+
+            // ซิงค์แปลงกสิกรรมที่ผูกกันด้วย
+            const relatedFarm = this.farms.find((f) => f.id === localM.farmId || f.memberId === localM.id);
+            if (relatedFarm) {
+              await this.firestoreSet('farms', relatedFarm.id, relatedFarm);
+            }
+
+            // บันทึก Audit Log
+            await this.firestoreSet('auditLogs', `log-rescue-${Date.now()}`, {
+              id: `log-rescue-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              action: 'register_member',
+              actorRole: 'member',
+              actorName: localM.fullName,
+              details: `ระบบ Auto-Rescue ซิงค์ข้อมูลใบสมัครที่ค้างในเครื่องขึ้น Cloud Firestore อัตโนมัติ (แปลง: ${relatedFarm?.farmName || '-'})`,
+              targetId: localM.id,
+            });
+            console.log(`[Auto-Rescue] Successfully uploaded member ${localM.id} and farm to Cloud Firestore!`);
+          } catch (rescueErr) {
+            console.warn(`[Auto-Rescue] Error pushing member ${localM.id} to Firestore:`, rescueErr);
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore sync [members] notice:', err);
+      }
+
+      // 2. ซิงค์ Farms (ข้อมูลแปลงกสิกรรม)
+      try {
         const farmsSnap = await getDocs(collection(db, 'farms'));
         if (!farmsSnap.empty) {
           const remoteFarms = farmsSnap.docs.map((d) => d.data() as Farm);
@@ -290,7 +358,34 @@ class DataService {
             }
           }
         }
+      } catch (err) {
+        console.warn('Firestore sync [farms] notice:', err);
+      }
 
+      // 3. ซิงค์ Products (ตลาดเครือข่าย)
+      try {
+        const productsSnap = await getDocs(collection(db, 'products'));
+        if (!productsSnap.empty) {
+          const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
+          if (remoteProds.length > 0) {
+            const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
+            this.products = this.products.map((localP) => {
+              const remoteP = remoteProdMap.get(localP.id);
+              return remoteP ? { ...remoteP, ...localP } : localP;
+            });
+            for (const rp of remoteProds) {
+              if (!this.products.some((p) => p.id === rp.id)) {
+                this.products.push(rp);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore sync [products] notice:', err);
+      }
+
+      // 4. ซิงค์ Categories (หมวดหมู่และ SKU)
+      try {
         const categoriesSnap = await getDocs(collection(db, 'categories'));
         if (!categoriesSnap.empty) {
           const remoteCats = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
@@ -301,14 +396,18 @@ class DataService {
           }
         }
 
-        // Push initial categories (including tools) to Firestore
         for (const initCat of INITIAL_CATEGORY_TAGS) {
           if (!this.categories.some((c) => c.id === initCat.id)) {
             this.categories.push(initCat);
           }
           this.firestoreSet('categories', initCat.id, initCat);
         }
+      } catch (err) {
+        console.warn('Firestore sync [categories] notice:', err);
+      }
 
+      // 5. ซิงค์ Audit Logs (ประวัติความโปร่งใส)
+      try {
         const logsSnap = await getDocs(collection(db, 'auditLogs'));
         if (!logsSnap.empty) {
           const remoteLogs = logsSnap.docs.map((d) => d.data() as AuditLog);
@@ -318,7 +417,12 @@ class DataService {
             }
           }
         }
+      } catch (err) {
+        console.warn('Firestore sync [auditLogs] notice:', err);
+      }
 
+      // 6. ซิงค์ News (ข่าวสาร & เอามื้อสามัคคี)
+      try {
         const newsSnap = await getDocs(collection(db, 'news'));
         if (!newsSnap.empty) {
           const remoteNews = newsSnap.docs.map((d) => d.data() as NewsEvent);
@@ -326,14 +430,16 @@ class DataService {
             this.news = remoteNews;
           }
         }
-
-        this.save();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('nsw_data_updated'));
-        }
+      } catch (err) {
+        console.warn('Firestore sync [news] notice:', err);
       }
 
+      this.lastSyncTimestamp = Date.now();
       this.isFirestoreSynced = true;
+      this.save();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
     } catch (err) {
       console.warn('Firestore sync running in offline-first mode:', err);
     }
@@ -352,12 +458,14 @@ class DataService {
     return result;
   }
 
-  private async firestoreSet(collectionName: string, id: string, data: any) {
-    if (typeof window === 'undefined' || !db) return;
+  private async firestoreSet(collectionName: string, id: string, data: any): Promise<boolean> {
+    if (typeof window === 'undefined' || !db) return false;
     try {
       await setDoc(doc(db, collectionName, id), this.cleanForFirestore(data));
+      return true;
     } catch (e) {
       console.warn(`Firestore set error [${collectionName}/${id}]:`, e);
+      return false;
     }
   }
 
@@ -661,6 +769,14 @@ class DataService {
       });
     }
 
+    // 3. หากยังไม่พบ แต่ในเครื่องนี้มีผู้ใช้ปัจจุบันที่สมัครไว้แล้ว (currentUserId) และยังไม่มี lineUserId
+    if (!member && this.currentUserId && !DEMO_MEMBER_IDS.includes(this.currentUserId)) {
+      const activeMember = this.members.find((m) => m.id === this.currentUserId);
+      if (activeMember && !activeMember.lineUserId) {
+        member = activeMember;
+      }
+    }
+
     if (member) {
       let changed = false;
       if (!member.lineUserId || member.lineUserId !== profile.userId) {
@@ -851,8 +967,9 @@ class DataService {
 
   /**
    * สมาชิกเกษตรกรลงทะเบียนแปลงใหม่ (สถานะเริ่มต้น: รออนุมัติ pending)
+   * บันทึกข้อมูลแบบ Asynchronous พร้อมตรวจสอบความถูกต้อง และจัดเก็บ Audit Log
    */
-  registerNewMember(data: {
+  async registerNewMember(data: {
     fullName: string;
     facePhotoUrl: string;
     farmName: string;
@@ -870,28 +987,36 @@ class DataService {
     trainingCourse?: string;
     trainingLocation?: string;
     photos?: string[];
-  }): { member: MemberProfile; farm: Farm } {
+  }): Promise<{ member: MemberProfile; farm: Farm; success: boolean; firestoreSynced: boolean }> {
     const memberId = `mem-${Date.now()}`;
     const farmId = `farm-${Date.now()}`;
+
+    // ทำความสะอาดและกรองข้อมูล (Sanitization) ป้องกัน Firestore Error
+    const cleanFullName = data.fullName.trim().slice(0, 100);
+    const cleanFarmName = data.farmName.trim().slice(0, 100);
+    const cleanPhone = data.phone.trim().replace(/[^\d+-, ]/g, '').slice(0, 20);
+    const cleanLineId = data.lineId.trim().slice(0, 50);
+    const cleanDistrict = data.district.trim();
+    const cleanSubdistrict = data.subdistrict.trim().slice(0, 50);
 
     const newFarm: Farm = {
       id: farmId,
       memberId: memberId,
-      ownerName: data.fullName,
-      farmName: data.farmName,
-      tagline: data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
-      story: data.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์',
-      photos: data.photos && data.photos.length > 0 ? data.photos : [
+      ownerName: cleanFullName,
+      farmName: cleanFarmName,
+      tagline: (data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง').trim().slice(0, 120),
+      story: (data.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์').trim().slice(0, 1000),
+      photos: data.photos && data.photos.length > 0 ? data.photos.slice(0, 10) : [
         'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
       ],
-      district: data.district,
-      subdistrict: data.subdistrict,
+      district: cleanDistrict,
+      subdistrict: cleanSubdistrict,
       internalCoordinates: data.coordinates || {
         lat: 15.7 + Math.random() * 0.2,
         lng: 100.0 + Math.random() * 0.2,
       },
       publicZone: {
-        name: `โซน ต.${data.subdistrict} อ.${data.district}`,
+        name: `โซน ต.${cleanSubdistrict} อ.${cleanDistrict}`,
         approxLat: 15.7 + Math.random() * 0.2,
         approxLng: 100.0 + Math.random() * 0.2,
         radiusKm: 4.0,
@@ -899,47 +1024,83 @@ class DataService {
       practices: data.practices.length > 0 ? data.practices : ['กสิกรรมธรรมชาติ', 'ไร้สารเคมี 100%'],
       isPublicPhone: data.isPublicPhone,
       isPublicLine: data.isPublicLine,
-      phone: data.phone,
-      lineId: data.lineId,
+      phone: cleanPhone,
+      lineId: cleanLineId,
       socials: {
-        lineId: data.lineId,
+        lineId: cleanLineId,
       },
     };
 
     const newMember: MemberProfile = {
       id: memberId,
       lineUserId: data.lineUserId || '',
-      fullName: data.fullName,
+      fullName: cleanFullName,
       facePhotoUrl: data.facePhotoUrl,
       role: 'member',
       roles: ['member'],
       status: 'pending', // ต้องให้แอดมินเครือข่ายตรวจสอบและอนุมัติก่อน
       fontSizePref: 'normal',
-      phone: data.phone,
-      lineId: data.lineId,
+      phone: cleanPhone,
+      lineId: cleanLineId,
       isPublicPhone: data.isPublicPhone,
       isPublicLine: data.isPublicLine,
       isPublicSocials: true,
       socials: {
-        lineId: data.lineId,
+        lineId: cleanLineId,
       },
       delegationStatus: 'none',
-      trainingCourse: data.trainingCourse || '',
-      trainingLocation: data.trainingLocation || '',
+      trainingCourse: (data.trainingCourse || '').trim().slice(0, 150),
+      trainingLocation: (data.trainingLocation || '').trim().slice(0, 150),
       farmId: farmId,
       createdAt: new Date().toISOString().split('T')[0],
     };
 
+    // 1. บันทึกลง local cache ทันทีเพื่อความลื่นไหลของระบบ
     this.farms.unshift(newFarm);
     this.members.unshift(newMember);
     this.currentUserId = memberId; // สลับผู้ใช้เป็นสมาชิกใหม่ทันที
     this.save();
 
-    // ซิงค์ไปยัง Cloud Firestore
-    this.firestoreSet('farms', newFarm.id, newFarm);
-    this.firestoreSet('members', newMember.id, newMember);
+    // 2. บันทึกและรอผลจาก Cloud Firestore (Await guarantee)
+    let memberSaved = false;
+    let farmSaved = false;
+    try {
+      [memberSaved, farmSaved] = await Promise.all([
+        this.firestoreSet('members', newMember.id, newMember),
+        this.firestoreSet('farms', newFarm.id, newFarm),
+      ]);
+    } catch (err) {
+      console.warn('Firestore write error in registerNewMember:', err);
+    }
 
-    return { member: newMember, farm: newFarm };
+    // 3. จัดเก็บ Audit Log บันทึกประวัติการสมัครสมาชิกเพื่อความโปร่งใส
+    const auditLog: AuditLog = {
+      id: `log-${Date.now()}`,
+      action: 'register_member',
+      performedByAdminId: data.lineUserId || memberId,
+      performedByAdminName: cleanFullName,
+      targetMemberId: memberId,
+      targetMemberName: cleanFullName,
+      targetFarmName: cleanFarmName,
+      timestamp: new Date().toLocaleString('th-TH'),
+      details: `สมาชิก ${cleanFullName} ลงทะเบียนแปลง ${cleanFarmName} (เบอร์: ${cleanPhone}, LINE: ${data.lineUserId || cleanLineId || 'N/A'}) รอดำเนินการอนุมัติ`,
+    };
+    this.auditLogs.unshift(auditLog);
+    this.save();
+    try {
+      await this.firestoreSet('auditLogs', auditLog.id, auditLog);
+    } catch {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+
+    return { 
+      member: newMember, 
+      farm: newFarm, 
+      success: true, 
+      firestoreSynced: memberSaved 
+    };
   }
 
   // ==================== ASSISTED ENTRY & TRACEABILITY ====================

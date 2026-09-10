@@ -102,9 +102,24 @@ export default function AdminPage() {
   const [catGroupFilter, setCatGroupFilter] = useState<string>('all');
   const [catFeedback, setCatFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState('');
+
   useEffect(() => {
     loadData();
-    const handleUpdate = () => loadData();
+
+    // ดึงข้อมูลสดจาก Cloud Firestore อัตโนมัติเมื่อเปิดหน้า Admin
+    setIsSyncing(true);
+    dataService.ensureFirestoreSync(true).then(() => {
+      loadData();
+      setIsSyncing(false);
+      setLastSyncTime(dataService.getLastSyncTime());
+    });
+
+    const handleUpdate = () => {
+      loadData();
+      setLastSyncTime(dataService.getLastSyncTime());
+    };
     window.addEventListener('nsw_data_updated', handleUpdate);
     window.addEventListener('storage', handleUpdate);
     return () => {
@@ -112,6 +127,14 @@ export default function AdminPage() {
       window.removeEventListener('storage', handleUpdate);
     };
   }, []);
+
+  const handleRefreshFirestore = async () => {
+    setIsSyncing(true);
+    await dataService.ensureFirestoreSync(true);
+    loadData();
+    setIsSyncing(false);
+    setLastSyncTime(dataService.getLastSyncTime());
+  };
 
   const loadData = () => {
     setCurrentUser(dataService.getCurrentUser());
@@ -607,13 +630,44 @@ export default function AdminPage() {
       {/* ================= TAB 1: PENDING MEMBERS VERIFICATION ================= */}
       {activeTab === 'pending' && (
         <div className="space-y-4">
-          <p className="text-sm text-stone-500 font-medium">
-            คัดกรองสมาชิกด้วยรูปหน้าจริง เพื่อยืนยันว่าเป็นสมาชิกเครือข่ายตัวจริง
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
+            <div>
+              <p className="text-sm font-bold text-stone-900">
+                คัดกรองสมาชิกด้วยรูปหน้าจริง เพื่อยืนยันว่าเป็นสมาชิกเครือข่ายตัวจริง
+              </p>
+              <p className="text-xs text-stone-500 mt-0.5">
+                ซิงค์สดกับ Cloud Firestore • ดึงข้อมูลล่าสุด: <span className="font-semibold text-emerald-700">{lastSyncTime || dataService.getLastSyncTime()}</span>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleRefreshFirestore}
+              disabled={isSyncing}
+              className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>{isSyncing ? 'กำลังดึงข้อมูลจาก Cloud...' : '🔄 รีเฟรชข้อมูลจาก Cloud'}</span>
+            </button>
+          </div>
 
           {pendingMembers.length === 0 ? (
-            <div className="p-12 text-center bg-white rounded-3xl border border-stone-200 text-stone-500">
-              ไม่มีสมาชิกรอการอนุมัติในขณะนี้
+            <div className="p-10 text-center bg-white rounded-3xl border border-stone-200 text-stone-500 space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+                <Check className="w-6 h-6 stroke-[2.5]" />
+              </div>
+              <p className="text-base font-bold text-stone-700">ไม่มีสมาชิกรอการอนุมัติในขณะนี้</p>
+              <p className="text-xs text-stone-500 max-w-md mx-auto">
+                หากมีสมาชิกแจ้งว่าเพิ่งลงทะเบียนผ่านมือถือหรือคอมพิวเตอร์ กรุณากดปุ่มรีเฟรชด้านล่างเพื่อดึงข้อมูลสดจาก Cloud Firestore ได้ทันทีครับ
+              </p>
+              <button
+                type="button"
+                onClick={handleRefreshFirestore}
+                disabled={isSyncing}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-50 hover:bg-brand-100 text-brand-800 border border-brand-200 text-xs font-bold transition-colors cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>กดดึงข้อมูลล่าสุดจาก Cloud Firestore อีกครั้ง</span>
+              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

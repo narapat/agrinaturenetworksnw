@@ -31,6 +31,7 @@ export default function FarmsDirectoryPage() {
     };
 
     refreshFarms();
+    dataService.ensureFirestoreSync().then(() => refreshFarms());
 
     window.addEventListener('nsw_data_updated', refreshFarms);
     window.addEventListener('storage', refreshFarms);

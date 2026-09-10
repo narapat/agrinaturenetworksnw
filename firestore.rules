@@ -38,7 +38,7 @@ service cloud.firestore {
                     && (request.resource.data.role == 'member' || request.resource.data.role == 'guest')
                     && request.resource.data.status in ['pending', 'approved']
                     && request.resource.data.phone is string
-                    && request.resource.data.phone.size() <= 20;
+                    && request.resource.data.phone.size() <= 30;
 
       // การแก้ไขข้อมูลสมาชิก: เจ้าของบัญชีหรือแอดมินเท่านั้น
       allow update: if (

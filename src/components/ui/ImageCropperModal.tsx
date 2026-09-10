@@ -10,6 +10,7 @@ interface ImageCropperModalProps {
   file: File | null;
   onConfirm: (optimizedDataUrl: string) => void;
   aspectRatio?: number;
+  maxDimension?: number;
 }
 
 export default function ImageCropperModal({
@@ -18,16 +19,23 @@ export default function ImageCropperModal({
   file,
   onConfirm,
   aspectRatio = 4 / 3,
+  maxDimension,
 }: ImageCropperModalProps) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [originalSize, setOriginalSize] = useState<number>(0);
   const [compressedSize, setCompressedSize] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const effectiveMaxDimension = maxDimension || (aspectRatio === 1 ? 400 : 800);
+
   React.useEffect(() => {
     if (file && isOpen) {
       setIsProcessing(true);
-      compressImage(file, { maxWidth: 1200, maxHeight: 1200, quality: 0.82 })
+      compressImage(file, { 
+        maxWidth: effectiveMaxDimension * 1.5, 
+        maxHeight: effectiveMaxDimension * 1.5, 
+        quality: 0.82 
+      })
         .then((res) => {
           setPreviewUrl(res.dataUrl);
           setOriginalSize(res.originalSize);
@@ -39,7 +47,7 @@ export default function ImageCropperModal({
           setIsProcessing(false);
         });
     }
-  }, [file, isOpen]);
+  }, [file, isOpen, effectiveMaxDimension]);
 
   if (!isOpen || !file) return null;
 
@@ -47,7 +55,7 @@ export default function ImageCropperModal({
     if (!previewUrl) return;
     setIsProcessing(true);
     try {
-      const cropped = await cropImageToAspect(previewUrl, aspectRatio);
+      const cropped = await cropImageToAspect(previewUrl, aspectRatio, effectiveMaxDimension);
       onConfirm(cropped);
       onClose();
     } catch (e) {

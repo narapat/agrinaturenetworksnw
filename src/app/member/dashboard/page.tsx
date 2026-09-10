@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
-import { dataService } from '@/services/dataService';
+import { dataService, DEMO_MEMBER_IDS } from '@/services/dataService';
 import { liffService } from '@/services/liffService';
 import { MemberProfile, Farm, Product, hasMemberRole } from '@/types';
 import { DISTRICTS_NSW, FARM_PRACTICE_OPTIONS } from '@/data/mockData';
@@ -38,6 +38,8 @@ export default function MemberDashboardPage() {
   const { fontSize, setFontSize, getTextClass } = useFontSize();
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isLineGateRequired, setIsLineGateRequired] = useState(false);
+  const [isConnectingLine, setIsConnectingLine] = useState(false);
   const [farm, setFarm] = useState<Farm | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [showAssistModal, setShowAssistModal] = useState(false);
@@ -125,11 +127,33 @@ export default function MemberDashboardPage() {
       dataService.updateMember(user.id, { farmId: userFarm.id });
     }
 
-    // ซิงค์ lineUserId เข้ากับ LINE Profile อัตโนมัติหากยังไม่ได้ผูก
+    const isDemo = DEMO_MEMBER_IDS.includes(user.id);
     const lineProf = liffService.getProfile();
+
+    // 🌟 บังคับผูก LINE ก่อนไปต่อ สำหรับสมาชิกจริง (ไม่ว่าสถานะจะเป็น approved หรือ pending)
+    if (!isDemo) {
+      // ตรวจสอบว่ามี LINE Profile เชื่อมต่ออยู่ในเบราว์เซอร์นี้หรือไม่
+      if (!lineProf) {
+        setIsLineGateRequired(true);
+        setCurrentUser(user);
+        setFarm(userFarm);
+        setIsLoadingAuth(false);
+        return;
+      }
+    }
+
+    setIsLineGateRequired(false);
+
+    // ซิงค์ lineUserId เข้ากับ LINE Profile อัตโนมัติหากยังไม่ได้ผูก
     if (lineProf && (!user.lineUserId || user.lineUserId !== lineProf.userId)) {
       user.lineUserId = lineProf.userId;
-      dataService.updateMember(user.id, { lineUserId: lineProf.userId });
+      if (!user.facePhotoUrl || user.facePhotoUrl.includes('unsplash')) {
+        user.facePhotoUrl = lineProf.pictureUrl || user.facePhotoUrl;
+      }
+      dataService.updateMember(user.id, { 
+        lineUserId: lineProf.userId,
+        facePhotoUrl: user.facePhotoUrl,
+      });
     }
 
     setCurrentUser(user);
@@ -260,6 +284,110 @@ export default function MemberDashboardPage() {
       <div className="min-h-[50vh] flex flex-col items-center justify-center p-6 space-y-4">
         <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
         <p className="text-stone-500 text-sm font-medium">กำลังตรวจสอบข้อมูลสมาชิก...</p>
+      </div>
+    );
+  }
+
+  // 🌟 บังคับเชื่อมต่อ LINE ก่อนเข้าจัดการแปลง (ไม่ว่า admin จะอนุมัติหรือไม่อนุมัติ)
+  if (isLineGateRequired && currentUser) {
+    return (
+      <div className="w-full max-w-xl mx-auto px-4 py-8 sm:py-12">
+        <div className="bg-white rounded-3xl border border-emerald-200 shadow-xl overflow-hidden p-6 sm:p-8 space-y-6 text-center">
+          {/* Green LINE Icon Header */}
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-[#06C755]/10 text-[#06C755] flex items-center justify-center shadow-inner">
+            <MessageSquare className="w-10 h-10 fill-current" />
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 text-xs font-semibold border border-emerald-200">
+              <span>🌿 ระบบสมาชิกเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900">
+              กรุณาเชื่อมต่อบัญชี LINE
+            </h1>
+            <p className="text-sm sm:text-base text-stone-600">
+              เพื่อความปลอดภัยและใช้เป็นกุญแจสำคัญในการเข้าจัดการแปลงกสิกรรมของคุณ
+            </p>
+          </div>
+
+          {/* Farm & Member Preview Box (ยืนยันว่าข้อมูลเดิมยังอยู่ครบถ้วน) */}
+          <div className="bg-stone-50 rounded-2xl p-4 sm:p-5 border border-stone-200 text-left space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-stone-500 font-medium">ข้อมูลแปลงของคุณ:</span>
+              <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${
+                currentUser.status === 'approved' 
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                  : 'bg-amber-100 text-amber-800 border border-amber-200'
+              }`}>
+                {currentUser.status === 'approved' ? '✓ อนุมัติแล้ว' : '⏳ รอแอดมินอนุมัติ'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {currentUser.facePhotoUrl ? (
+                <img src={currentUser.facePhotoUrl} alt="" className="w-12 h-12 rounded-full object-cover border border-stone-300 shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-stone-200 flex items-center justify-center text-stone-600 font-bold shrink-0">
+                  {currentUser.fullName.slice(0, 1)}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="font-bold text-stone-900 text-base truncate">{currentUser.fullName}</p>
+                <p className="text-xs text-stone-600 truncate">🏡 แปลง: {farm?.farmName || 'แปลงกสิกรรมธรรมชาติ'}</p>
+                <p className="text-xs text-stone-500 truncate">📍 อ.{farm?.district || '-'} จ.นครสวรรค์</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Explanation Features */}
+          <div className="grid grid-cols-1 gap-2.5 text-left pt-1">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 text-xs sm:text-sm text-stone-700">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5" />
+              </div>
+              <span>ข้อมูลใบสมัครและแปลงของคุณบันทึกเรียบร้อย 100% ไม่สูญหาย</span>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50/50 border border-emerald-100 text-xs sm:text-sm text-stone-700">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Check className="w-3.5 h-3.5" />
+              </div>
+              <span>เชื่อมต่อ LINE เพื่อใช้จัดการผลผลิตและเข้าหน้าแปลงอัตโนมัติ</span>
+            </div>
+          </div>
+
+          {/* LINE Connect Action Button */}
+          <div className="space-y-3 pt-2">
+            <button
+              onClick={async () => {
+                setIsConnectingLine(true);
+                try {
+                  await liffService.login('/member/dashboard');
+                } catch (err) {
+                  console.error('LIFF login error:', err);
+                  setIsConnectingLine(false);
+                }
+              }}
+              disabled={isConnectingLine}
+              className="w-full py-4 px-6 rounded-2xl bg-[#06C755] hover:bg-[#05b34c] text-white font-bold text-base sm:text-lg shadow-lg shadow-[#06C755]/25 flex items-center justify-center gap-3 transition-all transform active:scale-95 disabled:opacity-75 cursor-pointer"
+            >
+              {isConnectingLine ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>กำลังเชื่อมต่อ LINE...</span>
+                </>
+              ) : (
+                <>
+                  <MessageSquare className="w-6 h-6 fill-current" />
+                  <span>เข้าสู่ระบบด้วย LINE เพื่อผูกบัญชีแปลง</span>
+                </>
+              )}
+            </button>
+
+            <p className="text-xs text-stone-400">
+              🔒 ปลอดภัยตามมาตรฐาน LINE Official และ พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

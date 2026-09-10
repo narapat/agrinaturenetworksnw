@@ -123,7 +123,7 @@ export interface CategoryTag {
 
 export interface AuditLog {
   id: string;
-  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin' | 'create_news' | 'update_news' | 'delete_news' | 'update_sku' | 'delete_sku';
+  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin' | 'create_news' | 'update_news' | 'delete_news' | 'update_sku' | 'delete_sku' | 'register_member';
   performedByAdminId: string;
   performedByAdminName: string;
   targetMemberId: string;

@@ -25,8 +25,18 @@ export default function HomePage() {
   const [searchKeyword, setSearchKeyword] = useState('');
 
   useEffect(() => {
-    setProducts(dataService.getPublicProducts());
-    setSkuGroups(dataService.getGroupedSKUs());
+    const updateData = () => {
+      setProducts(dataService.getPublicProducts());
+      setSkuGroups(dataService.getGroupedSKUs());
+    };
+
+    updateData();
+    dataService.ensureFirestoreSync();
+
+    window.addEventListener('nsw_data_updated', updateData);
+    return () => {
+      window.removeEventListener('nsw_data_updated', updateData);
+    };
   }, []);
 
   return (

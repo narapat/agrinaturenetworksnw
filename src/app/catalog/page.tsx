@@ -38,6 +38,10 @@ function CatalogContent() {
 
   useEffect(() => {
     loadData();
+    dataService.ensureFirestoreSync().then(() => loadData());
+    const handleUpdate = () => loadData();
+    window.addEventListener('nsw_data_updated', handleUpdate);
+    return () => window.removeEventListener('nsw_data_updated', handleUpdate);
   }, [selectedDistrict, selectedCategory, selectedStatus, selectedSkuTag]);
 
   const loadData = () => {

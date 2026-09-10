@@ -92,7 +92,8 @@ export async function compressImage(
  */
 export async function cropImageToAspect(
   dataUrl: string,
-  targetAspect: number = 4 / 3
+  targetAspect: number = 4 / 3,
+  maxDimension: number = 800
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -112,8 +113,8 @@ export async function cropImageToAspect(
       }
 
       const canvas = document.createElement('canvas');
-      canvas.width = Math.min(sw, 1200);
-      canvas.height = Math.min(sh, 1200 / targetAspect);
+      canvas.width = Math.min(sw, maxDimension);
+      canvas.height = Math.min(sh, maxDimension / targetAspect);
 
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -122,7 +123,7 @@ export async function cropImageToAspect(
       }
 
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.85));
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
     };
     img.onerror = (err) => reject(err);
   });
