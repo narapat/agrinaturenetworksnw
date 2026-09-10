@@ -36,6 +36,7 @@ export interface MemberProfile {
   trainingCourse?: string; // อบรมหลักสูตรอะไรมา
   trainingLocation?: string; // อบรมที่ไหนมา / ศูนย์ใด
   farmId: string;
+  farmName?: string;
   createdAt: string;
 }
 

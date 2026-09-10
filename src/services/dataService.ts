@@ -141,6 +141,14 @@ class DataService {
         }
       }
 
+      // ปรับปรุงข้อมูลแปลงให้สมบูรณ์และซ่อมแซมแปลงของสมาชิกที่ยังไม่มีใน this.farms
+      this.farms = this.farms.map((f) => this.normalizeFarm(f));
+      for (const m of this.members) {
+        if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
+          this.repairMissingUserFarm(m);
+        }
+      }
+
       // Ensure all news have status field properly initialized and new sample events exist
       for (const initN of INITIAL_NEWS) {
         const existing = this.news.find((n) => n.id === initN.id);
@@ -353,6 +361,13 @@ class DataService {
             console.warn(`[Auto-Rescue] Error pushing member ${localM.id} to Firestore:`, rescueErr);
           }
         }
+
+        // ซ่อมแซมสมาชิกที่มี farmId แต่ยังไม่มีแปลงในระบบ
+        for (const m of this.members) {
+          if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
+            this.repairMissingUserFarm(m);
+          }
+        }
       } catch (err) {
         console.warn('Firestore sync [members] notice:', err);
       }
@@ -361,12 +376,12 @@ class DataService {
       try {
         const farmsSnap = await getDocs(collection(db, 'farms'));
         if (!farmsSnap.empty) {
-          const remoteFarms = farmsSnap.docs.map((d) => d.data() as Farm);
+          const remoteFarms = farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm));
           const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
 
           this.farms = this.farms.map((localF) => {
             const remoteF = remoteFarmMap.get(localF.id);
-            return remoteF ? { ...remoteF, ...localF } : localF;
+            return remoteF ? this.normalizeFarm({ ...remoteF, ...localF }) : localF;
           });
 
           for (const rf of remoteFarms) {
@@ -377,6 +392,13 @@ class DataService {
         }
       } catch (err) {
         console.warn('Firestore sync [farms] notice:', err);
+      }
+
+      // ตรวจสอบความสมบูรณ์รอบสอง: หากยังมีสมาชิกที่มี farmId แต่ไม่พบใน this.farms ให้ซ่อมแซมทันที
+      for (const m of this.members) {
+        if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
+          this.repairMissingUserFarm(m);
+        }
       }
 
       // 3. ซิงค์ Products (ตลาดเครือข่าย)
@@ -505,9 +527,75 @@ class DataService {
   }
 
   // ==================== SECURITY & ZERO-DATA LEAKAGE ====================
+
+  /**
+   * เติมข้อมูลที่จำเป็น (Fallbacks) ให้แปลงกสิกรรมเสมอ ป้องกันข้อมูลแหว่งจาก Firestore
+   */
+  normalizeFarm(farm: Partial<Farm> & { id: string; memberId?: string }): Farm {
+    const member = this.members.find((m) => m.id === farm.memberId || m.farmId === farm.id);
+    const district = farm.district || 'เมืองนครสวรรค์';
+    const subdistrict = farm.subdistrict || '';
+    const internalCoords = farm.internalCoordinates || { lat: 15.7000, lng: 100.0500 };
+    
+    return {
+      id: farm.id,
+      memberId: farm.memberId || member?.id || '',
+      ownerName: farm.ownerName || member?.fullName || 'เกษตรกรเครือข่าย',
+      farmName: farm.farmName || member?.farmName || (member?.fullName ? `แปลงกสิกรรม ${member.fullName}` : 'แปลงกสิกรรมธรรมชาติ'),
+      tagline: farm.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
+      story: farm.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์ ยึดหลักเศรษฐกิจพอเพียง',
+      photos: (farm.photos && Array.isArray(farm.photos) && farm.photos.length > 0) ? farm.photos : [
+        'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop'
+      ],
+      district: district,
+      subdistrict: subdistrict,
+      internalCoordinates: internalCoords,
+      publicZone: farm.publicZone || {
+        name: subdistrict ? `โซน ต.${subdistrict} อ.${district}` : `โซน อ.${district}`,
+        approxLat: Number((internalCoords.lat + (Math.random() - 0.5) * 0.02).toFixed(6)),
+        approxLng: Number((internalCoords.lng + (Math.random() - 0.5) * 0.02).toFixed(6)),
+        radiusKm: 3
+      },
+      practices: (farm.practices && Array.isArray(farm.practices) && farm.practices.length > 0) ? farm.practices : ['โคก หนอง นา', 'กสิกรรมธรรมชาติ'],
+      isPublicPhone: farm.isPublicPhone ?? false,
+      isPublicLine: farm.isPublicLine ?? false,
+      phone: farm.phone || member?.phone,
+      lineId: farm.lineId || member?.lineId,
+      socials: farm.socials || (member?.socials ? { ...member.socials } : {})
+    };
+  }
+
+  /**
+   * ซ่อมแซม/สร้างข้อมูลแปลงในเครื่องทันทีสำหรับสมาชิกที่สมัครแล้วมี farmId แต่ข้อมูลแปลงยังซิงค์ไม่ลงมา
+   */
+  repairMissingUserFarm(member: MemberProfile): Farm {
+    const existing = this.farms.find((f) => f.id === member.farmId || f.memberId === member.id);
+    if (existing) return this.normalizeFarm(existing);
+
+    const farmId = member.farmId || `farm-${Date.now()}`;
+    const newFarm = this.normalizeFarm({
+      id: farmId,
+      memberId: member.id,
+      ownerName: member.fullName,
+      farmName: member.farmName || (member.fullName ? `แปลงกสิกรรม ${member.fullName}` : 'แปลงกสิกรรมธรรมชาติ'),
+      phone: member.phone,
+      lineId: member.lineId,
+      isPublicPhone: member.isPublicPhone,
+      isPublicLine: member.isPublicLine,
+    });
+
+    this.farms.push(newFarm);
+    if (member.farmId !== farmId) {
+      member.farmId = farmId;
+    }
+    this.save();
+    return newFarm;
+  }
+
   // คัดกรองข้อมูลก่อนส่งให้บุคคลทั่วไปดู (ตัดเบอร์โทร, LINE ID, และพิกัดจริงทิ้งทั้งหมด)
   private sanitizeFarmForPublic(farm: Farm): Farm {
-    const clean = { ...farm };
+    const normalized = this.normalizeFarm(farm);
+    const clean = { ...normalized };
     // ตัดพิกัดจริงออก 100% เหลือเฉพาะโซนรัศมี
     delete (clean as any).internalCoordinates;
     

@@ -22,9 +22,9 @@ export default function FarmsDirectoryPage() {
         const q = searchQuery.toLowerCase();
         list = list.filter(
           (f) =>
-            f.farmName.toLowerCase().includes(q) ||
-            f.ownerName.toLowerCase().includes(q) ||
-            f.story.toLowerCase().includes(q)
+            (f.farmName || '').toLowerCase().includes(q) ||
+            (f.ownerName || '').toLowerCase().includes(q) ||
+            (f.story || '').toLowerCase().includes(q)
         );
       }
       setFarms([...list]);
@@ -102,8 +102,8 @@ export default function FarmsDirectoryPage() {
               {/* Farm Photo Slideshow (แสดงทีละรูป หมุนวนอัตโนมัติ และคลิกรูปเพื่อเปิดแปลงได้) */}
               <div className="relative w-full h-52 sm:h-56 bg-stone-900 overflow-hidden shrink-0">
                 <FarmSlideshow
-                  photos={farm.photos}
-                  farmName={farm.farmName}
+                  photos={farm.photos || []}
+                  farmName={farm.farmName || 'แปลงกสิกรรม'}
                   heightClass="h-52 sm:h-56"
                   aspectRatioClass="aspect-video"
                   autoPlayInterval={3500}
@@ -128,7 +128,7 @@ export default function FarmsDirectoryPage() {
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs font-semibold text-stone-500">
-                      โดย {farm.ownerName}
+                      โดย {farm.ownerName || 'เกษตรกรเครือข่าย'}
                     </span>
                   </div>
 
@@ -145,13 +145,13 @@ export default function FarmsDirectoryPage() {
                   )}
 
                   <p className="text-xs text-stone-500 mt-2 line-clamp-2 leading-relaxed">
-                    {farm.story}
+                    {farm.story || 'แปลงกสิกรรมธรรมชาติ จ.นครสวรรค์ ยึดหลักเศรษฐกิจพอเพียง'}
                   </p>
                 </div>
 
                 {/* Practices Tags */}
                 <div className="flex flex-wrap gap-1.5 pt-2">
-                  {farm.practices.slice(0, 3).map((p, idx) => (
+                  {(farm.practices || []).slice(0, 3).map((p, idx) => (
                     <span
                       key={idx}
                       className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[11px] font-medium"

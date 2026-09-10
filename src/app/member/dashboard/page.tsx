@@ -112,9 +112,15 @@ export default function MemberDashboardPage() {
 
   const processUserFarm = (user: MemberProfile) => {
     // ตรวจสอบว่าสมาชิกสร้างฟาร์มแล้วหรือยัง
-    const userFarm = user.farmId 
+    let userFarm = user.farmId 
       ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
       : dataService.getFarmByMemberId(user.id);
+
+    // หากสมาชิกมี farmId หรือเป็นสมาชิกที่เคยสมัครแล้ว แต่ตัวแปลงยังซิงค์ไม่ลงมา (เช่น ติด Firestore Rules)
+    // ให้ทำการกู้คืน/สร้างโครงแปลงในเครื่องทันที เพื่อไม่ให้เตะผู้ใช้ไปหน้าสร้างแปลงใหม่
+    if (!userFarm && (user.farmId || user.role === 'member')) {
+      userFarm = dataService.repairMissingUserFarm(user);
+    }
 
     if (!userFarm) {
       router.replace('/member/create-farm');
