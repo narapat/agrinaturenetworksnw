@@ -69,42 +69,45 @@ export default function AddProductPage() {
     setImageUrl(compressedDataUrl);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !farm || !selectedSkuTag) return;
+    if (!farm) return;
+    if (!selectedSkuTag) return;
 
     setIsSubmitting(true);
 
-    dataService.memberAddProduct({
-      farmId: farm.id,
-      farmName: farm.farmName,
-      district: farm.district,
-      subdistrict: farm.subdistrict,
-      title: title.trim() || `${selectedSkuTag.name} (${farm.farmName})`,
-      skuTagId: selectedSkuTag.id,
-      skuTagName: selectedSkuTag.name,
-      category: selectedSkuTag.category,
-      categoryName: 
-        selectedSkuTag.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
-        selectedSkuTag.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
-        selectedSkuTag.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
-        selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
-        selectedSkuTag.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
-      status: status,
-      price: status === 'share' ? 0 : Number(price) || 0,
-      unit: unit,
-      description: description.trim() || 'ผลผลิตอินทรีย์วิถีกสิกรรมธรรมชาติ ไร้สารเคมี ปลอดภัยต่อผู้บริโภค',
-      images: [imageUrl],
-      isPublicPhone: farm.isPublicPhone,
-      isPublicLine: farm.isPublicLine,
-      phone: farm.isPublicPhone ? farm.phone : undefined,
-      lineId: farm.isPublicLine ? farm.lineId : undefined,
-    });
+    try {
+      await dataService.memberAddProduct({
+        farmId: farm.id,
+        farmName: farm.farmName,
+        district: farm.district,
+        subdistrict: farm.subdistrict,
+        title: title.trim() || `${selectedSkuTag.name} (${farm.farmName})`,
+        skuTagId: selectedSkuTag.id,
+        skuTagName: selectedSkuTag.name,
+        category: selectedSkuTag.category,
+        categoryName: 
+          selectedSkuTag.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
+          selectedSkuTag.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
+          selectedSkuTag.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
+          selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
+          selectedSkuTag.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
+        status: status,
+        price: status === 'share' ? 0 : Number(price) || 0,
+        unit: unit,
+        description: description.trim() || 'ผลผลิตอินทรีย์วิถีกสิกรรมธรรมชาติ ไร้สารเคมี ปลอดภัยต่อผู้บริโภค',
+        images: [imageUrl],
+        isPublicPhone: farm.isPublicPhone,
+        isPublicLine: farm.isPublicLine,
+        phone: farm.isPublicPhone ? farm.phone : undefined,
+        lineId: farm.isPublicLine ? farm.lineId : undefined,
+      });
 
-    setTimeout(() => {
-      setIsSubmitting(false);
       router.push('/member/dashboard');
-    }, 600);
+    } catch (err) {
+      console.error('Failed to add product:', err);
+      setIsSubmitting(false);
+    }
   };
 
   const commonUnits = ['กิโลกรัม', 'ขวด (1,000 มล.)', 'ถุง (5 กก.)', 'กระสอบ (15 กก.)', 'หวี', 'ชุด/ซอง', 'ชิ้น/เล่ม', 'เตา/ชุด', 'เครื่อง'];

@@ -104,7 +104,7 @@ export default function EditProductPage() {
     setImageUrl(compressedDataUrl);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!product || !selectedSkuTag) return;
 
@@ -117,7 +117,7 @@ export default function EditProductPage() {
       selectedSkuTag.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
       selectedSkuTag.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด';
 
-    dataService.updateProduct(productId, {
+    await dataService.updateProduct(productId, {
       title: title.trim() || product.title,
       skuTagId: selectedSkuTag.id,
       skuTagName: selectedSkuTag.name,
@@ -137,10 +137,10 @@ export default function EditProductPage() {
     }, 800);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!product) return;
     setIsDeleting(true);
-    dataService.deleteProduct(product.id);
+    await dataService.deleteProduct(product.id);
     setTimeout(() => {
       setIsDeleting(false);
       setShowDeleteModal(false);

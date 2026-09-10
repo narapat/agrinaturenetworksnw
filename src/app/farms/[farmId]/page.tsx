@@ -113,23 +113,26 @@ export default function FarmDetailPage() {
     );
   };
 
-  const handleSavePractices = () => {
+  const handleSavePractices = async () => {
     if (!farm) return;
     setIsSavingPractices(true);
-    const updated = dataService.updateFarm(farm.id, {
-      practices: [...selectedPractices],
-    });
-    if (updated) {
-      setFarm({ ...updated });
-    }
-    setTimeout(() => {
-      setIsSavingPractices(false);
+    try {
+      const updated = await dataService.updateFarm(farm.id, {
+        practices: [...selectedPractices],
+      });
+      if (updated) {
+        setFarm({ ...updated });
+      }
       setSavePracticesSuccess(true);
       setTimeout(() => {
         setSavePracticesSuccess(false);
         setIsEditingPractices(false);
       }, 1200);
-    }, 300);
+    } catch (err) {
+      console.error('Error updating practices:', err);
+    } finally {
+      setIsSavingPractices(false);
+    }
   };
 
   const handleShareLine = () => {

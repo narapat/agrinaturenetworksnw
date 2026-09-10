@@ -49,6 +49,7 @@ export default function CreateFarmPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const practiceOptions = [
     'โคก หนอง นา',
@@ -126,31 +127,38 @@ export default function CreateFarmPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
     if (!farmName.trim()) return;
 
     setIsSubmitting(true);
+    setCreateError(null);
 
-    dataService.createFarm(currentUser.id, {
-      farmName: farmName.trim(),
-      tagline: tagline.trim() || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
-      story: story.trim() || 'แปลงกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง เครือข่ายนครสวรรค์',
-      district,
-      subdistrict: subdistrict.trim() || 'เมือง',
-      phone: phone.trim() || currentUser.phone,
-      lineId: lineId.trim() || currentUser.lineId,
-      isPublicPhone,
-      isPublicLine,
-      practices: selectedPractices,
-      photos: farmPhotos,
-    });
+    try {
+      await dataService.createFarm(currentUser.id, {
+        farmName: farmName.trim(),
+        tagline: tagline.trim() || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
+        story: story.trim() || 'แปลงกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง เครือข่ายนครสวรรค์',
+        district,
+        subdistrict: subdistrict.trim() || 'เมือง',
+        phone: phone.trim() || currentUser.phone,
+        lineId: lineId.trim() || currentUser.lineId,
+        isPublicPhone,
+        isPublicLine,
+        practices: selectedPractices,
+        photos: farmPhotos,
+      });
 
-    setIsSubmitted(true);
-    setTimeout(() => {
-      router.replace('/member/dashboard');
-    }, 1500);
+      setIsSubmitted(true);
+      setTimeout(() => {
+        router.replace('/member/dashboard');
+      }, 1200);
+    } catch (err: any) {
+      console.error('Error creating farm:', err);
+      setCreateError('เกิดข้อผิดพลาดในการบันทึกข้อมูลแปลง: ' + (err?.message || 'กรุณาลองใหม่อีกครั้ง'));
+      setIsSubmitting(false);
+    }
   };
 
   if (isLoading || !currentUser) {
@@ -427,6 +435,13 @@ export default function CreateFarmPage() {
               </div>
             </div>
           </div>
+
+          {/* Error Message */}
+          {createError && (
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-bold text-center">
+              ⚠️ {createError}
+            </div>
+          )}
 
           {/* Submit Button & Feedback */}
           {isSubmitted ? (

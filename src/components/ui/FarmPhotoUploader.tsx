@@ -44,9 +44,9 @@ export default function FarmPhotoUploader({
       setCompressProgress({ current: i + 1, total: filesToProcess.length });
       try {
         const compressed = await compressImage(filesToProcess[i], {
-          maxWidth: 1280,
-          maxHeight: 800,
-          quality: 0.82,
+          maxWidth: 800,
+          maxHeight: 600,
+          quality: 0.70,
         });
         newOptimizedPhotos.push(compressed.dataUrl);
       } catch (err) {

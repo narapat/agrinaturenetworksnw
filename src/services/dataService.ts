@@ -232,8 +232,8 @@ class DataService {
   /**
    * บีบอัดภาพ Base64 Data URL ให้ปลอดภัย ป้องกันชนเพดาน 1 MB ของ Firestore
    */
-  private async compressDataUrlSafe(dataUrl: string, maxDim: number = 400, quality: number = 0.75): Promise<string> {
-    if (typeof window === 'undefined' || !dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 200000) {
+  private async compressDataUrlSafe(dataUrl: string, maxDim: number = 800, quality: number = 0.70): Promise<string> {
+    if (typeof window === 'undefined' || !dataUrl || !dataUrl.startsWith('data:image/') || dataUrl.length < 70000) {
       return dataUrl;
     }
     return new Promise((resolve) => {
@@ -256,7 +256,8 @@ class DataService {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', quality));
+          const compressed = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressed.length < dataUrl.length ? compressed : dataUrl);
         } else {
           resolve(dataUrl);
         }
@@ -366,11 +367,67 @@ class DataService {
         if (!farmsSnap.empty) {
           const remoteFarms = farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm));
           const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
+          const initialFarmIds = new Set(INITIAL_FARMS.map((f) => f.id));
 
-          // จุดสำคัญ: ข้อมูลจริงจาก Cloud Firestore ต้องแทนที่ข้อมูลในเครื่องเสมอ
+          // ===================================================================
+          // 🌟 AUTO-RESCUE FARMS: ตรวจจับแปลงที่สร้างไว้ในเครื่อง (LocalStorage)
+          // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น สร้างขณะออฟไลน์ หรือเน็ตหลุด)
+          // ซิงค์ขึ้น Cloud Firestore อัตโนมัติทันที เพื่อไม่ให้ข้อมูลแปลงสูญหาย
+          // ===================================================================
+          const unuploadedFarms = this.farms.filter(
+            (f) => !initialFarmIds.has(f.id) && 
+                   !remoteFarmMap.has(f.id) && 
+                   this.members.some((m) => m.id === f.memberId || m.farmId === f.id)
+          );
+
+          for (const localF of unuploadedFarms) {
+            try {
+              console.log(`[Auto-Rescue] Syncing unuploaded local farm ${localF.id} (${localF.farmName}) to Cloud Firestore...`);
+              let safePhotos = localF.photos || [];
+              if (safePhotos.length > 0 && typeof window !== 'undefined') {
+                const processedPhotos: string[] = [];
+                for (const p of safePhotos) {
+                  if (p && p.startsWith('data:image/') && p.length > 70000) {
+                    try {
+                      const comp = await this.compressDataUrlSafe(p, 800, 0.70);
+                      processedPhotos.push(comp);
+                    } catch {
+                      processedPhotos.push(p);
+                    }
+                  } else {
+                    processedPhotos.push(p);
+                  }
+                }
+                safePhotos = processedPhotos;
+              }
+
+              const farmToUpload: Farm = {
+                ...localF,
+                photos: safePhotos,
+              };
+
+              await this.firestoreSet('farms', farmToUpload.id, farmToUpload);
+              remoteFarmMap.set(farmToUpload.id, farmToUpload);
+              console.log(`[Auto-Rescue] Successfully uploaded local farm ${farmToUpload.id} to Firestore!`);
+            } catch (fErr) {
+              console.warn(`[Auto-Rescue] Error uploading local farm ${localF.id} to Firestore:`, fErr);
+            }
+          }
+
+          // จุดสำคัญ: ผสานข้อมูลจริงจาก Cloud Firestore กับข้อมูลในเครื่อง
           this.farms = this.farms.map((localF) => {
             const remoteF = remoteFarmMap.get(localF.id);
-            return remoteF ? this.normalizeFarm(remoteF) : localF;
+            if (!remoteF) return localF;
+
+            // ตรวจสอบกรณีรูปถ่ายแปลง: ถ้าในเครื่องมีรูปจริงแต่ remote ยังไม่มีรูป ให้ซิงค์รูปขึ้น cloud และคงรูปไว้
+            const hasLocalPhotos = localF.photos && localF.photos.length > 0 && !localF.photos[0].includes('unsplash');
+            const hasRemotePhotos = remoteF.photos && remoteF.photos.length > 0 && !remoteF.photos[0].includes('unsplash');
+            if (hasLocalPhotos && !hasRemotePhotos) {
+              this.firestoreUpdate('farms', localF.id, { photos: localF.photos });
+              return { ...this.normalizeFarm(remoteF), photos: localF.photos };
+            }
+
+            return this.normalizeFarm(remoteF);
           });
 
           for (const rf of remoteFarms) {
@@ -379,9 +436,12 @@ class DataService {
             }
           }
 
-          // ลบแปลงชั่วคราว/ตกค้างที่ไม่มีใน Firestore และไม่ใช่ INITIAL_FARMS
-          const initialFarmIds = new Set(INITIAL_FARMS.map((f) => f.id));
-          this.farms = this.farms.filter((f) => remoteFarmMap.has(f.id) || initialFarmIds.has(f.id));
+          // ลบเฉพาะแปลงชั่วคราวตกค้างที่ไม่ใช่ของสมาชิกคนใด และไม่มีใน Firestore
+          this.farms = this.farms.filter(
+            (f) => remoteFarmMap.has(f.id) || 
+                   initialFarmIds.has(f.id) || 
+                   this.members.some((m) => m.id === f.memberId || m.farmId === f.id)
+          );
         }
       } catch (err) {
         console.warn('Firestore sync [farms] notice:', err);
@@ -390,20 +450,71 @@ class DataService {
       // 3. ซิงค์ Products (ตลาดเครือข่าย)
       try {
         const productsSnap = await getDocs(collection(db, 'products'));
-        if (!productsSnap.empty) {
-          const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
-          if (remoteProds.length > 0) {
-            const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
-            // ข้อมูลสินค้าจริงจาก Cloud Firestore ต้องแทนที่ข้อมูลในเครื่องเสมอ
-            this.products = this.products.map((localP) => {
-              const remoteP = remoteProdMap.get(localP.id);
-              return remoteP ? remoteP : localP;
-            });
-            for (const rp of remoteProds) {
-              if (!this.products.some((p) => p.id === rp.id)) {
-                this.products.push(rp);
+        const remoteProds = !productsSnap.empty ? productsSnap.docs.map((d) => d.data() as Product) : [];
+        const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
+        const initialProdIds = new Set(INITIAL_PRODUCTS.map((p) => p.id));
+
+        // ===================================================================
+        // 🌟 AUTO-RESCUE PRODUCTS: ตรวจจับผลผลิตที่สร้างไว้ในเครื่อง (LocalStorage) 
+        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น เพิ่มขณะเน็ตหลุด) ดันขึ้นอัตโนมัติ
+        // ===================================================================
+        const unuploadedProducts = this.products.filter(
+          (p) => !initialProdIds.has(p.id) && 
+                 !remoteProdMap.has(p.id) && 
+                 this.farms.some((f) => f.id === p.farmId)
+        );
+
+        for (const localP of unuploadedProducts) {
+          try {
+            console.log(`[Auto-Rescue] Syncing unuploaded local product ${localP.id} (${localP.title}) to Cloud Firestore...`);
+            let safeImages = localP.images || [];
+            if (safeImages.length > 0 && typeof window !== 'undefined') {
+              const processedImages: string[] = [];
+              for (const img of safeImages) {
+                if (img && img.startsWith('data:image/') && img.length > 70000) {
+                  try {
+                    const comp = await this.compressDataUrlSafe(img, 800, 0.75);
+                    processedImages.push(comp);
+                  } catch {
+                    processedImages.push(img);
+                  }
+                } else {
+                  processedImages.push(img);
+                }
               }
+              safeImages = processedImages;
             }
+
+            const productToUpload: Product = {
+              ...localP,
+              images: safeImages,
+            };
+
+            await this.firestoreSet('products', productToUpload.id, productToUpload);
+            remoteProdMap.set(productToUpload.id, productToUpload);
+            console.log(`[Auto-Rescue] Successfully uploaded local product ${productToUpload.id} to Firestore!`);
+          } catch (pErr) {
+            console.warn(`[Auto-Rescue] Error uploading local product ${localP.id} to Firestore:`, pErr);
+          }
+        }
+
+        if (remoteProds.length > 0) {
+          // ข้อมูลสินค้าจริงจาก Cloud Firestore ผสานกับข้อมูลในเครื่อง
+          this.products = this.products.map((localP) => {
+            const remoteP = remoteProdMap.get(localP.id);
+            return remoteP ? remoteP : localP;
+          });
+          for (const rp of remoteProds) {
+            if (!this.products.some((p) => p.id === rp.id)) {
+              this.products.push(rp);
+            }
+          }
+        } else {
+          for (const initProd of INITIAL_PRODUCTS) {
+            if (!this.products.some((p) => p.id === initProd.id)) {
+              this.products.push(initProd);
+            }
+            this.firestoreSet('products', initProd.id, initProd);
           }
         }
       } catch (err) {
@@ -495,21 +606,25 @@ class DataService {
     }
   }
 
-  private async firestoreUpdate(collectionName: string, id: string, data: any) {
-    if (typeof window === 'undefined' || !db) return;
+  private async firestoreUpdate(collectionName: string, id: string, data: any): Promise<boolean> {
+    if (typeof window === 'undefined' || !db) return false;
     try {
-      await updateDoc(doc(db, collectionName, id), this.cleanForFirestore(data));
-    } catch (e) {
-      console.warn(`Firestore update error [${collectionName}/${id}]:`, e);
+      await setDoc(doc(db, collectionName, id), this.cleanForFirestore(data), { merge: true });
+      return true;
+    } catch (e: any) {
+      console.warn(`Firestore update error [${collectionName}/${id}]:`, e?.message || e);
+      return false;
     }
   }
 
-  private async firestoreDelete(collectionName: string, id: string) {
-    if (typeof window === 'undefined' || !db) return;
+  private async firestoreDelete(collectionName: string, id: string): Promise<boolean> {
+    if (typeof window === 'undefined' || !db) return true;
     try {
       await deleteDoc(doc(db, collectionName, id));
+      return true;
     } catch (e) {
       console.warn(`Firestore delete error [${collectionName}/${id}]:`, e);
+      return false;
     }
   }
 
@@ -1230,20 +1345,40 @@ class DataService {
   /**
    * แอดมินช่วยลงผลผลิตแทนสมาชิก (พร้อมบันทึก Audit Log เพื่อความโปร่งใส)
    */
-  adminAssistAddProduct(
+  async adminAssistAddProduct(
     admin: MemberProfile,
     targetMemberId: string,
     productData: Omit<Product, 'id' | 'updatedAt' | 'farmId' | 'farmName' | 'district' | 'subdistrict' | 'isPublicPhone' | 'isPublicLine'>
-  ): Product {
+  ): Promise<Product> {
     const member = this.members.find((m) => m.id === targetMemberId);
     if (!member) throw new Error('Member not found');
 
     const farm = this.farms.find((f) => f.id === member.farmId);
     if (!farm) throw new Error('Farm not found');
 
+    // บีบอัดรูปภาพ Base64 เสมอ
+    let safeImages = productData.images || [];
+    if (safeImages.length > 0 && typeof window !== 'undefined') {
+      const processed: string[] = [];
+      for (const img of safeImages) {
+        if (img && img.startsWith('data:image/') && img.length > 70000) {
+          try {
+            const comp = await this.compressDataUrlSafe(img, 800, 0.75);
+            processed.push(comp);
+          } catch {
+            processed.push(img);
+          }
+        } else {
+          processed.push(img);
+        }
+      }
+      safeImages = processed;
+    }
+
     const newProduct: Product = {
       ...productData,
       id: `prod-${Date.now()}`,
+      images: safeImages,
       farmId: farm.id,
       farmName: farm.farmName,
       district: farm.district,
@@ -1275,40 +1410,88 @@ class DataService {
     this.save();
 
     // ซิงค์ไปยัง Cloud Firestore
-    this.firestoreSet('products', newProduct.id, newProduct);
-    this.firestoreUpdate('members', member.id, { delegationStatus: 'completed' });
-    this.firestoreSet('auditLogs', newLog.id, newLog);
+    await this.firestoreSet('products', newProduct.id, newProduct);
+    await this.firestoreUpdate('members', member.id, { delegationStatus: 'completed' });
+    await this.firestoreSet('auditLogs', newLog.id, newLog);
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
 
     return newProduct;
   }
 
   // สมาชิกลงข้อมูลด้วยตนเอง
-  memberAddProduct(productData: Omit<Product, 'id' | 'updatedAt'>): Product {
+  async memberAddProduct(productData: Omit<Product, 'id' | 'updatedAt'>): Promise<Product> {
+    // บีบอัดรูปภาพ Base64 เสมอ
+    let safeImages = productData.images || [];
+    if (safeImages.length > 0 && typeof window !== 'undefined') {
+      const processed: string[] = [];
+      for (const img of safeImages) {
+        if (img && img.startsWith('data:image/') && img.length > 70000) {
+          try {
+            const comp = await this.compressDataUrlSafe(img, 800, 0.75);
+            processed.push(comp);
+          } catch {
+            processed.push(img);
+          }
+        } else {
+          processed.push(img);
+        }
+      }
+      safeImages = processed;
+    }
+
     const newProduct: Product = {
       ...productData,
       id: `prod-${Date.now()}`,
+      images: safeImages,
       updatedAt: new Date().toISOString().split('T')[0],
     };
     this.products.unshift(newProduct);
     this.save();
-    this.firestoreSet('products', newProduct.id, newProduct);
+    await this.firestoreSet('products', newProduct.id, newProduct);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
     return newProduct;
   }
 
-  updateProductStatus(productId: string, status: Product['status']) {
+  async updateProductStatus(productId: string, status: Product['status']): Promise<void> {
     const prod = this.products.find((p) => p.id === productId);
     if (prod) {
       prod.status = status;
       prod.updatedAt = new Date().toISOString().split('T')[0];
       this.save();
-      this.firestoreUpdate('products', productId, { status, updatedAt: prod.updatedAt });
+      await this.firestoreUpdate('products', productId, { status, updatedAt: prod.updatedAt });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
     }
   }
 
   // แก้ไขข้อมูลผลผลิตที่ลงไปแล้ว (ชื่อ, ราคา, หมวดหมู่, รูปภาพ, สถานะ, คำอธิบาย)
-  updateProduct(productId: string, updatedData: Partial<Product>): Product | null {
+  async updateProduct(productId: string, updatedData: Partial<Product>): Promise<Product | null> {
     const index = this.products.findIndex((p) => p.id === productId);
     if (index === -1) return null;
+
+    // บีบอัดรูปภาพ Base64 เสมอหากมีการแก้ไขรูป
+    if (updatedData.images && Array.isArray(updatedData.images)) {
+      const safeImages: string[] = [];
+      for (const img of updatedData.images) {
+        if (img && img.startsWith('data:image/') && img.length > 70000 && typeof window !== 'undefined') {
+          try {
+            const comp = await this.compressDataUrlSafe(img, 800, 0.75);
+            safeImages.push(comp);
+          } catch {
+            safeImages.push(img);
+          }
+        } else {
+          safeImages.push(img);
+        }
+      }
+      updatedData.images = safeImages;
+    }
 
     const existing = this.products[index];
     const updated: Product = {
@@ -1321,26 +1504,50 @@ class DataService {
 
     this.products[index] = updated;
     this.save();
-    this.firestoreUpdate('products', productId, updated);
+    await this.firestoreUpdate('products', productId, updated);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
     return updated;
   }
 
   // ลบผลผลิตออกจากระบบ
-  deleteProduct(productId: string): boolean {
+  async deleteProduct(productId: string): Promise<boolean> {
     const initialLen = this.products.length;
     this.products = this.products.filter((p) => p.id !== productId);
     if (this.products.length !== initialLen) {
       this.save();
-      this.firestoreDelete('products', productId);
+      await this.firestoreDelete('products', productId);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
       return true;
     }
     return false;
   }
 
   // แก้ไขข้อมูลแปลงกสิกรรม (ชื่อแปลง, คำขวัญ, เรื่องเล่า, อำเภอ, ตำบล, แนวทางปฏิบัติ)
-  updateFarm(farmId: string, updatedData: Partial<Farm>): Farm | null {
+  async updateFarm(farmId: string, updatedData: Partial<Farm>): Promise<Farm | null> {
     const farm = this.farms.find((f) => f.id === farmId);
     if (!farm) return null;
+
+    // บีบอัดรูปภาพ Base64 ป้องกันชนเพดาน 1 MB ของ Cloud Firestore เสมอ
+    if (updatedData.photos && Array.isArray(updatedData.photos)) {
+      const safePhotos: string[] = [];
+      for (const p of updatedData.photos) {
+        if (p && p.startsWith('data:image') && p.length > 80000 && typeof window !== 'undefined') {
+          try {
+            const compressed = await this.compressDataUrlSafe(p, 800, 0.70);
+            safePhotos.push(compressed);
+          } catch {
+            safePhotos.push(p);
+          }
+        } else {
+          safePhotos.push(p);
+        }
+      }
+      updatedData.photos = safePhotos;
+    }
 
     Object.assign(farm, updatedData);
 
@@ -1366,7 +1573,10 @@ class DataService {
     }
 
     this.save();
-    this.firestoreUpdate('farms', farmId, farm);
+    const firestoreOk = await this.firestoreUpdate('farms', farmId, farm);
+    if (!firestoreOk && db) {
+      throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1374,7 +1584,7 @@ class DataService {
   }
 
   // สร้างแปลงกสิกรรมใหม่สำหรับสมาชิกที่ยังไม่มีแปลง
-  createFarm(
+  async createFarm(
     memberId: string,
     farmData: {
       farmName: string;
@@ -1390,9 +1600,28 @@ class DataService {
       isPublicPhone?: boolean;
       isPublicLine?: boolean;
     }
-  ): Farm {
+  ): Promise<Farm> {
     const member = this.members.find((m) => m.id === memberId);
     const farmId = `farm-${Date.now()}`;
+    const rawPhotos = farmData.photos && farmData.photos.length > 0 ? farmData.photos : [
+      'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
+    ];
+
+    // บีบอัดรูปภาพ Base64 ป้องกันชนเพดาน 1 MB ของ Cloud Firestore เสมอ
+    const safePhotos: string[] = [];
+    for (const p of rawPhotos) {
+      if (p && p.startsWith('data:image') && p.length > 80000 && typeof window !== 'undefined') {
+        try {
+          const compressed = await this.compressDataUrlSafe(p, 800, 0.70);
+          safePhotos.push(compressed);
+        } catch {
+          safePhotos.push(p);
+        }
+      } else {
+        safePhotos.push(p);
+      }
+    }
+
     const newFarm: Farm = {
       id: farmId,
       memberId: memberId,
@@ -1400,9 +1629,7 @@ class DataService {
       farmName: farmData.farmName,
       tagline: farmData.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
       story: farmData.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์',
-      photos: farmData.photos && farmData.photos.length > 0 ? farmData.photos : [
-        'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
-      ],
+      photos: safePhotos,
       district: farmData.district,
       subdistrict: farmData.subdistrict,
       internalCoordinates: farmData.coordinates || {
@@ -1428,10 +1655,13 @@ class DataService {
     this.farms.unshift(newFarm);
     if (member) {
       member.farmId = farmId;
-      this.firestoreUpdate('members', member.id, { farmId });
+      await this.firestoreUpdate('members', member.id, { farmId });
     }
     this.save();
-    this.firestoreSet('farms', farmId, newFarm);
+    const firestoreOk = await this.firestoreSet('farms', farmId, newFarm);
+    if (!firestoreOk && db) {
+      throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }

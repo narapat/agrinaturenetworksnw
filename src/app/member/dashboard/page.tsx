@@ -30,7 +30,8 @@ import {
   EyeOff,
   X,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 
 export default function MemberDashboardPage() {
@@ -63,7 +64,9 @@ export default function MemberDashboardPage() {
   const [editPractices, setEditPractices] = useState<string[]>([]);
   const [isSavingPractices, setIsSavingPractices] = useState(false);
   const [practicesSavedToast, setPracticesSavedToast] = useState(false);
+  const [isSavingFarm, setIsSavingFarm] = useState(false);
   const [farmSaveSuccess, setFarmSaveSuccess] = useState(false);
+  const [farmSaveError, setFarmSaveError] = useState<string | null>(null);
 
   // Delete Product Confirmation Modal State
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
@@ -178,21 +181,24 @@ export default function MemberDashboardPage() {
     );
   };
 
-  const handleSavePracticesDirect = () => {
+  const handleSavePracticesDirect = async () => {
     if (!farm) return;
     setIsSavingPractices(true);
-    const updated = dataService.updateFarm(farm.id, {
-      practices: [...editPractices],
-    });
-    if (updated) {
-      setFarm({ ...updated });
-    }
-    setTimeout(() => {
-      setIsSavingPractices(false);
+    try {
+      const updated = await dataService.updateFarm(farm.id, {
+        practices: [...editPractices],
+      });
+      if (updated) {
+        setFarm({ ...updated });
+      }
       setPracticesSavedToast(true);
       setTimeout(() => setPracticesSavedToast(false), 3500);
       loadData();
-    }, 300);
+    } catch (err) {
+      console.error('Failed to update farm practices:', err);
+    } finally {
+      setIsSavingPractices(false);
+    }
   };
 
   const handleTogglePhone = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -234,41 +240,51 @@ export default function MemberDashboardPage() {
     setEditSubdistrict(farm.subdistrict);
     setEditPhotos(farm.photos ? [...farm.photos] : []);
     setEditPractices(farm.practices ? [...farm.practices] : []);
+    setFarmSaveError(null);
     setShowEditFarmModal(true);
   };
 
-  const handleSaveFarm = (e: React.FormEvent) => {
+  const handleSaveFarm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!farm) return;
-    const updated = dataService.updateFarm(farm.id, {
-      farmName: editFarmName.trim() || farm.farmName,
-      tagline: editTagline.trim(),
-      story: editStory.trim(),
-      district: editDistrict,
-      subdistrict: editSubdistrict.trim(),
-      photos: [...editPhotos],
-      practices: [...editPractices],
-    });
-    if (updated) {
-      setFarm({ ...updated });
+    setIsSavingFarm(true);
+    setFarmSaveError(null);
+    try {
+      const updated = await dataService.updateFarm(farm.id, {
+        farmName: editFarmName.trim() || farm.farmName,
+        tagline: editTagline.trim(),
+        story: editStory.trim(),
+        district: editDistrict,
+        subdistrict: editSubdistrict.trim(),
+        photos: [...editPhotos],
+        practices: [...editPractices],
+      });
+      if (updated) {
+        setFarm({ ...updated });
+        setFarmSaveSuccess(true);
+        setTimeout(() => {
+          setFarmSaveSuccess(false);
+          setShowEditFarmModal(false);
+          loadData();
+        }, 800);
+      } else {
+        setFarmSaveError('ไม่สามารถบันทึกข้อมูลแปลงได้ กรุณาลองใหม่อีกครั้ง');
+      }
+    } catch (err: any) {
+      console.error('Error saving farm:', err);
+      setFarmSaveError('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + (err?.message || 'กรุณาลองใหม่อีกครั้ง'));
+    } finally {
+      setIsSavingFarm(false);
     }
-    setFarmSaveSuccess(true);
-    setTimeout(() => {
-      setFarmSaveSuccess(false);
-      setShowEditFarmModal(false);
-      loadData();
-    }, 600);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!productToDelete) return;
     setIsDeletingProd(true);
-    dataService.deleteProduct(productToDelete.id);
-    setTimeout(() => {
-      setIsDeletingProd(false);
-      setProductToDelete(null);
-      loadData();
-    }, 500);
+    await dataService.deleteProduct(productToDelete.id);
+    setIsDeletingProd(false);
+    setProductToDelete(null);
+    loadData();
   };
 
   const handleFaceCropConfirm = (croppedUrl: string) => {
@@ -1068,6 +1084,12 @@ export default function MemberDashboardPage() {
                 />
               </div>
 
+              {farmSaveError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs font-bold text-rose-700 text-center">
+                  ⚠️ {farmSaveError}
+                </div>
+              )}
+
               {farmSaveSuccess && (
                 <div className="p-3 bg-brand-50 border border-brand-200 rounded-2xl text-xs font-bold text-brand-900 text-center flex items-center justify-center gap-2">
                   <Check className="w-4 h-4 text-brand-600" />
@@ -1078,17 +1100,25 @@ export default function MemberDashboardPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={isSavingFarm}
                   onClick={() => setShowEditFarmModal(false)}
-                  className="flex-1 py-3 rounded-2xl border border-stone-200 text-stone-700 font-bold text-sm hover:bg-stone-50"
+                  className="flex-1 py-3 rounded-2xl border border-stone-200 text-stone-700 font-bold text-sm hover:bg-stone-50 disabled:opacity-50"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  disabled={farmSaveSuccess}
-                  className="flex-1 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md shadow-brand-600/20"
+                  disabled={isSavingFarm || farmSaveSuccess}
+                  className="flex-1 py-3 rounded-2xl bg-brand-600 hover:bg-brand-700 disabled:bg-stone-300 text-white font-bold text-sm shadow-md shadow-brand-600/20 flex items-center justify-center gap-2"
                 >
-                  💾 บันทึกข้อมูลแปลง
+                  {isSavingFarm ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>กำลังบันทึกข้อมูล & บีบอัดรูป...</span>
+                    </>
+                  ) : (
+                    <>💾 บันทึกข้อมูลแปลง</>
+                  )}
                 </button>
               </div>
             </form>
