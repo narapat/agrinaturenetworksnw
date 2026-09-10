@@ -74,10 +74,16 @@ export default function FarmDetailPage() {
       setProducts(dataService.getProductsByFarmId(farmId));
       setSelectedPractices(f.practices ? [...f.practices] : []);
       setCurrentUser(user);
-      setPracticeOptions(dataService.getActivePracticeNames());
+
+      // รวมศาสตร์ที่มีในแปลงเข้ากับศาสตร์มาตรฐาน เพื่อให้แสดงครบทุกตัวเลือกที่แปลงเลือกไว้เสมอ
+      const activeOptions = dataService.getActivePracticeNames();
+      const currentFarmPractices = f.practices || [];
+      const combinedOptions = Array.from(new Set([...activeOptions, ...currentFarmPractices]));
+      setPracticeOptions(combinedOptions);
     };
 
     loadFarm();
+    dataService.ensureFirestoreSync(true).then(() => loadFarm());
 
     window.addEventListener('nsw_data_updated', loadFarm);
     window.addEventListener('storage', loadFarm);
@@ -124,6 +130,9 @@ export default function FarmDetailPage() {
       });
       if (updated) {
         setFarm({ ...updated });
+        const activeOptions = dataService.getActivePracticeNames();
+        const combined = Array.from(new Set([...activeOptions, ...(updated.practices || [])]));
+        setPracticeOptions(combined);
       }
       setSavePracticesSuccess(true);
       setTimeout(() => {

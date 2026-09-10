@@ -129,6 +129,13 @@ class DataService {
         }
       }
 
+      // Ensure all standard initial practices exist in local state
+      for (const initP of INITIAL_PRACTICE_TAGS) {
+        if (!this.practices.some((p) => p.id === initP.id)) {
+          this.practices.push(initP);
+        }
+      }
+
       // Ensure standard products exist
       for (const initProd of INITIAL_PRODUCTS) {
         if (!this.products.some((p) => p.id === initProd.id)) {
@@ -155,6 +162,27 @@ class DataService {
 
       // ปรับปรุงข้อมูลแปลงให้สมบูรณ์
       this.farms = this.farms.map((f) => this.normalizeFarm(f));
+
+      // เติมวิถี/ศาสตร์ที่แปลงมีอยู่แล้วเข้าสู่ระบบแท็กกลางอัตโนมัติ เพื่อให้แสดงในตัวเลือกแก้ไขและแอดมินจัดการได้
+      const existingPracticeNames = new Set(this.practices.map((p) => p.name));
+      for (const f of this.farms) {
+        if (f.practices && Array.isArray(f.practices)) {
+          for (const pName of f.practices) {
+            if (pName && !existingPracticeNames.has(pName)) {
+              this.practices.push({
+                id: `practice-custom-${Math.random().toString(36).slice(2, 8)}`,
+                name: pName,
+                category: 'other',
+                categoryName: 'กสิกรรมธรรมชาติ / วิถีอื่นๆ',
+                icon: '🌱',
+                description: `วิถี/ศาสตร์ที่มีการปฏิบัติจริงในแปลง (${pName})`,
+                isActive: true,
+              });
+              existingPracticeNames.add(pName);
+            }
+          }
+        }
+      }
 
       // Ensure all news have status field properly initialized and new sample events exist
       for (const initN of INITIAL_NEWS) {
@@ -591,6 +619,29 @@ class DataService {
               this.practices.push(initP);
             }
             this.firestoreSet('practices', initP.id, initP);
+          }
+        }
+
+        // เติมวิถี/ศาสตร์ที่มีอยู่ในแปลงเข้าสู่ระบบแท็กกลางอัตโนมัติ เพื่อให้แสดงในตัวเลือกและบันทึกลง Firestore
+        const existingNames = new Set(this.practices.map((p) => p.name));
+        for (const f of this.farms) {
+          if (f.practices && Array.isArray(f.practices)) {
+            for (const pName of f.practices) {
+              if (pName && !existingNames.has(pName)) {
+                const newTag: FarmPracticeTag = {
+                  id: `practice-custom-${Math.random().toString(36).slice(2, 8)}`,
+                  name: pName,
+                  category: 'other',
+                  categoryName: 'กสิกรรมธรรมชาติ / วิถีอื่นๆ',
+                  icon: '🌱',
+                  description: `วิถี/ศาสตร์ที่มีการปฏิบัติจริงในแปลง (${pName})`,
+                  isActive: true,
+                };
+                this.practices.push(newTag);
+                existingNames.add(pName);
+                this.firestoreSet('practices', newTag.id, newTag);
+              }
+            }
           }
         }
       } catch (err) {

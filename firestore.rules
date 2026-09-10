@@ -127,5 +127,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // ==========================================
+    // 7. PRACTICES COLLECTION (วิถีและศาสตร์กสิกรรมธรรมชาติ)
+    // ==========================================
+    match /practices/{practiceId} {
+      allow read: if true;
+      allow create, update, delete: if isValidString(request.resource.data.name, 2, 120);
+    }
+
   }
 }

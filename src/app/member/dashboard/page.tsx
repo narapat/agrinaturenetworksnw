@@ -120,7 +120,9 @@ export default function MemberDashboardPage() {
       ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
       : dataService.getFarmByMemberId(user.id);
 
-    setPracticeOptions(dataService.getActivePracticeNames());
+    const activePractices = dataService.getActivePracticeNames();
+    const farmPractices = userFarm?.practices || [];
+    setPracticeOptions(Array.from(new Set([...activePractices, ...farmPractices])));
 
     // ซิงค์ farmId ให้ตรงกันหากแปลงมีอยู่จริง
     if (userFarm && user.farmId !== userFarm.id) {
