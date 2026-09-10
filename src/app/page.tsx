@@ -31,7 +31,7 @@ export default function HomePage() {
     };
 
     updateData();
-    dataService.ensureFirestoreSync();
+    dataService.ensureFirestoreSync(true).then(() => updateData());
 
     window.addEventListener('nsw_data_updated', updateData);
     return () => {

@@ -123,7 +123,7 @@ export const INITIAL_CATEGORY_TAGS: CategoryTag[] = [
   },
   {
     id: 'bokashi',
-    name: 'ปุ๋ยหมักโบกาฉิ / จุลินทรีย์',
+    name: 'ปุ๋ยหมักธรรมชาติ / จุลินทรีย์',
     category: 'byproduct',
     icon: '🍂',
     description: 'ปุ๋ยหมักชีวภาพสูตรไม่พลิกกลับกอง หรือปุ๋ยหมักรำแห้งจุลินทรีย์ท้องถิ่น',
@@ -731,7 +731,7 @@ export const INITIAL_PRODUCTS: Product[] = [
     subdistrict: 'หนองกรด',
     title: 'ปุ๋ยหมักโบกาฉิมูลสัตว์หมักชีวภาพแห้ง',
     skuTagId: 'bokashi',
-    skuTagName: 'ปุ๋ยหมักโบกาฉิ / จุลินทรีย์',
+    skuTagName: 'ปุ๋ยหมักธรรมชาติ / จุลินทรีย์',
     category: 'byproduct',
     categoryName: 'ปัจจัยการผลิต/By-product',
     status: 'sale',

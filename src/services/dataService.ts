@@ -540,9 +540,25 @@ class DataService {
         if (!categoriesSnap.empty) {
           const remoteCats = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
           for (const rc of remoteCats) {
-            if (!this.categories.some((c) => c.id === rc.id)) {
+            const localIdx = this.categories.findIndex((c) => c.id === rc.id);
+            if (localIdx === -1) {
               this.categories.push(rc);
+            } else {
+              this.categories[localIdx] = { ...this.categories[localIdx], ...rc };
             }
+
+            // Cascade ชื่อ SKU หรือหมวดหมู่ที่อัปเดตไปยังสินค้าที่เชื่อมโยงอยู่ทันที
+            this.products.forEach((p) => {
+              if (p.skuTagId === rc.id) {
+                if (rc.name && p.skuTagName !== rc.name) {
+                  p.skuTagName = rc.name;
+                }
+                if (rc.category && p.category !== rc.category) {
+                  p.category = rc.category;
+                  p.categoryName = this.getCategoryName(rc.category);
+                }
+              }
+            });
           }
         } else {
           for (const initCat of INITIAL_CATEGORY_TAGS) {
