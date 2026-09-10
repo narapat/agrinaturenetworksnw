@@ -361,13 +361,6 @@ class DataService {
             console.warn(`[Auto-Rescue] Error pushing member ${localM.id} to Firestore:`, rescueErr);
           }
         }
-
-        // ซ่อมแซมสมาชิกที่มี farmId แต่ยังไม่มีแปลงในระบบ
-        for (const m of this.members) {
-          if (m.farmId && !this.farms.some((f) => f.id === m.farmId || f.memberId === m.id)) {
-            this.repairMissingUserFarm(m);
-          }
-        }
       } catch (err) {
         console.warn('Firestore sync [members] notice:', err);
       }
@@ -379,9 +372,10 @@ class DataService {
           const remoteFarms = farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm));
           const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
 
+          // จุดสำคัญ: ข้อมูลจริงจาก Cloud Firestore ต้องแทนที่ข้อมูลในเครื่องเสมอ
           this.farms = this.farms.map((localF) => {
             const remoteF = remoteFarmMap.get(localF.id);
-            return remoteF ? this.normalizeFarm({ ...remoteF, ...localF }) : localF;
+            return remoteF ? this.normalizeFarm(remoteF) : localF;
           });
 
           for (const rf of remoteFarms) {
@@ -408,9 +402,10 @@ class DataService {
           const remoteProds = productsSnap.docs.map((d) => d.data() as Product);
           if (remoteProds.length > 0) {
             const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
+            // ข้อมูลสินค้าจริงจาก Cloud Firestore ต้องแทนที่ข้อมูลในเครื่องเสมอ
             this.products = this.products.map((localP) => {
               const remoteP = remoteProdMap.get(localP.id);
-              return remoteP ? { ...remoteP, ...localP } : localP;
+              return remoteP ? remoteP : localP;
             });
             for (const rp of remoteProds) {
               if (!this.products.some((p) => p.id === rp.id)) {

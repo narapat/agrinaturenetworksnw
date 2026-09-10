@@ -75,7 +75,7 @@ export default function MemberDashboardPage() {
     async function checkAuthAndLoad() {
       try {
         await Promise.all([
-          dataService.ensureFirestoreSync(),
+          dataService.ensureFirestoreSync(true),
           liffService.init(),
         ]);
       } catch (err) {
