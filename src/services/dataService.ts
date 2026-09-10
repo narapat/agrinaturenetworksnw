@@ -136,8 +136,11 @@ class DataService {
 
       // Ensure farm-admin exists so admin has their own farm
       for (const initFarm of INITIAL_FARMS) {
-        if (!this.farms.some((f) => f.id === initFarm.id)) {
+        const existing = this.farms.find((f) => f.id === initFarm.id);
+        if (!existing) {
           this.farms.push(initFarm);
+        } else if (initFarm.id === 'farm-admin') {
+          existing.farmName = initFarm.farmName;
         }
       }
 
