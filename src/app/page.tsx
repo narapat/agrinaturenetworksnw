@@ -91,29 +91,6 @@ export default function HomePage() {
               <span>ค้นหาแปลงกสิกรรม</span>
             </Link>
           </div>
-
-          {/* Impact / Stats Row */}
-          <div className="pt-8 border-t border-stone-200/80 w-full max-w-3xl mt-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 sm:gap-4">
-              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
-                <div className="text-3xl sm:text-4xl font-black text-stone-900 tracking-normal">15</div>
-                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">อำเภอในนครสวรรค์</div>
-              </div>
-              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
-                <div className="text-3xl sm:text-4xl font-black text-brand-600 tracking-normal">48+</div>
-                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">แปลงกสิกรรมธรรมชาติ</div>
-              </div>
-              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
-                <div className="text-3xl sm:text-4xl font-black text-blue-600 tracking-normal">100%</div>
-                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">วิถีไร้สารเคมี</div>
-              </div>
-              <div className="p-3 rounded-2xl bg-white/60 border border-stone-100 sm:bg-transparent sm:border-0">
-                <div className="text-3xl sm:text-4xl font-black text-amber-600 tracking-normal">ฟรี</div>
-                <div className="text-xs sm:text-sm text-stone-500 font-medium mt-0.5">เมล็ดพันธุ์แบ่งปัน</div>
-              </div>
-            </div>
-          </div>
-
         </div>
       </section>
 
