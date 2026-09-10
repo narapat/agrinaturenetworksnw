@@ -4,6 +4,8 @@ import {
   Product,
   CategoryTag,
   ProductCategory,
+  FarmPracticeTag,
+  PracticeCategory,
   AuditLog,
   NewsEvent,
   NewsStatus,
@@ -18,6 +20,7 @@ import {
   INITIAL_FARMS,
   INITIAL_PRODUCTS,
   INITIAL_CATEGORY_TAGS,
+  INITIAL_PRACTICE_TAGS,
   INITIAL_AUDIT_LOGS,
   INITIAL_NEWS,
 } from '@/data/mockData';
@@ -37,6 +40,7 @@ const STORAGE_KEYS = {
   FARMS: 'nsw_farms_v1',
   PRODUCTS: 'nsw_products_v1',
   CATEGORIES: 'nsw_categories_v1',
+  PRACTICES: 'nsw_practices_v1',
   LOGS: 'nsw_audit_logs_v1',
   NEWS: 'nsw_news_v1',
   CURRENT_USER: 'nsw_current_user_v1',
@@ -58,6 +62,7 @@ class DataService {
   private farms: Farm[] = [];
   private products: Product[] = [];
   private categories: CategoryTag[] = [];
+  private practices: FarmPracticeTag[] = [];
   private auditLogs: AuditLog[] = [];
   private news: NewsEvent[] = [];
   private currentUserId: string = 'guest'; // ค่าเริ่มต้น: ผู้เข้าชมทั่วไป (หากเข้าผ่าน LINE ยังไม่เป็นสมาชิก)
@@ -74,6 +79,7 @@ class DataService {
       this.farms = [...INITIAL_FARMS];
       this.products = [...INITIAL_PRODUCTS];
       this.categories = [...INITIAL_CATEGORY_TAGS];
+      this.practices = [...INITIAL_PRACTICE_TAGS];
       this.auditLogs = [...INITIAL_AUDIT_LOGS];
       this.news = [...INITIAL_NEWS];
       return;
@@ -91,6 +97,9 @@ class DataService {
 
       const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       this.categories = storedCategories ? JSON.parse(storedCategories) : [...INITIAL_CATEGORY_TAGS];
+
+      const storedPractices = localStorage.getItem(STORAGE_KEYS.PRACTICES);
+      this.practices = storedPractices ? JSON.parse(storedPractices) : [...INITIAL_PRACTICE_TAGS];
 
       const storedLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
       this.auditLogs = storedLogs ? JSON.parse(storedLogs) : [...INITIAL_AUDIT_LOGS];
@@ -181,6 +190,7 @@ class DataService {
       localStorage.setItem(STORAGE_KEYS.FARMS, JSON.stringify(this.farms));
       localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(this.products));
       localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(this.categories));
+      localStorage.setItem(STORAGE_KEYS.PRACTICES, JSON.stringify(this.practices));
       localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(this.auditLogs));
       localStorage.setItem(STORAGE_KEYS.NEWS, JSON.stringify(this.news));
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, this.currentUserId);
@@ -544,6 +554,31 @@ class DataService {
         }
       } catch (err) {
         console.warn('Firestore sync [categories] notice:', err);
+      }
+
+      // 4.1 ซิงค์ Farm Practices (วิถีและศาสตร์กสิกรรมธรรมชาติ)
+      try {
+        const practicesSnap = await getDocs(collection(db, 'practices'));
+        if (!practicesSnap.empty) {
+          const remotePractices = practicesSnap.docs.map((d) => d.data() as FarmPracticeTag);
+          for (const rp of remotePractices) {
+            const localIdx = this.practices.findIndex((p) => p.id === rp.id);
+            if (localIdx === -1) {
+              this.practices.push(rp);
+            } else {
+              this.practices[localIdx] = { ...this.practices[localIdx], ...rp };
+            }
+          }
+        } else {
+          for (const initP of INITIAL_PRACTICE_TAGS) {
+            if (!this.practices.some((p) => p.id === initP.id)) {
+              this.practices.push(initP);
+            }
+            this.firestoreSet('practices', initP.id, initP);
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore sync [practices] notice:', err);
       }
 
       // 5. ซิงค์ Audit Logs (ประวัติความโปร่งใส)
@@ -941,6 +976,17 @@ class DataService {
     }
     this.currentUserId = userId;
     this.save();
+    if (userId !== 'guest') {
+      const swMember = this.members.find((m) => m.id === userId);
+      if (swMember) {
+        this.logActivity('member_login', `สลับผู้ใช้เข้าสู่ระบบ: ${swMember.fullName} (เดโม)`, {
+          targetMemberId: swMember.id,
+          targetMemberName: swMember.fullName,
+          actorId: swMember.id,
+          actorName: swMember.fullName,
+        });
+      }
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -956,6 +1002,12 @@ class DataService {
     } catch {}
     this.currentUserId = member.id;
     this.save();
+    this.logActivity('member_login', `สมาชิกเข้าสู่ระบบ: ${member.fullName}`, {
+      targetMemberId: member.id,
+      targetMemberName: member.fullName,
+      actorId: member.id,
+      actorName: member.fullName,
+    });
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1022,6 +1074,14 @@ class DataService {
       }
       const wasDifferentUser = this.currentUserId !== member.id;
       this.currentUserId = member.id;
+      if (wasDifferentUser) {
+        this.logActivity('member_login', `สมาชิก ${member.fullName} เข้าสู่ระบบผ่าน LINE (${profile.displayName})`, {
+          targetMemberId: member.id,
+          targetMemberName: member.fullName,
+          actorId: member.id,
+          actorName: member.fullName,
+        });
+      }
       if (changed || wasDifferentUser) {
         this.save();
         if (changed) {
@@ -1454,6 +1514,21 @@ class DataService {
     this.products.unshift(newProduct);
     this.save();
     await this.firestoreSet('products', newProduct.id, newProduct);
+
+    const currentU = this.getCurrentUser();
+    const farm = this.getFarmById(newProduct.farmId);
+    await this.logActivity(
+      'create_product',
+      `เพิ่มผลผลิตใหม่: "${newProduct.title}" ราคา ${newProduct.price} บาท/${newProduct.unit}`,
+      {
+        targetMemberId: currentU?.id || farm?.memberId,
+        targetMemberName: currentU?.fullName || (farm ? farm.ownerName : '-'),
+        targetFarmName: farm?.farmName || newProduct.farmName,
+        actorId: currentU?.id || farm?.memberId,
+        actorName: currentU?.fullName || (farm ? farm.ownerName : 'สมาชิก'),
+      }
+    );
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1467,6 +1542,31 @@ class DataService {
       prod.updatedAt = new Date().toISOString().split('T')[0];
       this.save();
       await this.firestoreUpdate('products', productId, { status, updatedAt: prod.updatedAt });
+
+      const currentU = this.getCurrentUser();
+      const farm = this.getFarmById(prod.farmId);
+      const statusLabel =
+        status === 'sale'
+          ? 'พร้อมจำหน่าย'
+          : status === 'share'
+          ? 'แบ่งปัน/แจกฟรี'
+          : status === 'preorder'
+          ? 'เปิดจองล่วงหน้า'
+          : status === 'out_of_stock'
+          ? 'หมดชั่วคราว'
+          : 'ซ่อน';
+      await this.logActivity(
+        'update_product',
+        `เปลี่ยนสถานะผลผลิต "${prod.title}" เป็น "${statusLabel}"`,
+        {
+          targetMemberId: currentU?.id,
+          targetMemberName: currentU?.fullName,
+          targetFarmName: farm?.farmName || prod.farmName,
+          actorId: currentU?.id,
+          actorName: currentU?.fullName,
+        }
+      );
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('nsw_data_updated'));
       }
@@ -1508,6 +1608,21 @@ class DataService {
     this.products[index] = updated;
     this.save();
     await this.firestoreUpdate('products', productId, updated);
+
+    const currentU = this.getCurrentUser();
+    const farm = this.getFarmById(updated.farmId);
+    await this.logActivity(
+      'update_product',
+      `แก้ไขข้อมูลผลผลิต: "${updated.title}" (${updated.price} บาท/${updated.unit})`,
+      {
+        targetMemberId: currentU?.id,
+        targetMemberName: currentU?.fullName,
+        targetFarmName: farm?.farmName || updated.farmName,
+        actorId: currentU?.id,
+        actorName: currentU?.fullName,
+      }
+    );
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1516,11 +1631,27 @@ class DataService {
 
   // ลบผลผลิตออกจากระบบ
   async deleteProduct(productId: string): Promise<boolean> {
+    const prodToDelete = this.products.find((p) => p.id === productId);
     const initialLen = this.products.length;
     this.products = this.products.filter((p) => p.id !== productId);
     if (this.products.length !== initialLen) {
       this.save();
       await this.firestoreDelete('products', productId);
+
+      const currentU = this.getCurrentUser();
+      const farm = prodToDelete ? this.getFarmById(prodToDelete.farmId) : null;
+      await this.logActivity(
+        'delete_product',
+        `ลบผลผลิต: "${prodToDelete?.title || productId}"`,
+        {
+          targetMemberId: currentU?.id,
+          targetMemberName: currentU?.fullName,
+          targetFarmName: farm?.farmName || prodToDelete?.farmName,
+          actorId: currentU?.id,
+          actorName: currentU?.fullName,
+        }
+      );
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('nsw_data_updated'));
       }
@@ -1577,9 +1708,22 @@ class DataService {
 
     this.save();
     const firestoreOk = await this.firestoreUpdate('farms', farmId, farm);
-    if (!firestoreOk && db) {
+    if (!firestoreOk && db && typeof window !== 'undefined') {
       throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
     }
+
+    const currentU = this.getCurrentUser();
+    await this.logActivity(
+      'update_farm',
+      `อัปเดตข้อมูลแปลง: "${farm.farmName}"`,
+      {
+        targetMemberId: farm.memberId,
+        targetMemberName: farm.ownerName,
+        targetFarmName: farm.farmName,
+        actorId: currentU?.id || farm.memberId,
+        actorName: currentU?.fullName || farm.ownerName,
+      }
+    );
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1662,9 +1806,22 @@ class DataService {
     }
     this.save();
     const firestoreOk = await this.firestoreSet('farms', farmId, newFarm);
-    if (!firestoreOk && db) {
+    if (!firestoreOk && db && typeof window !== 'undefined') {
       throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
     }
+
+    await this.logActivity(
+      'create_farm',
+      `สร้างแปลงใหม่: "${newFarm.farmName}" (อ.${newFarm.district} ต.${newFarm.subdistrict})`,
+      {
+        targetMemberId: memberId,
+        targetMemberName: member ? member.fullName : 'สมาชิกเครือข่าย',
+        targetFarmName: newFarm.farmName,
+        actorId: memberId,
+        actorName: member ? member.fullName : 'สมาชิกเครือข่าย',
+      }
+    );
+
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
@@ -1846,6 +2003,186 @@ class DataService {
       window.dispatchEvent(new Event('nsw_data_updated'));
     }
 
+    return { success: true, reassignedCount, deletedName };
+  }
+
+  // ==================== ACTIVITIES & AUDIT LOGGING ====================
+
+  async logActivity(
+    action: AuditLog['action'],
+    details: string,
+    extra?: {
+      targetMemberId?: string;
+      targetMemberName?: string;
+      targetFarmName?: string;
+      actorId?: string;
+      actorName?: string;
+    }
+  ): Promise<void> {
+    const currentUser = this.getCurrentUser();
+    const actorId = extra?.actorId || currentUser?.id || 'guest';
+    const actorName = extra?.actorName || currentUser?.fullName || 'ผู้ใช้งาน';
+
+    const newLog: AuditLog = {
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      action,
+      performedByAdminId: actorId,
+      performedByAdminName: actorName,
+      targetMemberId: extra?.targetMemberId || (currentUser ? currentUser.id : '-'),
+      targetMemberName: extra?.targetMemberName || (currentUser ? currentUser.fullName : '-'),
+      targetFarmName: extra?.targetFarmName || '-',
+      details,
+      timestamp: new Date().toLocaleString('th-TH'),
+    };
+    this.auditLogs.unshift(newLog);
+    this.save();
+    await this.firestoreSet('auditLogs', newLog.id, newLog);
+  }
+
+  // ==================== ADMIN: FARM PRACTICES (วิถีและศาสตร์กสิกรรมธรรมชาติ) ====================
+
+  getPractices(): FarmPracticeTag[] {
+    return this.practices;
+  }
+
+  getActivePracticeNames(): string[] {
+    return this.practices.filter((p) => p.isActive).map((p) => p.name);
+  }
+
+  getPracticeCategoryName(category: PracticeCategory): string {
+    switch (category) {
+      case 'water':
+        return 'ด้านน้ำและการจัดการพื้นที่';
+      case 'soil':
+        return 'ด้านดิน ปุ๋ยหมัก และจุลินทรีย์';
+      case 'forest':
+        return 'ด้านป่าและไม้ยืนต้น';
+      case 'biodiversity':
+        return 'ด้านความหลากหลายและเมล็ดพันธุ์';
+      case 'energy':
+        return 'ด้านพลังงานและแปรรูป';
+      case 'animal':
+        return 'ด้านปศุสัตว์และประมงธรรมชาติ';
+      case 'other':
+      default:
+        return 'กสิกรรมธรรมชาติ / วิถีอื่นๆ';
+    }
+  }
+
+  getFarmCountByPractice(practiceName: string): number {
+    return this.farms.filter((f) => f.practices && f.practices.includes(practiceName)).length;
+  }
+
+  addPracticeTag(data: Omit<FarmPracticeTag, 'id'>): FarmPracticeTag {
+    const newTag: FarmPracticeTag = {
+      ...data,
+      id: `practice-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString().split('T')[0],
+      updatedAt: new Date().toISOString().split('T')[0],
+    };
+    this.practices.push(newTag);
+    this.save();
+    this.firestoreSet('practices', newTag.id, newTag);
+
+    this.logActivity(
+      'create_practice',
+      `เพิ่มวิถี/ศาสตร์กสิกรรมธรรมชาติใหม่: "${newTag.name}" (${newTag.categoryName})`
+    );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return newTag;
+  }
+
+  updatePracticeTag(
+    id: string,
+    updates: Partial<Omit<FarmPracticeTag, 'id'>>
+  ): { success: boolean; practice?: FarmPracticeTag; updatedFarmCount: number } {
+    const tag = this.practices.find((p) => p.id === id);
+    if (!tag) return { success: false, updatedFarmCount: 0 };
+
+    const oldName = tag.name;
+    Object.assign(tag, updates, { updatedAt: new Date().toISOString().split('T')[0] });
+
+    let updatedFarmCount = 0;
+    // Cascade update to all farms if practice name changed!
+    if (updates.name && updates.name !== oldName) {
+      const newName = updates.name;
+      for (const farm of this.farms) {
+        if (farm.practices && farm.practices.includes(oldName)) {
+          farm.practices = farm.practices.map((p) => (p === oldName ? newName : p));
+          this.firestoreUpdate('farms', farm.id, { practices: farm.practices });
+          updatedFarmCount++;
+        }
+      }
+    }
+
+    this.save();
+    this.firestoreUpdate('practices', id, { ...tag });
+
+    this.logActivity(
+      'update_practice',
+      `แก้ไขวิถี/ศาสตร์: "${oldName}" ${updates.name && updates.name !== oldName ? `-> "${updates.name}"` : ''}`
+    );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
+    return { success: true, practice: tag, updatedFarmCount };
+  }
+
+  togglePracticeStatus(id: string): void {
+    const tag = this.practices.find((p) => p.id === id);
+    if (tag) {
+      tag.isActive = !tag.isActive;
+      tag.updatedAt = new Date().toISOString().split('T')[0];
+      this.save();
+      this.firestoreUpdate('practices', id, { isActive: tag.isActive, updatedAt: tag.updatedAt });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+    }
+  }
+
+  deletePracticeTagWithReassign(
+    sourceId: string,
+    targetId?: string
+  ): { success: boolean; reassignedCount: number; deletedName: string } {
+    const tagIdx = this.practices.findIndex((p) => p.id === sourceId);
+    if (tagIdx === -1) return { success: false, reassignedCount: 0, deletedName: '' };
+
+    const deletedTag = this.practices[tagIdx];
+    const deletedName = deletedTag.name;
+    const targetTag = targetId ? this.practices.find((p) => p.id === targetId) : null;
+    let reassignedCount = 0;
+
+    for (const farm of this.farms) {
+      if (farm.practices && farm.practices.includes(deletedName)) {
+        if (targetTag) {
+          farm.practices = Array.from(new Set(farm.practices.map((p) => (p === deletedName ? targetTag.name : p))));
+        } else {
+          farm.practices = farm.practices.filter((p) => p !== deletedName);
+        }
+        this.firestoreUpdate('farms', farm.id, { practices: farm.practices });
+        reassignedCount++;
+      }
+    }
+
+    this.practices.splice(tagIdx, 1);
+    this.save();
+    this.firestoreDelete('practices', sourceId);
+
+    this.logActivity(
+      'delete_practice',
+      targetTag
+        ? `ลบศาสตร์ "${deletedName}" และโยกย้าย ${reassignedCount} แปลงไปยัง "${targetTag.name}"`
+        : `ลบศาสตร์ "${deletedName}" ออกจากระบบ (${reassignedCount} แปลงได้รับผลกระทบ)`
+    );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('nsw_data_updated'));
+    }
     return { success: true, reassignedCount, deletedName };
   }
 

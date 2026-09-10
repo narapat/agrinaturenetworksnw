@@ -49,6 +49,7 @@ export default function FarmDetailPage() {
   // Auto-rotating Slideshow State
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const [practiceOptions, setPracticeOptions] = useState<string[]>(FARM_PRACTICE_OPTIONS);
 
   useEffect(() => {
     if (!farmId) return;
@@ -73,6 +74,7 @@ export default function FarmDetailPage() {
       setProducts(dataService.getProductsByFarmId(farmId));
       setSelectedPractices(f.practices ? [...f.practices] : []);
       setCurrentUser(user);
+      setPracticeOptions(dataService.getActivePracticeNames());
     };
 
     loadFarm();
@@ -422,7 +424,7 @@ export default function FarmDetailPage() {
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
-                    {FARM_PRACTICE_OPTIONS.map((opt) => {
+                    {practiceOptions.map((opt) => {
                       const isSelected = selectedPractices.includes(opt);
                       return (
                         <button

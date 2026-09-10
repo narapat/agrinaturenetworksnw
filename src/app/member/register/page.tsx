@@ -125,16 +125,11 @@ export default function MemberRegisterPage() {
     };
   }, [router]);
 
-  const practiceOptions = [
-    'โคก หนอง นา',
-    'เตาเผาไบโอชาร์ 1,000°C',
-    'น้ำส้มควันไม้ไร้ทาร์',
-    'ปุ๋ยหมักโบกาฉิ / จุลินทรีย์ IMO',
-    'ป่า 3 อย่าง ประโยชน์ 4 อย่าง',
-    'อนุรักษ์เมล็ดพันธุ์พื้นบ้าน',
-    'กล้วยและไม้ผลอินทรีย์',
-    'ไข่ไก่อารมณ์ดี',
-  ];
+  const [practiceOptions, setPracticeOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    setPracticeOptions(dataService.getActivePracticeNames());
+  }, []);
 
   const handleTogglePractice = (item: string) => {
     if (selectedPractices.includes(item)) {

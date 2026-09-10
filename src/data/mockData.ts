@@ -1,4 +1,4 @@
-import { MemberProfile, Farm, Product, CategoryTag, AuditLog, NewsEvent } from '@/types';
+import { MemberProfile, Farm, Product, CategoryTag, FarmPracticeTag, AuditLog, NewsEvent } from '@/types';
 
 export const DISTRICTS_NSW = [
   'เมืองนครสวรรค์',
@@ -22,11 +22,86 @@ export const FARM_PRACTICE_OPTIONS = [
   'โคก หนอง นา',
   'เตาเผาไบโอชาร์ 1,000°C',
   'น้ำส้มควันไม้ไร้ทาร์',
-  'ปุ๋ยหมักโบกาฉิ / จุลินทรีย์ IMO',
+  'น้ำหมักเจ็ดรส',
   'ป่า 3 อย่าง ประโยชน์ 4 อย่าง',
   'อนุรักษ์เมล็ดพันธุ์พื้นบ้าน',
-  'กล้วยและไม้ผลอินทรีย์',
-  'ไข่ไก่อารมณ์ดี',
+  'เกษตรอินทรีย์',
+  'กสิกรรมธรรมชาติ',
+];
+
+export const INITIAL_PRACTICE_TAGS: FarmPracticeTag[] = [
+  {
+    id: 'practice-khok-nong-na',
+    name: 'โคก หนอง นา',
+    category: 'water',
+    categoryName: 'ด้านน้ำและการจัดการพื้นที่',
+    icon: '💧',
+    description: 'การบริหารจัดการน้ำ ดิน และพื้นที่ตามศาสตร์พระราชา เพื่อการพึ่งพาตนเอง',
+    isActive: true,
+  },
+  {
+    id: 'practice-biochar',
+    name: 'เตาเผาไบโอชาร์ 1,000°C',
+    category: 'energy',
+    categoryName: 'ด้านพลังงานและแปรรูป',
+    icon: '🔥',
+    description: 'การเผาถ่านชีวภาพอุณหภูมิสูง ปรับปรุงโครงสร้างดินและกักเก็บคาร์บอน',
+    isActive: true,
+  },
+  {
+    id: 'practice-wood-vinegar',
+    name: 'น้ำส้มควันไม้ไร้ทาร์',
+    category: 'energy',
+    categoryName: 'ด้านพลังงานและแปรรูป',
+    icon: '🪵',
+    description: 'ผลพลอยได้จากการเผาถ่าน ตกตะกอนบริสุทธิ์เพื่อขับไล่แมลงและบำรุงพืช',
+    isActive: true,
+  },
+  {
+    id: 'practice-seven-flavor',
+    name: 'น้ำหมักเจ็ดรส',
+    category: 'soil',
+    categoryName: 'ด้านดิน ปุ๋ยหมัก และจุลินทรีย์',
+    icon: '🧫',
+    description: 'ภูมิปัญญาน้ำหมักชีวภาพ 7 รสชาติ เพื่อการดูแลพืชและปรับปรุงดินตามธรรมชาติ',
+    isActive: true,
+  },
+  {
+    id: 'practice-forest-4-benefits',
+    name: 'ป่า 3 อย่าง ประโยชน์ 4 อย่าง',
+    category: 'forest',
+    categoryName: 'ด้านป่าและไม้ยืนต้น',
+    icon: '🌳',
+    description: 'ปลูกพืชกิน พืชใช้ พืชเศรษฐกิจ และสร้างความร่มเย็น ฟื้นฟูระบบนิเวศ',
+    isActive: true,
+  },
+  {
+    id: 'practice-native-seed',
+    name: 'อนุรักษ์เมล็ดพันธุ์พื้นบ้าน',
+    category: 'biodiversity',
+    categoryName: 'ด้านความหลากหลายและเมล็ดพันธุ์',
+    icon: '🌱',
+    description: 'การคัดเลือก ขยาย และเก็บรักษาเมล็ดพันธุ์แท้เพื่อความมั่นคงทางอาหาร',
+    isActive: true,
+  },
+  {
+    id: 'practice-organic-agri',
+    name: 'เกษตรอินทรีย์',
+    category: 'forest',
+    categoryName: 'ด้านป่าและไม้ยืนต้น',
+    icon: '🌿',
+    description: 'การทำเกษตรปลอดสารเคมี พึ่งพาตนเอง ฟื้นฟูระบบนิเวศธรรมชาติ',
+    isActive: true,
+  },
+  {
+    id: 'practice-agri-nature',
+    name: 'กสิกรรมธรรมชาติ',
+    category: 'other',
+    categoryName: 'กสิกรรมธรรมชาติ / วิถีอื่นๆ',
+    icon: '🌾',
+    description: 'วิถีกสิกรรมตามหลักปรัชญาเศรษฐกิจพอเพียงและศาสตร์พระราชา คืนชีวิตให้แผ่นดิน',
+    isActive: true,
+  },
 ];
 
 export const INITIAL_CATEGORY_TAGS: CategoryTag[] = [

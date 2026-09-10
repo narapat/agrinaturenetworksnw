@@ -62,6 +62,7 @@ export default function MemberDashboardPage() {
   const [editSubdistrict, setEditSubdistrict] = useState('');
   const [editPhotos, setEditPhotos] = useState<string[]>([]);
   const [editPractices, setEditPractices] = useState<string[]>([]);
+  const [practiceOptions, setPracticeOptions] = useState<string[]>(FARM_PRACTICE_OPTIONS);
   const [isSavingPractices, setIsSavingPractices] = useState(false);
   const [practicesSavedToast, setPracticesSavedToast] = useState(false);
   const [isSavingFarm, setIsSavingFarm] = useState(false);
@@ -118,6 +119,8 @@ export default function MemberDashboardPage() {
     const userFarm = user.farmId 
       ? (dataService.getFarmById(user.farmId) || dataService.getFarmByMemberId(user.id))
       : dataService.getFarmByMemberId(user.id);
+
+    setPracticeOptions(dataService.getActivePracticeNames());
 
     // ซิงค์ farmId ให้ตรงกันหากแปลงมีอยู่จริง
     if (userFarm && user.farmId !== userFarm.id) {
@@ -648,7 +651,7 @@ export default function MemberDashboardPage() {
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-            {FARM_PRACTICE_OPTIONS.map((opt) => {
+            {practiceOptions.map((opt) => {
               const isSelected = editPractices.includes(opt);
               return (
                 <button
@@ -1051,7 +1054,7 @@ export default function MemberDashboardPage() {
                   5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {FARM_PRACTICE_OPTIONS.map((opt) => {
+                  {practiceOptions.map((opt) => {
                     const isSelected = editPractices.includes(opt);
                     return (
                       <button

@@ -122,9 +122,52 @@ export interface CategoryTag {
   isActive: boolean;
 }
 
+export type PracticeCategory = 
+  | 'water'         // ด้านน้ำและการจัดการพื้นที่ (โคก หนอง นา, ธนาคารน้ำ)
+  | 'soil'          // ด้านดิน ปุ๋ยหมัก และจุลินทรีย์ (น้ำหมักเจ็ดรส, ปุ๋ยหมัก)
+  | 'forest'        // ด้านป่าและไม้ยืนต้น (ป่า 3 อย่าง 4 ประโยชน์, เกษตรอินทรีย์)
+  | 'biodiversity'  // ด้านความหลากหลายและเมล็ดพันธุ์ (อนุรักษ์เมล็ดพันธุ์)
+  | 'energy'        // ด้านพลังงานและผลพลอยได้ (เตาเผาไบโอชาร์, น้ำส้มควันไม้)
+  | 'animal'        // ด้านปศุสัตว์และประมงธรรมชาติ
+  | 'other';        // กสิกรรมธรรมชาติ / ศาสตร์อื่นๆ
+
+export interface FarmPracticeTag {
+  id: string;
+  name: string;
+  category: PracticeCategory;
+  categoryName: string;
+  icon: string;
+  description: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AuditLog {
   id: string;
-  action: 'assist_create_product' | 'assist_edit_product' | 'assist_update_farm' | 'approve_member' | 'reject_member' | 'assign_admin' | 'revoke_admin' | 'create_news' | 'update_news' | 'delete_news' | 'update_sku' | 'delete_sku' | 'register_member';
+  action: 
+    | 'assist_create_product' 
+    | 'assist_edit_product' 
+    | 'assist_update_farm' 
+    | 'approve_member' 
+    | 'reject_member' 
+    | 'assign_admin' 
+    | 'revoke_admin' 
+    | 'create_news' 
+    | 'update_news' 
+    | 'delete_news' 
+    | 'update_sku' 
+    | 'delete_sku' 
+    | 'create_practice'
+    | 'update_practice'
+    | 'delete_practice'
+    | 'register_member'
+    | 'member_login'
+    | 'create_farm'
+    | 'update_farm'
+    | 'create_product'
+    | 'update_product'
+    | 'delete_product';
   performedByAdminId: string;
   performedByAdminName: string;
   targetMemberId: string;
