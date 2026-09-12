@@ -153,11 +153,11 @@ export async function POST(req: NextRequest) {
     const cleanSubdistrict = typeof subdistrict === 'string' && subdistrict.trim() ? subdistrict.trim().slice(0, 50) : 'เมือง';
     const cleanTagline = typeof tagline === 'string' && tagline.trim() ? tagline.trim().slice(0, 120) : 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง';
     const cleanStory = typeof story === 'string' && story.trim() ? story.trim().slice(0, 1000) : 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์';
-    const cleanLineId = typeof lineId === 'string' && lineId.trim() ? lineId.trim().slice(0, 50) : (tokenPayload.name || cleanPhone);
+    const cleanLineId = typeof lineId === 'string' && lineId.trim() ? lineId.trim().slice(0, 50) : '';
     const cleanTrainingCourse = typeof trainingCourse === 'string' ? trainingCourse.trim().slice(0, 150) : '';
     const cleanTrainingLocation = typeof trainingLocation === 'string' ? trainingLocation.trim().slice(0, 150) : '';
     const cleanIsPublicPhone = Boolean(isPublicPhone);
-    const cleanIsPublicLine = isPublicLine !== undefined ? Boolean(isPublicLine) : true;
+    const cleanIsPublicLine = isPublicLine !== undefined ? Boolean(isPublicLine) : false;
 
     const cleanPractices = Array.isArray(practices)
       ? practices.filter((p): p is string => typeof p === 'string').map((p) => p.trim().slice(0, 50)).slice(0, 20)
@@ -304,9 +304,9 @@ export async function POST(req: NextRequest) {
       isPublicPhone: cleanIsPublicPhone,
       isPublicLine: cleanIsPublicLine,
       phone: cleanIsPublicPhone ? cleanPhone : '',
-      lineId: cleanIsPublicLine ? cleanLineId : '',
+      lineId: cleanIsPublicLine && cleanLineId ? cleanLineId : '',
       socials: {
-        lineId: cleanLineId,
+        lineId: cleanIsPublicLine && cleanLineId ? cleanLineId : '',
       },
       createdAt: createdDateOnly,
       updatedAt: nowIso,

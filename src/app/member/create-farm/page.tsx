@@ -38,7 +38,7 @@ export default function CreateFarmPage() {
   const [phone, setPhone] = useState('');
   const [lineId, setLineId] = useState('');
   const [isPublicPhone, setIsPublicPhone] = useState(false); // ค่าเริ่มต้น: ซ่อนเบอร์โทร (Anti-Scam)
-  const [isPublicLine, setIsPublicLine] = useState(true);
+  const [isPublicLine, setIsPublicLine] = useState(false); // ค่าเริ่มต้น: ซ่อน LINE ID (Opt-in)
   const [selectedPractices, setSelectedPractices] = useState<string[]>([
     'โคก หนอง นา', 
     'กสิกรรมธรรมชาติ'
@@ -93,7 +93,7 @@ export default function CreateFarmPage() {
       if (user.phone) setPhone(user.phone);
       if (user.lineId) setLineId(user.lineId);
       setIsPublicPhone(user.isPublicPhone ?? false);
-      setIsPublicLine(user.isPublicLine ?? true);
+      setIsPublicLine(user.isPublicLine ?? false);
       setIsLoading(false);
     }
 

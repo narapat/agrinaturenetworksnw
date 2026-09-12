@@ -44,7 +44,7 @@ export default function MemberRegisterPage() {
   const [trainingLocation, setTrainingLocation] = useState('');
   const [story, setStory] = useState('');
   const [isPublicPhone, setIsPublicPhone] = useState(false); // ค่าเริ่มต้น: ซ่อนเบอร์โทร (Anti-Scam)
-  const [isPublicLine, setIsPublicLine] = useState(true);
+  const [isPublicLine, setIsPublicLine] = useState(false); // ค่าเริ่มต้น: ซ่อน LINE ID (Opt-in)
   const [selectedPractices, setSelectedPractices] = useState<string[]>(['โคก หนอง นา', 'กสิกรรมธรรมชาติ']);
   const [farmPhotos, setFarmPhotos] = useState<string[]>([
     'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop'

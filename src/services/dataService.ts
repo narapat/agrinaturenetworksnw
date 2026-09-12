@@ -2203,11 +2203,11 @@ class DataService {
       },
       practices: farmData.practices && farmData.practices.length > 0 ? farmData.practices : ['กสิกรรมธรรมชาติ', 'ไร้สารเคมี 100%'],
       isPublicPhone: farmData.isPublicPhone !== undefined ? farmData.isPublicPhone : (member?.isPublicPhone ?? false),
-      isPublicLine: farmData.isPublicLine !== undefined ? farmData.isPublicLine : (member?.isPublicLine ?? true),
-      phone: farmData.phone || member?.phone || '',
-      lineId: farmData.lineId || member?.lineId || '',
+      isPublicLine: farmData.isPublicLine !== undefined ? farmData.isPublicLine : (member?.isPublicLine ?? false),
+      phone: (farmData.isPublicPhone !== undefined ? farmData.isPublicPhone : (member?.isPublicPhone ?? false)) ? (farmData.phone || member?.phone || '') : '',
+      lineId: (farmData.isPublicLine !== undefined ? farmData.isPublicLine : (member?.isPublicLine ?? false)) ? (farmData.lineId || member?.lineId || '') : '',
       socials: {
-        lineId: farmData.lineId || member?.lineId || '',
+        lineId: (farmData.isPublicLine !== undefined ? farmData.isPublicLine : (member?.isPublicLine ?? false)) ? (farmData.lineId || member?.lineId || '') : '',
       },
     };
 

@@ -289,6 +289,23 @@ async function auditAndScan() {
     });
   }
 
+  // ตรวจสอบ farms.lineId ว่ามีค่าเป็นแพทเทิร์นเบอร์โทรศัพท์หรือไม่ (Task D4: Phone leak audit)
+  const phonePattern = /^0[0-9]{8,9}$/;
+  const farmsWithPhoneInLineId = farmAuditResults.filter((f) => {
+    const rawLine = f.raw.lineId ? String(f.raw.lineId).trim().replace(/[-\s]/g, '') : '';
+    return phonePattern.test(rawLine);
+  });
+
+  console.log(`\n   🔍 ตรวจสอบจุดรั่วไหลเบอร์โทรใน farms.lineId (Task D4):`);
+  if (farmsWithPhoneInLineId.length > 0) {
+    console.log(`   ⚠️ พบ ${farmsWithPhoneInLineId.length} แปลงที่มีเบอร์โทรในฟิลด์ lineId:`);
+    farmsWithPhoneInLineId.forEach((f) => {
+      console.log(`      • [${f.id}] "${f.farmName}" (lineId: "${f.raw.lineId}", isPublicLine: ${f.raw.isPublicLine ?? 'none'})`);
+    });
+  } else {
+    console.log(`   ✅ ปลอดภัย: ไม่พบฟิลด์ farms.lineId ที่มีรูปแบบเบอร์โทรศัพท์`);
+  }
+
   // ==========================================
   // 4. DUPLICATE DETECTION (ใบสมัครซ้ำ)
   // ==========================================

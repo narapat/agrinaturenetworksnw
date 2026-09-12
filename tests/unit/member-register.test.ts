@@ -535,5 +535,73 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       // Crucial: batch.commit must NOT be called when idempotent
       expect(mockBatch.commit).not.toHaveBeenCalled();
     });
+
+    it('should default isPublicLine to false and ensure lineId is empty (not phone) when lineId is omitted', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'U_FARMER_NO_LINE_ID',
+          name: 'นายสมบัติ ไม่เล่นไลน์',
+          picture: 'https://profile.line-scdn.net/avatar.jpg',
+        }),
+      } as Response);
+
+      const mockBatchWrites: { refPath: string; data: any }[] = [];
+      const mockBatch = {
+        set: vi.fn((docRef: any, data: any) => {
+          mockBatchWrites.push({ refPath: docRef.path, data });
+        }),
+        create: vi.fn((docRef: any, data: any) => {
+          mockBatchWrites.push({ refPath: docRef.path, data });
+        }),
+        commit: vi.fn(async () => {}),
+      };
+
+      const mockDoc = (path: string) => ({
+        path,
+        get: vi.fn(async () => ({ exists: false })),
+        collection: (subName: string) => mockCollection(`${path}/${subName}`),
+      });
+
+      const mockCollection = (colPath: string): any => ({
+        path: colPath,
+        doc: (docId: string) => mockDoc(`${colPath}/${docId}`),
+      });
+
+      const mockDb = {
+        collection: (name: string) => mockCollection(name),
+        batch: () => mockBatch,
+      };
+
+      vi.spyOn(firebaseAdmin, 'getAdminDb').mockReturnValue(mockDb as any);
+
+      // Register without lineId or isPublicLine
+      const req = new NextRequest('http://localhost:3000/api/member/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer valid.line.token',
+        },
+        body: JSON.stringify({
+          fullName: 'สมบัติ ใจดี',
+          farmName: 'สวนสมบัติธรรมชาติ',
+          phone: '089-876-5432',
+        }),
+      });
+
+      const res = await registerPOST(req);
+      expect(res.status).toBe(201);
+
+      const farmWrite = mockBatchWrites.find((w) => w.refPath.startsWith('farms/farm-') && !w.refPath.includes('/private/'));
+      expect(farmWrite?.data.isPublicLine).toBe(false);
+      expect(farmWrite?.data.lineId).toBe('');
+      expect(farmWrite?.data.socials.lineId).toBe('');
+      expect(farmWrite?.data.lineId).not.toContain('0898765432');
+      expect(farmWrite?.data.lineId).not.toContain('089-876-5432');
+
+      const piiWrite = mockBatchWrites.find((w) => w.refPath.includes('members/') && w.refPath.includes('/private/pii'));
+      expect(piiWrite?.data.lineId).toBe('');
+      expect(piiWrite?.data.lineId).not.toContain('089');
+    });
   });
 });
