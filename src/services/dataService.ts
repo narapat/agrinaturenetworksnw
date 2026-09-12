@@ -393,6 +393,7 @@ class DataService {
                 id: relatedFarm.id,
                 memberId: relatedFarm.memberId,
                 ownerUid: relatedFarm.ownerUid || ownerUid,
+                status: relatedFarm.status || localM.status || 'pending',
                 ownerName: relatedFarm.ownerName,
                 farmName: relatedFarm.farmName,
                 tagline: relatedFarm.tagline,
@@ -836,6 +837,7 @@ class DataService {
       ownerName: farm.ownerName || member?.fullName || 'เกษตรกรเครือข่าย',
       farmName: farm.farmName || member?.farmName || (member?.fullName ? `แปลงกสิกรรม ${member.fullName}` : 'แปลงกสิกรรมธรรมชาติ'),
       tagline: farm.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
+      status: farm.status || member?.status || 'pending',
       story: farm.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์ ยึดหลักเศรษฐกิจพอเพียง',
       photos: (farm.photos && Array.isArray(farm.photos) && farm.photos.length > 0) ? farm.photos : [
         'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop'
@@ -1470,6 +1472,7 @@ class DataService {
       ownerUid: ownerUid,
       ownerName: cleanFullName,
       farmName: cleanFarmName,
+      status: 'pending',
       tagline: (data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง').trim().slice(0, 120),
       story: (data.story || 'แปลงเกษตรกรเครือข่ายกสิกรรมธรรมชาติ จ.นครสวรรค์').trim().slice(0, 1000),
       photos: data.photos && data.photos.length > 0 ? data.photos.slice(0, 10) : [
@@ -1537,6 +1540,7 @@ class DataService {
         id: newFarm.id,
         memberId: newFarm.memberId,
         ownerUid: ownerUid,
+        status: 'pending',
         ownerName: newFarm.ownerName,
         farmName: newFarm.farmName,
         tagline: newFarm.tagline,
@@ -2438,7 +2442,12 @@ class DataService {
     if (member) {
       member.status = 'approved';
 
-      const farm = this.farms.find((f) => f.id === member.farmId);
+      const farm = this.farms.find((f) => f.id === member.farmId || f.memberId === member.id);
+      if (farm) {
+        farm.status = 'approved';
+        this.firestoreUpdate('farms', farm.id, { status: 'approved' });
+      }
+
       const adminId = admin?.id || 'admin-001';
       const adminName = admin?.fullName || 'แอดมินเครือข่าย';
 
@@ -2474,7 +2483,12 @@ class DataService {
     if (member) {
       member.status = 'rejected';
 
-      const farm = this.farms.find((f) => f.id === member.farmId);
+      const farm = this.farms.find((f) => f.id === member.farmId || f.memberId === member.id);
+      if (farm) {
+        farm.status = 'rejected';
+        this.firestoreUpdate('farms', farm.id, { status: 'rejected' });
+      }
+
       const adminId = admin?.id || 'admin-001';
       const adminName = admin?.fullName || 'แอดมินเครือข่าย';
 

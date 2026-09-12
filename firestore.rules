@@ -89,19 +89,22 @@ service cloud.firestore {
                        isAdmin()
                      ));
 
-      // สร้างแปลงใหม่พร้อมข้อมูลที่ถูกต้อง
+      // สร้างแปลงใหม่พร้อมข้อมูลที่ถูกต้อง บังคับสถานะเริ่มต้นต้องเป็น 'pending' (ห้ามตั้ง approved เอง)
       allow create: if isValidString(request.resource.data.farmName, 2, 150)
                     && isValidString(request.resource.data.ownerName, 2, 120)
                     && request.resource.data.district is string
                     && request.resource.data.photos is list
-                    && request.resource.data.photos.size() <= 10;
+                    && request.resource.data.photos.size() <= 10
+                    && (!('status' in request.resource.data) || request.resource.data.status == 'pending');
 
       // อัปเดตข้อมูลแปลง: เจ้าของแปลง (ตรงตาม ownerUid หรือ memberId) หรือ แอดมิน
-      allow update: if isAuthenticated() && (
-        resource.data.ownerUid == request.auth.uid ||
-        resource.data.memberId == request.auth.uid ||
-        isAdmin()
-      );
+      // เจ้าของแปลงแก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด
+      // การอนุมัติ (status == 'approved') ทำได้โดยแอดมินเท่านั้น
+      allow update: if (
+        isAuthenticated() &&
+        (resource.data.ownerUid == request.auth.uid || resource.data.memberId == request.auth.uid) &&
+        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
+      ) || isAdmin();
 
       // ไม่อนุญาตให้ลบแปลงโดยตรง สงวนให้แอดมิน
       allow delete: if isAdmin();

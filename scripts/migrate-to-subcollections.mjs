@@ -51,11 +51,14 @@ async function migrateMembers() {
 
   let migratedCount = 0;
   const memberMap = new Map();
+  const memberStatusMap = new Map();
   const missingOwnerMembers = [];
 
   for (const doc of membersSnapshot.docs) {
     const data = doc.data();
     const memberId = doc.id;
+
+    memberStatusMap.set(memberId, data.status || 'pending');
 
     const ownerUid = data.ownerUid || data.lineUserId || null;
     if (ownerUid) {
@@ -96,7 +99,7 @@ async function migrateMembers() {
     }
 
     await db.collection('members').doc(memberId).set(sanitizedBaseMember);
-    console.log(`  ✓ Migrated member [${memberId}] (${data.fullName}) -> ownerUid: ${ownerUid || 'MISSING'}`);
+    console.log(`  ✓ Migrated member [${memberId}] (${data.fullName}) -> ownerUid: ${ownerUid || 'MISSING'}, status: ${sanitizedBaseMember.status}`);
     migratedCount++;
   }
 
@@ -108,10 +111,10 @@ async function migrateMembers() {
     console.log(`✅ All members have valid lineUserId/ownerUid.`);
   }
 
-  return { memberMap, migratedCount, missingOwnerMembers };
+  return { memberMap, memberStatusMap, migratedCount, missingOwnerMembers };
 }
 
-async function migrateFarms(memberMap) {
+async function migrateFarms(memberMap, memberStatusMap) {
   console.log('\n--- 🚜 Migrating Farms to Subcollections ---');
   const farmsSnapshot = await db.collection('farms').get();
   console.log(`Found ${farmsSnapshot.size} farms in Firestore.`);
@@ -135,6 +138,10 @@ async function migrateFarms(memberMap) {
       });
     }
 
+    // กำหนดสถานะฟาร์มจากข้อมูลเดิม หรือดึงจากสถานะสมาชิก (Option A Backfill)
+    const memberStatus = data.memberId ? memberStatusMap.get(data.memberId) : null;
+    const farmStatus = data.status || memberStatus || 'pending';
+
     // ข้อมูลติดต่อส่วนบุคคลสำหรับ subcollection
     const contactData = {
       internalCoordinates: data.internalCoordinates || null,
@@ -149,17 +156,19 @@ async function migrateFarms(memberMap) {
     // 1. บันทึกลง Subcollection farms/{farmId}/private/contact
     await db.collection('farms').doc(farmId).collection('private').doc('contact').set(contactData, { merge: true });
 
-    // 2. ลบ internalCoordinates ออกจาก Document สาธารณะ (คงเหลือเฉพาะ publicZone) และใส่ ownerUid
+    // 2. ลบ internalCoordinates ออกจาก Document สาธารณะ (คงเหลือเฉพาะ publicZone) และใส่ ownerUid + status
     const sanitizedBaseFarm = { ...data };
     if (ownerUid) {
       sanitizedBaseFarm.ownerUid = ownerUid;
     }
+    sanitizedBaseFarm.status = farmStatus;
+
     delete sanitizedBaseFarm.internalCoordinates;
     if (!data.isPublicPhone) delete sanitizedBaseFarm.phone;
     if (!data.isPublicLine) delete sanitizedBaseFarm.lineId;
 
     await db.collection('farms').doc(farmId).set(sanitizedBaseFarm);
-    console.log(`  ✓ Migrated farm [${farmId}] (${data.farmName || 'Unnamed'}) -> ownerUid: ${ownerUid || 'MISSING'}`);
+    console.log(`  ✓ Migrated farm [${farmId}] (${data.farmName || 'Unnamed'}) -> ownerUid: ${ownerUid || 'MISSING'}, status: ${farmStatus}`);
     migratedCount++;
   }
 
@@ -176,8 +185,8 @@ async function migrateFarms(memberMap) {
 
 async function run() {
   try {
-    const { memberMap, missingOwnerMembers } = await migrateMembers();
-    const { missingOwnerFarms } = await migrateFarms(memberMap);
+    const { memberMap, memberStatusMap, missingOwnerMembers } = await migrateMembers();
+    const { missingOwnerFarms } = await migrateFarms(memberMap, memberStatusMap);
     console.log('\n🎉 All Firestore data successfully migrated to secure Subcollection architecture!');
     console.log(`\n📋 Migration Summary:`);
     console.log(`- Members missing ownerUid: ${missingOwnerMembers.length}`);

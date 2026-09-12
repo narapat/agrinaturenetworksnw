@@ -48,6 +48,7 @@ export interface Farm {
   ownerName: string;
   farmName: string; // ชื่อแปลง / ศูนย์เรียนรู้
   tagline?: string;
+  status?: 'pending' | 'approved' | 'rejected'; // สถานะการอนุมัติแปลง (Option A)
   story: string; // เรื่องเล่าแปลง ปรัชญากสิกรรมธรรมชาติ
   photos: string[];
   district: string; // อำเภอ (ใน 15 อำเภอของนครสวรรค์)

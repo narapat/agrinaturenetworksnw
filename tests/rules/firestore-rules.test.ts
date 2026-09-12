@@ -293,4 +293,38 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       })
     );
   });
+
+  it('17. สมาชิกแก้ status แปลงของตัวเองเป็น approved -> deny', async () => {
+    const bobDb = testEnv.authenticatedContext(BOB_UID, { role: 'member' }).firestore();
+    await assertFails(
+      bobDb.collection('farms').doc(BOB_FARM_ID).update({
+        status: 'approved',
+      })
+    );
+  });
+
+  it('18. สร้างแปลงใหม่โดยส่ง status: "approved" มาด้วย -> deny', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    await assertFails(
+      aliceDb.collection('farms').doc('farm-new-002').set({
+        farmName: 'แปลงใหม่แอบอนุมัติตนเอง',
+        ownerName: 'อลิซ กสิกรรม',
+        district: 'เมืองนครสวรรค์',
+        subdistrict: 'หนองกรด',
+        memberId: ALICE_MEM_ID,
+        ownerUid: ALICE_UID,
+        status: 'approved',
+        photos: [],
+      })
+    );
+  });
+
+  it('19. แอดมินอนุมัติแปลง (status: "approved") -> allow', async () => {
+    const adminDb = testEnv.authenticatedContext(ADMIN_UID, { role: 'admin', admin: true }).firestore();
+    await assertSucceeds(
+      adminDb.collection('farms').doc(BOB_FARM_ID).update({
+        status: 'approved',
+      })
+    );
+  });
 });
