@@ -176,10 +176,16 @@ export async function getPublicFarmsServer(district?: string): Promise<Farm[]> {
  * ดึงข้อมูลแปลงกสิกรรมเดี่ยว (Server-side)
  */
 export async function getFarmByIdServer(id: string): Promise<Farm | null> {
+  if (!id || typeof id !== 'string') return null;
+  const cleanId = id.trim().replace(/"/g, '');
+
   const db = getAdminDb();
   if (db) {
     try {
-      const doc = await db.collection('farms').doc(id).get();
+      let doc = await db.collection('farms').doc(id).get();
+      if (!doc.exists && cleanId !== id) {
+        doc = await db.collection('farms').doc(cleanId).get();
+      }
       if (doc.exists) {
         return sanitizeFarmForPublic({ ...doc.data(), id: doc.id } as Farm);
       }
@@ -188,7 +194,7 @@ export async function getFarmByIdServer(id: string): Promise<Farm | null> {
     }
   }
 
-  const fallback = INITIAL_FARMS.find((f) => f.id === id);
+  const fallback = INITIAL_FARMS.find((f) => f.id === id || f.id === cleanId);
   return fallback ? sanitizeFarmForPublic(fallback) : null;
 }
 
@@ -259,10 +265,16 @@ export async function getPublicProductsServer(filters?: {
  * ดึงข้อมูลผลผลิตเดี่ยว (Server-side)
  */
 export async function getProductByIdServer(id: string): Promise<Product | null> {
+  if (!id || typeof id !== 'string') return null;
+  const cleanId = id.trim().replace(/"/g, '');
+
   const db = getAdminDb();
   if (db) {
     try {
-      const doc = await db.collection('products').doc(id).get();
+      let doc = await db.collection('products').doc(id).get();
+      if (!doc.exists && cleanId !== id) {
+        doc = await db.collection('products').doc(cleanId).get();
+      }
       if (doc.exists) {
         return sanitizeProductForPublic({ ...doc.data(), id: doc.id } as Product);
       }
@@ -271,7 +283,7 @@ export async function getProductByIdServer(id: string): Promise<Product | null> 
     }
   }
 
-  const fallback = INITIAL_PRODUCTS.find((p) => p.id === id);
+  const fallback = INITIAL_PRODUCTS.find((p) => p.id === id || p.id === cleanId);
   return fallback ? sanitizeProductForPublic(fallback) : null;
 }
 

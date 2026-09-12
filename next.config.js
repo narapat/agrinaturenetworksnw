@@ -4,6 +4,9 @@ const nextConfig = {
   images: {
     domains: ['images.unsplash.com'],
   },
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin'],
+  },
 };
 
 module.exports = nextConfig;
