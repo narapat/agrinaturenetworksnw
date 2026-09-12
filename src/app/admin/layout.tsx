@@ -19,12 +19,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     checkAdminAuth();
-    const handleUpdate = () => checkAdminAuth();
-    window.addEventListener('nsw_data_updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'nsw_admin_session' || e.key === 'nsw_user_logged_out') {
+        checkAdminAuth();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
     return () => {
-      window.removeEventListener('nsw_data_updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -58,7 +60,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             dataService.switchUser('admin-001');
           }
           setIsAdminAuthenticated(true);
-          dataService.dispatchDataUpdated();
           setIsLoading(false);
           return;
         }
@@ -107,7 +108,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           dataService.switchUser('admin-001');
         }
         setIsAdminAuthenticated(true);
-        dataService.dispatchDataUpdated();
         window.location.reload();
       } else {
         setErrorMessage(data.message || 'รหัสผ่านแอดมินไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
