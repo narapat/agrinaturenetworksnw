@@ -196,6 +196,14 @@ export default function MemberRegisterPage() {
     setErrorMessage('');
 
     try {
+      const idToken = liffService.getIdToken();
+      if (!idToken) {
+        setSubmitStatus('error');
+        setErrorMessage('ไม่พบข้อมูลการยืนยันตัวตน LINE หรือการเชื่อมต่อหมดอายุ กรุณาลองเข้าสู่ระบบ LINE ใหม่อีกครั้งครับ');
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await dataService.registerNewMember({
         fullName: cleanName,
         facePhotoUrl,
@@ -213,7 +221,7 @@ export default function MemberRegisterPage() {
         isPublicLine,
         practices: selectedPractices,
         photos: farmPhotos,
-      });
+      }, idToken);
 
       if (res.success) {
         setSubmitStatus('success');

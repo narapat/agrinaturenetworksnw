@@ -279,6 +279,13 @@ class LiffService {
     return !!this.liffInstance && this.liffInstance.isLoggedIn();
   }
 
+  getIdToken(): string | null {
+    if (this.liffInstance && this.liffInstance.isLoggedIn()) {
+      return this.liffInstance.getIDToken();
+    }
+    return null;
+  }
+
   isInClient(): boolean {
     return !!this.liffInstance && this.liffInstance.isInClient();
   }

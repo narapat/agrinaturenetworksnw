@@ -363,105 +363,46 @@ class DataService {
         // ===================================================================
         // 🌟 AUTO-RESCUE: ตรวจจับสมาชิกที่สมัครไว้ในเครื่อง (LocalStorage) 
         // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เฉพาะสถานะ pending เท่านั้น)
-        // ส่งขึ้น Cloud Firestore ทันทีอัตโนมัติ เพื่อให้แอดมินมองเห็นและอนุมัติได้
+        // ซิงค์ผ่าน Server API เมื่อมี LINE ID Token
         // ===================================================================
         const unuploadedMembers = this.members.filter(
           (m) => !DEMO_MEMBER_IDS.includes(m.id) && m.status === 'pending' && !remoteMemMap.has(m.id)
         );
 
-        for (const localM of unuploadedMembers) {
+        if (unuploadedMembers.length > 0 && typeof window !== 'undefined') {
           try {
-            console.log(`[Auto-Rescue] Syncing unuploaded local member ${localM.id} (${localM.fullName}) to Cloud Firestore...`);
-            const cleanPhone = (localM.phone || '').trim().replace(/[^\d+-, ]/g, '').slice(0, 20);
-            
-            let safePhoto = localM.facePhotoUrl;
-            if (safePhoto && safePhoto.length > 500000 && typeof window !== 'undefined') {
-              try {
-                safePhoto = await this.compressDataUrlSafe(safePhoto, 400, 0.75);
-              } catch {}
+            const { liffService } = await import('./liffService');
+            const token = liffService.getIdToken();
+            if (token) {
+              for (const localM of unuploadedMembers) {
+                const relatedFarm = this.farms.find((f) => f.id === localM.farmId || f.memberId === localM.id);
+                try {
+                  console.log(`[Auto-Rescue via Server] Syncing unuploaded local member ${localM.id} (${localM.fullName}) via POST /api/member/register...`);
+                  await this.registerNewMember({
+                    fullName: localM.fullName,
+                    facePhotoUrl: localM.facePhotoUrl || '',
+                    farmName: relatedFarm?.farmName || localM.farmName || 'แปลงกสิกรรมธรรมชาติ',
+                    tagline: relatedFarm?.tagline,
+                    story: relatedFarm?.story || '',
+                    district: relatedFarm?.district || 'เมืองนครสวรรค์',
+                    subdistrict: relatedFarm?.subdistrict || 'เมือง',
+                    phone: localM.phone || '',
+                    lineId: localM.lineId || '',
+                    lineUserId: localM.lineUserId,
+                    isPublicPhone: localM.isPublicPhone ?? false,
+                    isPublicLine: localM.isPublicLine ?? true,
+                    practices: relatedFarm?.practices || ['กสิกรรมธรรมชาติ'],
+                    coordinates: relatedFarm?.internalCoordinates,
+                    trainingCourse: localM.trainingCourse,
+                    trainingLocation: localM.trainingLocation,
+                    photos: relatedFarm?.photos,
+                  }, token);
+                } catch (rescueErr) {
+                  console.warn(`[Auto-Rescue via Server] Could not rescue member ${localM.id}:`, rescueErr);
+                }
+              }
             }
-
-            const ownerUid = localM.ownerUid || localM.lineUserId || '';
-
-            // แยก Document หลัก (Public/Member view) และ Subcollection private/pii
-            const publicMemberDoc: Partial<MemberProfile> = {
-              id: localM.id,
-              ownerUid: ownerUid,
-              fullName: localM.fullName,
-              role: localM.role || 'member',
-              status: 'pending', // บังคับสถานะเริ่มต้นต้องเป็น pending เสมอ
-              farmId: localM.farmId || '',
-              farmName: localM.farmName || '',
-              createdAt: localM.createdAt || new Date().toISOString(),
-              delegationStatus: localM.delegationStatus || 'none',
-            };
-
-            const privatePiiDoc = {
-              ownerUid: ownerUid,
-              phone: cleanPhone,
-              lineId: localM.lineId || '',
-              lineUserId: localM.lineUserId || '',
-              facePhotoUrl: safePhoto,
-              trainingCourse: localM.trainingCourse || '',
-              trainingLocation: localM.trainingLocation || '',
-              updatedAt: new Date().toISOString(),
-            };
-
-            await this.firestoreSet('members', localM.id, publicMemberDoc);
-            await this.firestoreSetSubdoc('members', localM.id, 'private', 'pii', privatePiiDoc);
-
-            // ซิงค์แปลงกสิกรรมที่ผูกกันด้วย
-            const relatedFarm = this.farms.find((f) => f.id === localM.farmId || f.memberId === localM.id);
-            if (relatedFarm) {
-              const publicFarmDoc: Partial<Farm> = {
-                id: relatedFarm.id,
-                memberId: relatedFarm.memberId,
-                ownerUid: relatedFarm.ownerUid || ownerUid,
-                status: relatedFarm.status || localM.status || 'pending',
-                ownerName: relatedFarm.ownerName,
-                farmName: relatedFarm.farmName,
-                tagline: relatedFarm.tagline,
-                story: relatedFarm.story,
-                photos: relatedFarm.photos,
-                district: relatedFarm.district,
-                subdistrict: relatedFarm.subdistrict,
-                publicZone: relatedFarm.publicZone,
-                practices: relatedFarm.practices,
-                isPublicPhone: relatedFarm.isPublicPhone,
-                isPublicLine: relatedFarm.isPublicLine,
-                phone: relatedFarm.isPublicPhone ? relatedFarm.phone : undefined,
-                lineId: relatedFarm.isPublicLine ? relatedFarm.lineId : undefined,
-                socials: relatedFarm.socials,
-              };
-
-              const privateContactDoc = {
-                ownerUid: relatedFarm.ownerUid || ownerUid,
-                internalCoordinates: relatedFarm.internalCoordinates,
-                phone: relatedFarm.phone,
-                lineId: relatedFarm.lineId,
-                updatedAt: new Date().toISOString(),
-              };
-
-              await this.firestoreSet('farms', relatedFarm.id, publicFarmDoc);
-              await this.firestoreSetSubdoc('farms', relatedFarm.id, 'private', 'contact', privateContactDoc);
-            }
-
-            // บันทึก Audit Log ผ่าน Server API
-            await this.recordAuditLog({
-              id: `log-rescue-${Date.now()}`,
-              action: 'register_member',
-              performedByAdminId: localM.lineUserId || localM.id,
-              performedByAdminName: localM.fullName,
-              targetMemberId: localM.id,
-              targetMemberName: localM.fullName,
-              targetFarmName: relatedFarm?.farmName || '-',
-              timestamp: new Date().toLocaleString('th-TH'),
-              details: `ระบบ Auto-Rescue ซิงค์ข้อมูลใบสมัครที่ค้างในเครื่องขึ้น Cloud Firestore อัตโนมัติ (แปลง: ${relatedFarm?.farmName || '-'})`,
-            });
-            console.log(`[Auto-Rescue] Successfully uploaded member ${localM.id} and farm to Cloud Firestore!`);
-          } catch (rescueErr) {
-            console.warn(`[Auto-Rescue] Error pushing member ${localM.id} to Firestore:`, rescueErr);
-          }
+          } catch {}
         }
       } catch (err) {
         console.warn('Firestore sync [members] notice:', err);
@@ -499,38 +440,35 @@ class DataService {
                    this.members.some((m) => m.id === f.memberId || m.farmId === f.id)
           );
 
-          for (const localF of unuploadedFarms) {
+          if (unuploadedFarms.length > 0 && typeof window !== 'undefined') {
             try {
-              console.log(`[Auto-Rescue] Syncing unuploaded local farm ${localF.id} (${localF.farmName}) to Cloud Firestore...`);
-              let safePhotos = localF.photos || [];
-              if (safePhotos.length > 0 && typeof window !== 'undefined') {
-                const processedPhotos: string[] = [];
-                for (const p of safePhotos) {
-                  if (p && p.startsWith('data:image/') && p.length > 70000) {
-                    try {
-                      const comp = await this.compressDataUrlSafe(p, 800, 0.70);
-                      processedPhotos.push(comp);
-                    } catch {
-                      processedPhotos.push(p);
-                    }
-                  } else {
-                    processedPhotos.push(p);
+              const { liffService } = await import('./liffService');
+              const token = liffService.getIdToken();
+              if (token) {
+                for (const localF of unuploadedFarms) {
+                  if (!localF.memberId) continue;
+                  try {
+                    console.log(`[Auto-Rescue via Server] Syncing unuploaded local farm ${localF.id} (${localF.farmName}) via POST /api/farm/create...`);
+                    await this.createFarm(localF.memberId, {
+                      farmName: localF.farmName,
+                      tagline: localF.tagline,
+                      story: localF.story,
+                      district: localF.district,
+                      subdistrict: localF.subdistrict,
+                      photos: localF.photos,
+                      practices: localF.practices,
+                      coordinates: localF.internalCoordinates,
+                      phone: localF.phone,
+                      lineId: localF.lineId,
+                      isPublicPhone: localF.isPublicPhone,
+                      isPublicLine: localF.isPublicLine,
+                    }, token);
+                  } catch (fErr) {
+                    console.warn(`[Auto-Rescue via Server] Could not rescue farm ${localF.id}:`, fErr);
                   }
                 }
-                safePhotos = processedPhotos;
               }
-
-              const farmToUpload: Farm = {
-                ...localF,
-                photos: safePhotos,
-              };
-
-              await this.firestoreSet('farms', farmToUpload.id, farmToUpload);
-              remoteFarmMap.set(farmToUpload.id, farmToUpload);
-              console.log(`[Auto-Rescue] Successfully uploaded local farm ${farmToUpload.id} to Firestore!`);
-            } catch (fErr) {
-              console.warn(`[Auto-Rescue] Error uploading local farm ${localF.id} to Firestore:`, fErr);
-            }
+            } catch {}
           }
 
           // จุดสำคัญ: ผสานข้อมูลจริงจาก Cloud Firestore กับข้อมูลในเครื่อง
@@ -1551,32 +1489,85 @@ class DataService {
    * สมาชิกเกษตรกรลงทะเบียนแปลงใหม่ (สถานะเริ่มต้น: รออนุมัติ pending)
    * บันทึกข้อมูลแบบ Asynchronous พร้อมตรวจสอบความถูกต้อง และจัดเก็บ Audit Log
    */
-  async registerNewMember(data: {
-    fullName: string;
-    facePhotoUrl: string;
-    farmName: string;
-    tagline?: string;
-    story: string;
-    district: string;
-    subdistrict: string;
-    phone: string;
-    lineId: string;
-    lineUserId?: string;
-    isPublicPhone: boolean;
-    isPublicLine: boolean;
-    practices: string[];
-    coordinates?: { lat: number; lng: number };
-    trainingCourse?: string;
-    trainingLocation?: string;
-    photos?: string[];
-  }): Promise<{ member: MemberProfile; farm: Farm; success: boolean; firestoreSynced: boolean }> {
+  async registerNewMember(
+    data: {
+      fullName: string;
+      facePhotoUrl: string;
+      farmName: string;
+      tagline?: string;
+      story: string;
+      district: string;
+      subdistrict: string;
+      phone: string;
+      lineId: string;
+      lineUserId?: string;
+      isPublicPhone: boolean;
+      isPublicLine: boolean;
+      practices: string[];
+      coordinates?: { lat: number; lng: number };
+      trainingCourse?: string;
+      trainingLocation?: string;
+      photos?: string[];
+    },
+    idToken?: string
+  ): Promise<{ member: MemberProfile; farm: Farm; success: boolean; firestoreSynced: boolean }> {
+    // 1. ตรวจสอบว่ามี LINE ID Token หรือไม่ เพื่อเรียกใช้ Server Registration API (POST /api/member/register)
+    let token = idToken;
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const { liffService } = await import('./liffService');
+        token = liffService.getIdToken() || undefined;
+      } catch {}
+    }
+
+    if (token) {
+      const response = await fetch('/api/member/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          ...data,
+          requestId: `req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        }),
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'การลงทะเบียนผ่านเซิร์ฟเวอร์ล้มเหลว กรุณาลองใหม่อีกครั้ง');
+      }
+
+      const registeredMember: MemberProfile = resData.member;
+      const registeredFarm: Farm = resData.farm;
+
+      // บันทึกลง Local Cache
+      this.members = this.members.filter((m) => m.id !== registeredMember.id);
+      this.members.unshift(registeredMember);
+      this.farms = this.farms.filter((f) => f.id !== registeredFarm.id);
+      this.farms.unshift(registeredFarm);
+      this.currentUserId = registeredMember.id;
+      this.save();
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+
+      return {
+        member: registeredMember,
+        farm: registeredFarm,
+        success: true,
+        firestoreSynced: true,
+      };
+    }
+
+    // 2. Fallback สำหรับสภาพแวดล้อมทดสอบที่ไม่มี LINE Token (In-memory Unit Tests)
     const memberId = `mem-${Date.now()}`;
     const farmId = `farm-${Date.now()}`;
 
-    // ทำความสะอาดและกรองข้อมูล (Sanitization) ป้องกัน Firestore Error
     const cleanFullName = data.fullName.trim().slice(0, 100);
     const cleanFarmName = data.farmName.trim().slice(0, 100);
-    const cleanPhone = data.phone.trim().replace(/[^\d+-, ]/g, '').slice(0, 20);
+    const cleanPhone = data.phone.trim().replace(/[^\d+\-, ]/g, '').slice(0, 20);
     const cleanLineId = data.lineId.trim().slice(0, 50);
     const cleanDistrict = data.district.trim();
     const cleanSubdistrict = data.subdistrict.trim().slice(0, 50);
@@ -1625,7 +1616,7 @@ class DataService {
       facePhotoUrl: data.facePhotoUrl,
       role: 'member',
       roles: ['member'],
-      status: 'pending', // ต้องให้แอดมินเครือข่ายตรวจสอบและอนุมัติก่อน
+      status: 'pending',
       fontSizePref: 'normal',
       phone: cleanPhone,
       lineId: cleanLineId,
@@ -1642,101 +1633,10 @@ class DataService {
       createdAt: new Date().toISOString().split('T')[0],
     };
 
-    // 1. บันทึกลง local cache ทันทีเพื่อความลื่นไหลของระบบ
     this.farms.unshift(newFarm);
     this.members.unshift(newMember);
-    this.currentUserId = memberId; // สลับผู้ใช้เป็นสมาชิกใหม่ทันที
+    this.currentUserId = memberId;
     this.save();
-
-    // 2. บันทึกและรอผลจาก Cloud Firestore แยก Subcollections ป้องกันข้อมูลรั่วไหล 100%
-    let memberSaved = false;
-    let farmSaved = false;
-    try {
-      // 2.1 แยกข้อมูล Farm: Document หลัก (สาธารณะ) vs Subcollection private/contact
-      const publicFarmDoc: Partial<Farm> = {
-        id: newFarm.id,
-        memberId: newFarm.memberId,
-        ownerUid: ownerUid,
-        status: 'pending',
-        ownerName: newFarm.ownerName,
-        farmName: newFarm.farmName,
-        tagline: newFarm.tagline,
-        story: newFarm.story,
-        photos: newFarm.photos,
-        district: newFarm.district,
-        subdistrict: newFarm.subdistrict,
-        publicZone: newFarm.publicZone,
-        practices: newFarm.practices,
-        isPublicPhone: newFarm.isPublicPhone,
-        isPublicLine: newFarm.isPublicLine,
-        phone: newFarm.isPublicPhone ? newFarm.phone : undefined,
-        lineId: newFarm.isPublicLine ? newFarm.lineId : undefined,
-        socials: newFarm.socials,
-      };
-
-      const privateContactDoc = {
-        ownerUid: ownerUid,
-        internalCoordinates: newFarm.internalCoordinates,
-        phone: newFarm.phone,
-        lineId: newFarm.lineId,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // 2.2 แยกข้อมูล Member: Document หลัก vs Subcollection private/pii
-      const publicMemberDoc: Partial<MemberProfile> = {
-        id: newMember.id,
-        ownerUid: ownerUid,
-        fullName: newMember.fullName,
-        role: newMember.role,
-        status: newMember.status,
-        farmId: newMember.farmId,
-        farmName: cleanFarmName,
-        createdAt: newMember.createdAt,
-        delegationStatus: newMember.delegationStatus,
-      };
-
-      const privatePiiDoc = {
-        ownerUid: ownerUid,
-        phone: cleanPhone,
-        lineId: cleanLineId,
-        lineUserId: data.lineUserId || '',
-        facePhotoUrl: data.facePhotoUrl,
-        trainingCourse: (data.trainingCourse || '').trim(),
-        trainingLocation: (data.trainingLocation || '').trim(),
-        isPublicPhone: data.isPublicPhone,
-        isPublicLine: data.isPublicLine,
-        updatedAt: new Date().toISOString(),
-      };
-
-      const [mRes, fRes] = await Promise.all([
-        this.firestoreSet('members', newMember.id, publicMemberDoc),
-        this.firestoreSet('farms', newFarm.id, publicFarmDoc),
-      ]);
-      memberSaved = mRes;
-      farmSaved = fRes;
-
-      // บันทึก Subcollections
-      await Promise.all([
-        this.firestoreSetSubdoc('members', newMember.id, 'private', 'pii', privatePiiDoc),
-        this.firestoreSetSubdoc('farms', newFarm.id, 'private', 'contact', privateContactDoc),
-      ]);
-    } catch (err) {
-      console.warn('Firestore write error in registerNewMember:', err);
-    }
-
-    // 3. จัดเก็บ Audit Log บันทึกประวัติการสมัครสมาชิกผ่าน Server API
-    const auditLog: AuditLog = {
-      id: `log-${Date.now()}`,
-      action: 'register_member',
-      performedByAdminId: data.lineUserId || memberId,
-      performedByAdminName: cleanFullName,
-      targetMemberId: memberId,
-      targetMemberName: cleanFullName,
-      targetFarmName: cleanFarmName,
-      timestamp: new Date().toLocaleString('th-TH'),
-      details: `สมาชิก ${cleanFullName} ลงทะเบียนแปลง ${cleanFarmName} รอดำเนินการอนุมัติ`,
-    };
-    await this.recordAuditLog(auditLog);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
@@ -1746,7 +1646,7 @@ class DataService {
       member: newMember, 
       farm: newFarm, 
       success: true, 
-      firestoreSynced: memberSaved 
+      firestoreSynced: false 
     };
   }
 
@@ -2115,10 +2015,10 @@ class DataService {
       lineId?: string;
       isPublicPhone?: boolean;
       isPublicLine?: boolean;
-    }
+    },
+    idToken?: string
   ): Promise<Farm> {
     const member = this.members.find((m) => m.id === memberId);
-    const farmId = `farm-${Date.now()}`;
     const rawPhotos = farmData.photos && farmData.photos.length > 0 ? farmData.photos : [
       'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&h=500&fit=crop',
     ];
@@ -2138,6 +2038,51 @@ class DataService {
       }
     }
 
+    // 1. หากมี LINE ID Token ให้เรียกใช้ Server API (POST /api/farm/create)
+    let token = idToken;
+    if (!token && typeof window !== 'undefined') {
+      try {
+        const { liffService } = await import('./liffService');
+        token = liffService.getIdToken() || undefined;
+      } catch {}
+    }
+
+    if (token) {
+      const response = await fetch('/api/farm/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          memberId,
+          ...farmData,
+          photos: safePhotos,
+        }),
+      });
+
+      const resData = await response.json().catch(() => ({}));
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'การสร้างแปลงผ่านเซิร์ฟเวอร์ล้มเหลว กรุณาลองใหม่อีกครั้ง');
+      }
+
+      const createdFarm: Farm = resData.farm;
+      this.farms = this.farms.filter((f) => f.id !== createdFarm.id);
+      this.farms.unshift(createdFarm);
+      if (member) {
+        member.farmId = createdFarm.id;
+        member.farmName = createdFarm.farmName;
+      }
+      this.save();
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('nsw_data_updated'));
+      }
+      return createdFarm;
+    }
+
+    // 2. Fallback สำหรับสภาพแวดล้อม Local / Offline Unit Tests
+    const farmId = `farm-${Date.now()}`;
     const newFarm: Farm = {
       id: farmId,
       memberId: memberId,
@@ -2171,13 +2116,9 @@ class DataService {
     this.farms.unshift(newFarm);
     if (member) {
       member.farmId = farmId;
-      await this.firestoreUpdate('members', member.id, { farmId });
+      member.farmName = newFarm.farmName;
     }
     this.save();
-    const firestoreOk = await this.firestoreSet('farms', farmId, newFarm);
-    if (!firestoreOk && db && typeof window !== 'undefined') {
-      throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
-    }
 
     await this.logActivity(
       'create_farm',

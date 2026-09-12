@@ -130,6 +130,13 @@ export default function CreateFarmPage() {
     setIsSubmitting(true);
     setCreateError(null);
 
+    const idToken = liffService.getIdToken();
+    if (!idToken) {
+      setCreateError('ไม่พบข้อมูลการยืนยันตัวตน LINE หรือการเชื่อมต่อหมดอายุ กรุณาลองเข้าสู่ระบบ LINE ใหม่อีกครั้งครับ');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       await dataService.createFarm(currentUser.id, {
         farmName: farmName.trim(),
@@ -143,7 +150,7 @@ export default function CreateFarmPage() {
         isPublicLine,
         practices: selectedPractices,
         photos: farmPhotos,
-      });
+      }, idToken);
 
       setIsSubmitted(true);
       setTimeout(() => {
