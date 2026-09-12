@@ -357,4 +357,64 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       })
     );
   });
+
+  // ========================================================
+  // Phase 4 Collection & List Query Tests (Cases 22 - 27)
+  // ========================================================
+
+  it('22. guest collection("farms").get() แบบไม่มี where -> deny', async () => {
+    const guestDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(guestDb.collection('farms').get());
+  });
+
+  it('23. guest collection("farms").where("status", "==", "approved").get() -> allow', async () => {
+    const guestDb = testEnv.unauthenticatedContext().firestore();
+    await assertSucceeds(
+      guestDb.collection('farms').where('status', '==', 'approved').get()
+    );
+  });
+
+  it('24. สมาชิกธรรมดา collection("farms").get() แบบไม่มี where -> deny', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    await assertFails(aliceDb.collection('farms').get());
+  });
+
+  it('25. แอดมิน collection("farms").get() -> allow', async () => {
+    const adminDb = testEnv.authenticatedContext(ADMIN_UID, { role: 'admin', admin: true }).firestore();
+    await assertSucceeds(adminDb.collection('farms').get());
+  });
+
+  it('26. guest collection("members").get() -> deny', async () => {
+    const guestDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(guestDb.collection('members').get());
+  });
+
+  it('27. สมาชิกสร้าง members / farms ตรงจาก client -> deny (หลัง 4.1 ปิด create)', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    // สมาชิกสร้าง member ตรงจาก client -> deny
+    await assertFails(
+      aliceDb.collection('members').doc('mem-client-direct').set({
+        fullName: 'สมาชิกสร้างตรง',
+        role: 'member',
+        status: 'pending',
+      })
+    );
+    // สมาชิกสร้าง farm ตรงจาก client -> deny
+    await assertFails(
+      aliceDb.collection('farms').doc('farm-client-direct').set({
+        farmName: 'แปลงสร้างตรง',
+        ownerName: 'อลิซ กสิกรรม',
+        district: 'เมืองนครสวรรค์',
+        status: 'pending',
+        photos: [],
+      })
+    );
+  });
+
+  it('28. สมาชิกดึงแปลงของตนเอง collection("farms").where("ownerUid", "==", ALICE_UID).get() -> allow (แม้สถานะ pending)', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    await assertSucceeds(
+      aliceDb.collection('farms').where('ownerUid', '==', ALICE_UID).get()
+    );
+  });
 });

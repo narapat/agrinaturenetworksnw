@@ -44,10 +44,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // การสมัครสมาชิกใหม่ (Self-registration):
-      // บังคับสถานะเริ่มต้นต้องเป็น 'pending' เสมอ (ห้ามตั้งเป็น 'approved' หรือ 'admin' เอง)
-      allow create: if isValidString(request.resource.data.fullName, 2, 120)
-                    && (request.resource.data.role == 'member' || request.resource.data.role == 'guest')
-                    && request.resource.data.status == 'pending';
+      // ปิดการสร้างโดยตรงจาก Client (บังคับสมัครผ่าน POST /api/member/register บน Server API เท่านั้น)
+      allow create: if false;
 
       // การแก้ไขข้อมูลสมาชิก:
       // เจ้าของบัญชี (ตรงตาม ownerUid หรือ memberId) แก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด
@@ -89,13 +87,9 @@ service cloud.firestore {
                        isAdmin()
                      ));
 
-      // สร้างแปลงใหม่พร้อมข้อมูลที่ถูกต้อง บังคับสถานะเริ่มต้นต้องเป็น 'pending' (ห้ามตั้ง approved เอง)
-      allow create: if isValidString(request.resource.data.farmName, 2, 150)
-                    && isValidString(request.resource.data.ownerName, 2, 120)
-                    && request.resource.data.district is string
-                    && request.resource.data.photos is list
-                    && request.resource.data.photos.size() <= 10
-                    && (!('status' in request.resource.data) || request.resource.data.status == 'pending');
+      // สร้างแปลงใหม่:
+      // ปิดการสร้างโดยตรงจาก Client (บังคับสร้างผ่าน POST /api/farm/create หรือ POST /api/member/register บน Server API เท่านั้น)
+      allow create: if false;
 
       // อัปเดตข้อมูลแปลง: เจ้าของแปลง (ตรงตาม ownerUid หรือ memberId) หรือ แอดมิน
       // เจ้าของแปลงแก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด

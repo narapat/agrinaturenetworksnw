@@ -424,8 +424,32 @@ class DataService {
           farmsSnap = await getDocs(q);
         }
 
+        const remoteFarms: Farm[] = [];
         if (!farmsSnap.empty) {
-          const remoteFarms = farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm));
+          remoteFarms.push(...farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm)));
+        }
+
+        // ดึงแปลงของตนเองเพิ่มเติมสำหรับสมาชิกที่ล็อกอินอยู่ (แม้สถานะยังเป็น pending)
+        const currentUser = this.getCurrentUser();
+        const currentOwnerUid = currentUser?.ownerUid || currentUser?.lineUserId;
+        if (currentOwnerUid && !this.isAdminSession()) {
+          try {
+            const myFarmsQ = query(collection(db, 'farms'), where('ownerUid', '==', currentOwnerUid));
+            const myFarmsSnap = await getDocs(myFarmsQ);
+            if (!myFarmsSnap.empty) {
+              for (const doc of myFarmsSnap.docs) {
+                const fData = this.normalizeFarm(doc.data() as Farm);
+                if (!remoteFarms.some((f) => f.id === fData.id)) {
+                  remoteFarms.push(fData);
+                }
+              }
+            }
+          } catch (myFarmsErr) {
+            console.warn('Firestore sync [my-farms] notice:', myFarmsErr);
+          }
+        }
+
+        if (remoteFarms.length > 0) {
           const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
           const initialFarmIds = new Set(INITIAL_FARMS.map((f) => f.id));
 
