@@ -120,6 +120,7 @@ async function migrateFarms(memberMap, memberStatusMap) {
   console.log(`Found ${farmsSnapshot.size} farms in Firestore.`);
 
   let migratedCount = 0;
+  const farmMap = new Map();
   const missingOwnerFarms = [];
 
   for (const doc of farmsSnapshot.docs) {
@@ -130,7 +131,9 @@ async function migrateFarms(memberMap, memberStatusMap) {
     const memberOwnerUid = data.memberId ? memberMap.get(data.memberId) : null;
     const ownerUid = data.ownerUid || memberOwnerUid || null;
 
-    if (!ownerUid) {
+    if (ownerUid) {
+      farmMap.set(farmId, ownerUid);
+    } else {
       missingOwnerFarms.push({
         id: farmId,
         farmName: data.farmName || 'Unnamed',
@@ -180,17 +183,63 @@ async function migrateFarms(memberMap, memberStatusMap) {
     console.log(`✅ All farms successfully mapped to an ownerUid.`);
   }
 
-  return { migratedCount, missingOwnerFarms };
+  return { farmMap, migratedCount, missingOwnerFarms };
+}
+
+async function migrateProducts(farmMap) {
+  console.log('\n--- 🛒 Migrating Products (Backfill ownerUid) ---');
+  const productsSnapshot = await db.collection('products').get();
+  console.log(`Found ${productsSnapshot.size} products in Firestore.`);
+
+  let migratedCount = 0;
+  const missingOwnerProducts = [];
+
+  for (const doc of productsSnapshot.docs) {
+    const data = doc.data();
+    const productId = doc.id;
+
+    const farmOwnerUid = data.farmId ? farmMap.get(data.farmId) : null;
+    const ownerUid = data.ownerUid || farmOwnerUid || null;
+
+    if (!ownerUid) {
+      missingOwnerProducts.push({
+        id: productId,
+        title: data.title || 'Unnamed',
+        farmId: data.farmId || 'None',
+      });
+    }
+
+    const updatedProduct = {
+      ...data,
+      ownerUid: ownerUid || data.ownerUid || '',
+    };
+
+    await db.collection('products').doc(productId).set(updatedProduct);
+    console.log(`  ✓ Migrated product [${productId}] (${data.title || 'Unnamed'}) -> ownerUid: ${ownerUid || 'MISSING'}`);
+    migratedCount++;
+  }
+
+  console.log(`✅ Finished migrating ${migratedCount} products.`);
+  if (missingOwnerProducts.length > 0) {
+    console.warn(`⚠️ Warning: ${missingOwnerProducts.length} products have NO ownerUid:`);
+    missingOwnerProducts.forEach((p) => console.warn(`   - Product [${p.id}] "${p.title}" (farmId: ${p.farmId})`));
+  } else {
+    console.log(`✅ All products successfully mapped to an ownerUid.`);
+  }
+
+  return { migratedCount, missingOwnerProducts };
 }
 
 async function run() {
   try {
     const { memberMap, memberStatusMap, missingOwnerMembers } = await migrateMembers();
-    const { missingOwnerFarms } = await migrateFarms(memberMap, memberStatusMap);
+    const { farmMap, missingOwnerFarms } = await migrateFarms(memberMap, memberStatusMap);
+    const { missingOwnerProducts } = await migrateProducts(farmMap);
     console.log('\n🎉 All Firestore data successfully migrated to secure Subcollection architecture!');
     console.log(`\n📋 Migration Summary:`);
     console.log(`- Members missing ownerUid: ${missingOwnerMembers.length}`);
     console.log(`- Farms missing ownerUid: ${missingOwnerFarms.length}`);
+    console.log(`- Products missing ownerUid: ${missingOwnerProducts.length}`);
   } catch (err) {
     console.error('❌ Migration failed:', err);
     process.exit(1);

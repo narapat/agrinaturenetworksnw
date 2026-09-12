@@ -567,8 +567,11 @@ class DataService {
               safeImages = processedImages;
             }
 
+            const farm = this.farms.find((f) => f.id === localP.farmId);
+            const ownerUid = localP.ownerUid || farm?.ownerUid || '';
             const productToUpload: Product = {
               ...localP,
+              ownerUid: ownerUid,
               images: safeImages,
             };
 
@@ -1681,9 +1684,12 @@ class DataService {
       safeImages = processed;
     }
 
+    const ownerUid = farm.ownerUid || member.ownerUid || member.lineUserId || '';
+
     const newProduct: Product = {
       ...productData,
       id: `prod-${Date.now()}`,
+      ownerUid: ownerUid,
       images: safeImages,
       farmId: farm.id,
       farmName: farm.farmName,
@@ -1748,9 +1754,14 @@ class DataService {
       safeImages = processed;
     }
 
+    const currentU = this.getCurrentUser();
+    const farm = this.getFarmById(productData.farmId);
+    const ownerUid = currentU?.ownerUid || currentU?.lineUserId || farm?.ownerUid || '';
+
     const newProduct: Product = {
       ...productData,
       id: `prod-${Date.now()}`,
+      ownerUid: ownerUid,
       images: safeImages,
       updatedAt: new Date().toISOString().split('T')[0],
     };
@@ -1758,8 +1769,6 @@ class DataService {
     this.save();
     await this.firestoreSet('products', newProduct.id, newProduct);
 
-    const currentU = this.getCurrentUser();
-    const farm = this.getFarmById(newProduct.farmId);
     await this.logActivity(
       'create_product',
       `เพิ่มผลผลิตใหม่: "${newProduct.title}" ราคา ${newProduct.price} บาท/${newProduct.unit}`,
@@ -1840,9 +1849,12 @@ class DataService {
     }
 
     const existing = this.products[index];
+    const farm = this.getFarmById(existing.farmId);
+    const ownerUid = existing.ownerUid || farm?.ownerUid || '';
     const updated: Product = {
       ...existing,
       ...updatedData,
+      ownerUid: ownerUid || existing.ownerUid,
       id: existing.id,
       farmId: existing.farmId,
       updatedAt: new Date().toISOString().split('T')[0],
@@ -1853,14 +1865,14 @@ class DataService {
     await this.firestoreUpdate('products', productId, updated);
 
     const currentU = this.getCurrentUser();
-    const farm = this.getFarmById(updated.farmId);
+    const updatedFarm = this.getFarmById(updated.farmId);
     await this.logActivity(
       'update_product',
       `แก้ไขข้อมูลผลผลิต: "${updated.title}" (${updated.price} บาท/${updated.unit})`,
       {
         targetMemberId: currentU?.id,
         targetMemberName: currentU?.fullName,
-        targetFarmName: farm?.farmName || updated.farmName,
+        targetFarmName: updatedFarm?.farmName || updated.farmName,
         actorId: currentU?.id,
         actorName: currentU?.fullName,
       }

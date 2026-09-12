@@ -79,6 +79,7 @@ export interface Product {
   id: string;
   farmId: string;
   farmName: string;
+  ownerUid?: string; // LINE User ID (Firebase Auth UID) ของเจ้าของผลผลิต
   district: string;
   subdistrict: string;
   title: string; // เช่น "ถ่านไบโอชาร์อุณหภูมิสูง", "น้ำส้มควันไม้บริสุทธิ์"

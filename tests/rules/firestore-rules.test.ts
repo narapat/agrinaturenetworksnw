@@ -127,6 +127,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
 
       // 5. Products
       await db.collection('products').doc(ALICE_PROD_ID).set({
+        ownerUid: ALICE_UID,
         farmId: ALICE_FARM_ID,
         farmName: 'แปลงอลิซ เกษตรอินทรีย์',
         title: 'น้ำส้มควันไม้แท้',
@@ -136,6 +137,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       });
 
       await db.collection('products').doc(BOB_PROD_ID).set({
+        ownerUid: BOB_UID,
         farmId: BOB_FARM_ID,
         farmName: 'แปลงบ็อบ โคกหนองนา',
         title: 'ปุ๋ยหมักโบกาฉิ',
@@ -243,7 +245,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
     );
   });
 
-  it('12. สมาชิก A แก้หรือลบ product ของสมาชิก B -> deny (EXPECTED TO FAIL ON CURRENT RULES)', async () => {
+  it('12. สมาชิก A แก้หรือลบ product ของสมาชิก B -> deny', async () => {
     const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
     // อลิซพยายามแก้ราคาสินค้าของบ็อบ
     await assertFails(
@@ -324,6 +326,34 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
     await assertSucceeds(
       adminDb.collection('farms').doc(BOB_FARM_ID).update({
         status: 'approved',
+      })
+    );
+  });
+
+  it('20. สมาชิกสร้าง product โดยใส่ ownerUid ของคนอื่น -> deny', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    await assertFails(
+      aliceDb.collection('products').doc('prod-alice-fake-001').set({
+        farmId: ALICE_FARM_ID,
+        title: 'สินค้าปลอมแปลงของอลิซแต่ใส่ชื่อบ็อบ',
+        price: 150,
+        status: 'sale',
+        images: [],
+        ownerUid: BOB_UID, // ปลอมแปลง ownerUid เป็นของ Bob
+      })
+    );
+  });
+
+  it('21. สมาชิกสร้าง product โดยใส่ ownerUid ของตนเอง -> allow', async () => {
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+    await assertSucceeds(
+      aliceDb.collection('products').doc('prod-alice-new-001').set({
+        farmId: ALICE_FARM_ID,
+        title: 'ปุ๋ยหมักใบก้ามปูแท้',
+        price: 50,
+        status: 'sale',
+        images: [],
+        ownerUid: ALICE_UID,
       })
     );
   });

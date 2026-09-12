@@ -131,16 +131,27 @@ service cloud.firestore {
       // อ่านข้อมูลผลผลิตสาธารณะได้
       allow read: if true;
 
-      // สมาชิกที่ล็อกอินหรือแอดมิน เพิ่มและแก้ไขผลผลิต
+      // สมาชิกที่ล็อกอินหรือแอดมิน เพิ่มผลผลิต (ownerUid ต้องตรงกับ request.auth.uid หรือเป็นแอดมิน)
       allow create: if isAuthenticated()
                     && isValidString(request.resource.data.title, 2, 150)
                     && isValidNumber(request.resource.data.price, 0, 1000000)
                     && request.resource.data.status in ['sale', 'share', 'preorder', 'out_of_stock', 'hidden']
                     && request.resource.data.images is list
-                    && request.resource.data.images.size() <= 6;
+                    && request.resource.data.images.size() <= 6
+                    && (
+                      request.resource.data.ownerUid == request.auth.uid ||
+                      isAdmin()
+                    );
 
-      allow update: if isAuthenticated();
-      allow delete: if isAuthenticated() || isAdmin();
+      // อัปเดตและลบผลผลิต: เฉพาะเจ้าของผลผลิต (resource.data.ownerUid == request.auth.uid) หรือแอดมินเท่านั้น
+      allow update: if isAuthenticated() && (
+        resource.data.ownerUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.ownerUid == request.auth.uid ||
+        isAdmin()
+      );
     }
 
     // ==========================================
