@@ -339,6 +339,27 @@ class DataService {
           }
         }
 
+        // สำหรับ Admin: ดึงข้อมูล Subcollection private/pii ของผู้สมัครสถานะ pending
+        // เพื่อให้เห็นข้อมูลส่วนบุคคลในการพิจารณาอนุมัติ (เบอร์โทร, LINE ID, ประวัติการอบรม, รูปหน้าจริง)
+        if (this.isAdminSession()) {
+          const pendingMems = this.members.filter((m) => m.status === 'pending');
+          await Promise.allSettled(
+            pendingMems.map(async (pm) => {
+              try {
+                const piiSnap = await getDoc(doc(db, 'members', pm.id, 'private', 'pii'));
+                if (piiSnap.exists()) {
+                  const pii = piiSnap.data();
+                  if (pii.phone) pm.phone = pii.phone;
+                  if (pii.lineId) pm.lineId = pii.lineId;
+                  if (pii.facePhotoUrl) pm.facePhotoUrl = pii.facePhotoUrl;
+                  if (pii.trainingCourse) pm.trainingCourse = pii.trainingCourse;
+                  if (pii.trainingLocation) pm.trainingLocation = pii.trainingLocation;
+                }
+              } catch {}
+            })
+          );
+        }
+
         // ===================================================================
         // 🌟 AUTO-RESCUE: ตรวจจับสมาชิกที่สมัครไว้ในเครื่อง (LocalStorage) 
         // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เฉพาะสถานะ pending เท่านั้น)
@@ -534,12 +555,34 @@ class DataService {
             }
           }
 
-          // ลบเฉพาะแปลงชั่วคราวตกค้างที่ไม่ใช่ของสมาชิกคนใด และไม่มีใน Firestore
-          this.farms = this.farms.filter(
-            (f) => remoteFarmMap.has(f.id) || 
-                   initialFarmIds.has(f.id) || 
-                   this.members.some((m) => m.id === f.memberId || m.farmId === f.id)
-          );
+          // สำหรับ Admin: ดึงข้อมูลติดต่อและพิกัดภายในจาก subcollection private/contact ของแปลง
+          if (this.isAdminSession()) {
+            const pendingFarms = this.farms.filter((f) => f.status === 'pending' || !f.phone);
+            await Promise.allSettled(
+              pendingFarms.map(async (pf) => {
+                try {
+                  const contactSnap = await getDoc(doc(db, 'farms', pf.id, 'private', 'contact'));
+                  if (contactSnap.exists()) {
+                    const c = contactSnap.data();
+                    if (c.phone) pf.phone = c.phone;
+                    if (c.lineId) pf.lineId = c.lineId;
+                    if (c.internalCoordinates) pf.internalCoordinates = c.internalCoordinates;
+                  }
+                } catch {}
+              })
+            );
+          }
+
+          // ผสานข้อมูลติดต่อแบบ 2-way ระหว่าง Members กับ Farms
+          for (const m of this.members) {
+            const farm = this.farms.find((f) => f.id === m.farmId || f.memberId === m.id);
+            if (farm) {
+              if (!m.phone && farm.phone) m.phone = farm.phone;
+              if (!m.lineId && farm.lineId) m.lineId = farm.lineId;
+              if (!farm.phone && m.phone) farm.phone = m.phone;
+              if (!farm.lineId && m.lineId) farm.lineId = m.lineId;
+            }
+          }
         }
       } catch (err) {
         console.warn('Firestore sync [farms] notice:', err);

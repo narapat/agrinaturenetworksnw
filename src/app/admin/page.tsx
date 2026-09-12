@@ -911,7 +911,9 @@ export default function AdminPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {pendingMembers.map((member) => {
-                const farm = dataService.getFarmById(member.farmId);
+                const farm = dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id);
+                const displayPhone = member.phone || farm?.phone || '';
+                const displayLineId = member.lineId || farm?.lineId || '';
                 return (
                   <div
                     key={member.id}
@@ -920,9 +922,12 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
                           alt={member.fullName}
                           className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-200 shrink-0 shadow-xs"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                          }}
                         />
                         <div className="min-w-0">
                           <h4 className="font-bold text-stone-900 text-base truncate">
@@ -932,7 +937,7 @@ export default function AdminPage() {
                             แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
                           </p>
                           <p className="text-xs text-brand-700 font-bold mt-0.5">
-                            📍 อ.{farm?.district} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
+                            📍 อ.{farm?.district || 'นครสวรรค์'} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
                           </p>
                         </div>
                       </div>
@@ -975,8 +980,8 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500 font-medium">
-                        <span>📞 {member.phone}</span>
-                        {member.lineId && <span>LINE: {member.lineId}</span>}
+                        <span>📞 {displayPhone || 'ไม่ได้ระบุ'}</span>
+                        {displayLineId && <span>LINE: {displayLineId}</span>}
                       </div>
                     </div>
                   </div>
@@ -1024,7 +1029,9 @@ export default function AdminPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {rejectedMembers.map((member) => {
-                const farm = dataService.getFarmById(member.farmId);
+                const farm = dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id);
+                const displayPhone = member.phone || farm?.phone || '';
+                const displayLineId = member.lineId || farm?.lineId || '';
                 return (
                   <div
                     key={member.id}
@@ -1037,9 +1044,12 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-4 pt-1">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
                           alt={member.fullName}
                           className="w-16 h-16 rounded-2xl object-cover border-2 border-rose-200 shrink-0 opacity-80"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                          }}
                         />
                         <div className="min-w-0">
                           <h4 className="font-bold text-stone-900 text-base truncate">
@@ -1049,7 +1059,7 @@ export default function AdminPage() {
                             แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
                           </p>
                           <p className="text-xs text-stone-500 mt-0.5">
-                            📍 อ.{farm?.district} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
+                            📍 อ.{farm?.district || 'นครสวรรค์'} {farm?.subdistrict ? `(ต.${farm.subdistrict})` : ''}
                           </p>
                         </div>
                       </div>
@@ -1068,8 +1078,8 @@ export default function AdminPage() {
                         </p>
                       </div>
                       <div className="pt-2 border-t border-stone-200/60 flex items-center justify-between text-[11px] text-stone-500 font-medium">
-                        <span>📞 {member.phone}</span>
-                        {member.lineId && <span>LINE: {member.lineId}</span>}
+                        <span>📞 {displayPhone || 'ไม่ได้ระบุ'}</span>
+                        {displayLineId && <span>LINE: {displayLineId}</span>}
                       </div>
                     </div>
 
@@ -1210,7 +1220,8 @@ export default function AdminPage() {
                 );
               })
               .map((member) => {
-                const farm = dataService.getFarmById(member.farmId);
+                const farm = dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id);
+                const displayPhone = member.phone || farm?.phone || 'ไม่ได้ระบุ';
                 const isAdmin = hasAdminRole(member);
                 const isPrimaryAdmin = member.id === 'admin-001';
 
@@ -1222,9 +1233,12 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
                           alt={member.fullName}
                           className="w-14 h-14 rounded-2xl object-cover border-2 border-stone-100 shrink-0 shadow-xs"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                          }}
                         />
                         <div className="min-w-0">
                           <h4 className="font-bold text-stone-900 text-sm truncate flex items-center gap-1.5">
@@ -1239,7 +1253,7 @@ export default function AdminPage() {
                             แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
                           </p>
                           <p className="text-[11px] text-stone-500 mt-0.5">
-                            📍 อ.{farm?.district || 'นครสวรรค์'} | 📞 {member.phone}
+                            📍 อ.{farm?.district || 'นครสวรรค์'} | 📞 {displayPhone}
                           </p>
                         </div>
                       </div>
