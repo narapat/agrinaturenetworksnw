@@ -10,7 +10,8 @@
     "test": "vitest run tests/unit",
     "test:watch": "vitest tests/unit",
     "test:rules": "export JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || echo '/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home'); firebase emulators:exec --only firestore \"vitest run tests/rules\"",
-    "test:e2e": "node --env-file=.env.local tests/e2e/admin-smoke.mjs"
+    "test:e2e": "node --env-file=.env.local tests/e2e/admin-smoke.mjs",
+    "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
     "@line/liff": "^2.31.0",
