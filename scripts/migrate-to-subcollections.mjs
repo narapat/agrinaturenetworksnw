@@ -81,7 +81,19 @@ async function migrateMembers() {
 
     memberStatusMap.set(memberId, data.status || 'pending');
 
-    const ownerUid = data.ownerUid || data.lineUserId || null;
+    // ตรวจสอบ ownerUid / lineUserId จากเอกสารหลัก หรือจาก Subcollection private/pii
+    let ownerUid = data.ownerUid || data.lineUserId || null;
+    let existingPii = null;
+
+    const piiDocRef = db.collection('members').doc(memberId).collection('private').doc('pii');
+    const piiDocSnap = await piiDocRef.get();
+    if (piiDocSnap.exists) {
+      existingPii = piiDocSnap.data();
+      if (!ownerUid) {
+        ownerUid = existingPii.ownerUid || existingPii.lineUserId || null;
+      }
+    }
+
     if (ownerUid) {
       memberMap.set(memberId, ownerUid);
     } else {
@@ -91,17 +103,19 @@ async function migrateMembers() {
     // ข้อมูล PII สำหรับบันทึกใน subcollection
     const hasPiiInParent = data.phone !== undefined ||
       data.lineId !== undefined ||
+      data.lineUserId !== undefined ||
       data.facePhotoUrl !== undefined ||
       data.trainingCourse !== undefined ||
       data.trainingLocation !== undefined;
 
     const piiData = {
-      phone: data.phone || null,
-      lineId: data.lineId || null,
-      lineUserId: data.lineUserId || null,
-      facePhotoUrl: data.facePhotoUrl || null,
-      trainingCourse: data.trainingCourse || null,
-      trainingLocation: data.trainingLocation || null,
+      ...(existingPii || {}),
+      phone: data.phone !== undefined ? data.phone : (existingPii?.phone || null),
+      lineId: data.lineId !== undefined ? data.lineId : (existingPii?.lineId || null),
+      lineUserId: data.lineUserId !== undefined ? data.lineUserId : (existingPii?.lineUserId || ownerUid || null),
+      facePhotoUrl: data.facePhotoUrl !== undefined ? data.facePhotoUrl : (existingPii?.facePhotoUrl || null),
+      trainingCourse: data.trainingCourse !== undefined ? data.trainingCourse : (existingPii?.trainingCourse || null),
+      trainingLocation: data.trainingLocation !== undefined ? data.trainingLocation : (existingPii?.trainingLocation || null),
       migratedAt: new Date().toISOString(),
     };
     if (ownerUid) {
@@ -112,23 +126,26 @@ async function migrateMembers() {
     const memberUpdates = {};
     if (data.phone !== undefined) memberUpdates.phone = FieldValue.delete();
     if (data.lineId !== undefined) memberUpdates.lineId = FieldValue.delete();
+    if (data.lineUserId !== undefined) memberUpdates.lineUserId = FieldValue.delete();
     if (data.facePhotoUrl !== undefined) memberUpdates.facePhotoUrl = FieldValue.delete();
     if (data.trainingCourse !== undefined) memberUpdates.trainingCourse = FieldValue.delete();
     if (data.trainingLocation !== undefined) memberUpdates.trainingLocation = FieldValue.delete();
     if (ownerUid && data.ownerUid !== ownerUid) memberUpdates.ownerUid = ownerUid;
 
-    const needsUpdate = hasPiiInParent || (ownerUid && data.ownerUid !== ownerUid);
+    const needsPiiUpdate = !piiDocSnap.exists || (ownerUid && existingPii?.ownerUid !== ownerUid);
+    const needsParentUpdate = Object.keys(memberUpdates).length > 0;
+    const needsUpdate = hasPiiInParent || needsParentUpdate || needsPiiUpdate;
 
     if (needsUpdate) {
       if (isCommit) {
         // 1. บันทึก subcollection
-        await db.collection('members').doc(memberId).collection('private').doc('pii').set(piiData, { merge: true });
+        await piiDocRef.set(piiData, { merge: true });
         // 2. ลบ sensitive fields ออกจากเอกสารหลักและอัปเดต ownerUid
-        if (Object.keys(memberUpdates).length > 0) {
+        if (needsParentUpdate) {
           await db.collection('members').doc(memberId).update(memberUpdates);
         }
       }
-      console.log(`  [${isDryRun ? 'DRY-RUN' : 'MIGRATED'}] Member [${memberId}] "${data.fullName}": PII moved to subcollection, ownerUid=${ownerUid || 'MISSING'}`);
+      console.log(`  [${isDryRun ? 'DRY-RUN' : 'MIGRATED'}] Member [${memberId}] "${data.fullName}": PII checked, ownerUid=${ownerUid || 'MISSING'}`);
       migratedCount++;
     } else {
       alreadyMigratedCount++;
@@ -166,10 +183,22 @@ async function migrateFarms(memberMap, memberStatusMap) {
 
     // หา ownerUid จาก data.ownerUid หรือค้นหาจาก memberId ใน memberMap
     const memberOwnerUid = data.memberId ? memberMap.get(data.memberId) : null;
-    const ownerUid = data.ownerUid || memberOwnerUid || null;
+    let ownerUid = data.ownerUid || memberOwnerUid || null;
+
+    const contactDocRef = db.collection('farms').doc(farmId).collection('private').doc('contact');
+    let existingContact = null;
+    const contactDocSnap = await contactDocRef.get();
+    if (contactDocSnap.exists) {
+      existingContact = contactDocSnap.data();
+      if (!ownerUid) {
+        ownerUid = existingContact.ownerUid || null;
+      }
+    }
 
     if (ownerUid) {
       farmMap.set(farmId, ownerUid);
+      // รองรับ Document ID ที่อาจมีเครื่องหมายคำพูดติดมา
+      farmMap.set(farmId.replace(/"/g, ''), ownerUid);
     } else {
       missingOwnerFarms.push({
         id: farmId,
@@ -187,9 +216,10 @@ async function migrateFarms(memberMap, memberStatusMap) {
       (!data.isPublicLine && data.lineId !== undefined);
 
     const contactData = {
-      internalCoordinates: data.internalCoordinates || null,
-      phone: data.phone || null,
-      lineId: data.lineId || null,
+      ...(existingContact || {}),
+      internalCoordinates: data.internalCoordinates !== undefined ? data.internalCoordinates : (existingContact?.internalCoordinates || null),
+      phone: data.phone !== undefined ? data.phone : (existingContact?.phone || null),
+      lineId: data.lineId !== undefined ? data.lineId : (existingContact?.lineId || null),
       migratedAt: new Date().toISOString(),
     };
     if (ownerUid) {
@@ -204,16 +234,16 @@ async function migrateFarms(memberMap, memberStatusMap) {
     if (ownerUid && data.ownerUid !== ownerUid) farmUpdates.ownerUid = ownerUid;
     if (farmStatus && data.status !== farmStatus) farmUpdates.status = farmStatus;
 
-    const needsUpdate = hasContactInParent ||
-      (ownerUid && data.ownerUid !== ownerUid) ||
-      (farmStatus && data.status !== farmStatus);
+    const needsContactUpdate = !contactDocSnap.exists || (ownerUid && existingContact?.ownerUid !== ownerUid);
+    const needsParentUpdate = Object.keys(farmUpdates).length > 0;
+    const needsUpdate = hasContactInParent || needsParentUpdate || needsContactUpdate;
 
     if (needsUpdate) {
       if (isCommit) {
         // 1. บันทึกลง Subcollection farms/{farmId}/private/contact
-        await db.collection('farms').doc(farmId).collection('private').doc('contact').set(contactData, { merge: true });
+        await contactDocRef.set(contactData, { merge: true });
         // 2. อัปเดตเอกสารหลัก
-        if (Object.keys(farmUpdates).length > 0) {
+        if (needsParentUpdate) {
           await db.collection('farms').doc(farmId).update(farmUpdates);
         }
       }
@@ -251,7 +281,8 @@ async function migrateProducts(farmMap) {
     const data = doc.data();
     const productId = doc.id;
 
-    const farmOwnerUid = data.farmId ? farmMap.get(data.farmId) : null;
+    // ค้นหา farmOwnerUid โดยลองทั้ง raw farmId และ sanitized farmId (ตัด quote ออก)
+    const farmOwnerUid = data.farmId ? (farmMap.get(data.farmId) || farmMap.get(data.farmId.replace(/"/g, ''))) : null;
     const ownerUid = data.ownerUid || farmOwnerUid || null;
 
     if (!ownerUid) {
