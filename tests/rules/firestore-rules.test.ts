@@ -417,4 +417,22 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       aliceDb.collection('farms').where('ownerUid', '==', ALICE_UID).get()
     );
   });
+
+  it('29. registrations และ idempotency collection ไม่อนุญาตให้อ่านหรือเขียนจาก client (ทั้ง auth และ guest) -> deny', async () => {
+    const guestDb = testEnv.unauthenticatedContext().firestore();
+    const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
+
+    // Guest read/write registrations
+    await assertFails(guestDb.collection('registrations').doc(ALICE_UID).get());
+    await assertFails(guestDb.collection('registrations').doc(ALICE_UID).set({ ownerUid: ALICE_UID }));
+
+    // Auth read/write registrations
+    await assertFails(aliceDb.collection('registrations').doc(ALICE_UID).get());
+    await assertFails(aliceDb.collection('registrations').doc(ALICE_UID).set({ ownerUid: ALICE_UID }));
+
+    // Guest & Auth read/write idempotency
+    await assertFails(guestDb.collection('idempotency').doc('req-123').get());
+    await assertFails(aliceDb.collection('idempotency').doc('req-123').get());
+  });
 });
+

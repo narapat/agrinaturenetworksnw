@@ -177,7 +177,20 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 6. DEFAULT DENY-ALL RULE
+    // 6. REGISTRATIONS & IDEMPOTENCY (Server Only Guard)
+    // ==========================================
+    match /registrations/{ownerUid} {
+      // Guard Document ป้องกันการสมัครซ้ำ จัดการผ่าน Server API เท่านั้น
+      allow read, write: if false;
+    }
+
+    match /idempotency/{requestId} {
+      // ตรวจสอบ Idempotency จัดการผ่าน Server API เท่านั้น
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // 7. DEFAULT DENY-ALL RULE
     // ==========================================
     match /{document=**} {
       allow read, write: if false;

@@ -1536,7 +1536,15 @@ class DataService {
       photos?: string[];
     },
     idToken?: string
-  ): Promise<{ member: MemberProfile; farm: Farm; success: boolean; firestoreSynced: boolean }> {
+  ): Promise<{
+    member: MemberProfile;
+    farm: Farm;
+    success: boolean;
+    firestoreSynced: boolean;
+    isDuplicate?: boolean;
+    status?: string;
+    message?: string;
+  }> {
     // 1. ตรวจสอบว่ามี LINE ID Token หรือไม่ เพื่อเรียกใช้ Server Registration API (POST /api/member/register)
     let token = idToken;
     if (!token && typeof window !== 'undefined') {
@@ -1561,7 +1569,51 @@ class DataService {
 
       const resData = await response.json().catch(() => ({}));
       if (!response.ok || !resData.success) {
-        if (response.status === 401) {
+        if (response.status === 409) {
+          const existingMemberId = resData.memberId || '';
+          const existingFarmId = resData.farmId || '';
+          const existingStatus = resData.status || 'pending';
+
+          const existingMember: MemberProfile = this.members.find((m) => m.id === existingMemberId) || ({
+            id: existingMemberId,
+            ownerUid: token,
+            lineUserId: token,
+            fullName: data.fullName,
+            role: 'member',
+            roles: ['member'],
+            status: existingStatus,
+            farmId: existingFarmId,
+            farmName: data.farmName,
+            createdAt: '',
+          } as unknown as MemberProfile);
+
+          const existingFarm: Farm = this.farms.find((f) => f.id === existingFarmId) || ({
+            id: existingFarmId,
+            memberId: existingMemberId,
+            ownerUid: token,
+            ownerName: data.fullName,
+            farmName: data.farmName,
+            status: existingStatus,
+            district: data.district,
+            subdistrict: data.subdistrict,
+            photos: [],
+          } as unknown as Farm);
+
+          if (existingMemberId) {
+            this.currentUserId = existingMemberId;
+            this.save();
+          }
+
+          return {
+            member: existingMember,
+            farm: existingFarm,
+            success: false,
+            isDuplicate: true,
+            status: existingStatus,
+            message: resData.message || 'ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว',
+            firestoreSynced: true,
+          };
+        } else if (response.status === 401) {
           throw new Error('การยืนยันตัวตนกับ LINE หมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่');
         } else if (response.status === 400) {
           throw new Error(resData.error || 'ข้อมูลการสมัครไม่ถูกต้อง กรุณาตรวจสอบข้อมูลอีกครั้ง');

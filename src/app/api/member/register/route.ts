@@ -27,6 +27,7 @@ const getLineChannelId = (): string => {
  * 7. หาก Admin SDK หรือฐานข้อมูลไม่พร้อม ตอบ 500 ทันที (ห้าม silent fallback ตอบ success)
  */
 export async function POST(req: NextRequest) {
+  let currentOwnerUid: string | undefined;
   try {
     // 1. ตรวจสอบ Authorization Header (Bearer LINE ID Token)
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+    currentOwnerUid = ownerUid;
 
     // 3. ตรวจสอบ Body และ Validate & Sanitize Input
     const body = await req.json().catch(() => null);
@@ -169,7 +171,7 @@ export async function POST(req: NextRequest) {
       ? facePhotoUrl.trim()
       : (tokenPayload.picture || '');
 
-    // 6. Idempotency Check ด้วย requestId
+    // 5. Idempotency Check ด้วย requestId
     if (cleanRequestId) {
       const idempDoc = await db.collection('idempotency').doc(cleanRequestId).get();
       if (idempDoc.exists) {
@@ -182,6 +184,42 @@ export async function POST(req: NextRequest) {
           message: 'ใบสมัครนี้ได้รับการบันทึกเรียบร้อยแล้ว',
         });
       }
+    }
+
+    // 6. ตรวจสอบ Guard Document registrations/{ownerUid} เพื่อป้องกันการสมัครซ้ำ (Task A)
+    const registrationRef = db.collection('registrations').doc(ownerUid);
+    const existingRegSnap = await registrationRef.get();
+    if (existingRegSnap.exists) {
+      const regData = existingRegSnap.data();
+      const existingMemberId = regData?.memberId || '';
+      let existingStatus = regData?.status || 'pending';
+      if (existingMemberId) {
+        try {
+          const memDoc = await db.collection('members').doc(existingMemberId).get();
+          if (memDoc.exists) {
+            existingStatus = memDoc.data()?.status || existingStatus;
+          }
+        } catch {}
+      }
+
+      let thaiStatusMsg = 'ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว ขณะนี้ใบสมัครของท่านอยู่ระหว่างรอการตรวจสอบและอนุมัติจากแอดมินเครือข่ายครับ';
+      if (existingStatus === 'approved') {
+        thaiStatusMsg = 'บัญชีของท่านได้รับการอนุมัติเป็นสมาชิกเครือข่ายเรียบร้อยแล้ว ท่านสามารถเข้าสู่ระบบเพื่อจัดการข้อมูลแปลงได้ทันทีครับ';
+      } else if (existingStatus === 'rejected') {
+        thaiStatusMsg = 'ใบสมัครของท่านไม่ผ่านการอนุมัติ กรุณาติดต่อผู้ประสานงานเครือข่ายเพื่อตรวจสอบข้อมูลเพิ่มเติมครับ';
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'DUPLICATE_REGISTRATION',
+          memberId: existingMemberId,
+          farmId: regData?.farmId,
+          status: existingStatus,
+          message: thaiStatusMsg,
+        },
+        { status: 409 }
+      );
     }
 
     // 7. พิกัดจริง (internalCoordinates) และ โซนสาธารณะ (publicZone)
@@ -313,6 +351,16 @@ export async function POST(req: NextRequest) {
     batch.set(farmContactRef, farmContactDoc);
     batch.set(auditRef, auditDoc);
 
+    // Guard document: registrations/{ownerUid} (Atomic create to guarantee no duplicate registration)
+    batch.create(registrationRef, {
+      ownerUid: ownerUid,
+      memberId: memberId,
+      farmId: farmId,
+      status: 'pending',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+
     if (cleanRequestId) {
       const idempRef = db.collection('idempotency').doc(cleanRequestId);
       batch.set(idempRef, {
@@ -336,6 +384,50 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (err: any) {
+    // ป้องกัน Race Condition ชนซ้ำใน batch.create(registrationRef)
+    if (
+      err?.code === 6 ||
+      err?.message?.includes('ALREADY_EXISTS') ||
+      err?.message?.includes('already exists')
+    ) {
+      try {
+        const db = getAdminDb();
+        if (db && currentOwnerUid) {
+          const regDoc = await db.collection('registrations').doc(currentOwnerUid).get();
+          if (regDoc.exists) {
+            const regData = regDoc.data();
+            const existingMemberId = regData?.memberId || '';
+            let existingStatus = regData?.status || 'pending';
+            if (existingMemberId) {
+              const memDoc = await db.collection('members').doc(existingMemberId).get();
+              if (memDoc.exists) {
+                existingStatus = memDoc.data()?.status || existingStatus;
+              }
+            }
+
+            let thaiStatusMsg = 'ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว ขณะนี้ใบสมัครของท่านอยู่ระหว่างรอการตรวจสอบและอนุมัติจากแอดมินเครือข่ายครับ';
+            if (existingStatus === 'approved') {
+              thaiStatusMsg = 'บัญชีของท่านได้รับการอนุมัติเป็นสมาชิกเครือข่ายเรียบร้อยแล้ว ท่านสามารถเข้าสู่ระบบเพื่อจัดการข้อมูลแปลงได้ทันทีครับ';
+            } else if (existingStatus === 'rejected') {
+              thaiStatusMsg = 'ใบสมัครของท่านไม่ผ่านการอนุมัติ กรุณาติดต่อผู้ประสานงานเครือข่ายเพื่อตรวจสอบข้อมูลเพิ่มเติมครับ';
+            }
+
+            return NextResponse.json(
+              {
+                success: false,
+                code: 'DUPLICATE_REGISTRATION',
+                memberId: existingMemberId,
+                farmId: regData?.farmId,
+                status: existingStatus,
+                message: thaiStatusMsg,
+              },
+              { status: 409 }
+            );
+          }
+        }
+      } catch {}
+    }
+
     console.error('[Register API Error]:', err);
     return NextResponse.json(
       {

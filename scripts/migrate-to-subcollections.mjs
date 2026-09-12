@@ -71,21 +71,26 @@ if (clientEmail && privateKey) {
 async function auditAndScan() {
   // 1. ดึงข้อมูลทั้งหมด
   console.log('📡 1. Fetching all documents from Firestore...');
-  const [membersSnap, farmsSnap, productsSnap] = await Promise.all([
+  const [membersSnap, farmsSnap, productsSnap, registrationsSnap] = await Promise.all([
     db.collection('members').get(),
     db.collection('farms').get(),
     db.collection('products').get(),
+    db.collection('registrations').get(),
   ]);
 
-  console.log(`   - Members  : ${membersSnap.size} documents`);
-  console.log(`   - Farms    : ${farmsSnap.size} documents`);
-  console.log(`   - Products : ${productsSnap.size} documents\n`);
+  console.log(`   - Members       : ${membersSnap.size} documents`);
+  console.log(`   - Farms         : ${farmsSnap.size} documents`);
+  console.log(`   - Products      : ${productsSnap.size} documents`);
+  console.log(`   - Registrations : ${registrationsSnap.size} documents\n`);
 
   const farmsById = new Map();
   farmsSnap.docs.forEach((d) => farmsById.set(d.id, { id: d.id, ...d.data() }));
 
   const membersById = new Map();
   membersSnap.docs.forEach((d) => membersById.set(d.id, { id: d.id, ...d.data() }));
+
+  const registrationsByUid = new Map();
+  registrationsSnap.docs.forEach((d) => registrationsByUid.set(d.id, { id: d.id, ...d.data() }));
 
   // ==========================================
   // 2. AUDIT MEMBERS
@@ -163,6 +168,37 @@ async function auditAndScan() {
     console.log('   ⚠️ รายชื่อสมาชิกที่ไม่สมบูรณ์:');
     memberAuditResults.filter((m) => !m.isHealthy).forEach((m) => {
       console.log(`      • [${m.id}] "${m.fullName}" (สถานะ: ${m.status}, pii: ${m.hasPiiSubdoc ? 'มี' : 'ไม่มี'}, ownerUid: ${m.ownerUid || 'ไม่มี'})`);
+    });
+  }
+
+  // ==========================================
+  // 2.5 AUDIT REGISTRATIONS GUARD (Task A4)
+  // ==========================================
+  console.log('\n--- 🛡️ 2.5 Auditing Registrations Guard (Duplicate Prevention) ---');
+  let regMatchedCount = 0;
+  let regMissingGuardCount = 0;
+  let regNoOwnerUidCount = 0;
+  const missingGuardMembers = [];
+
+  for (const m of memberAuditResults) {
+    if (!m.ownerUid) {
+      regNoOwnerUidCount++;
+    } else if (registrationsByUid.has(m.ownerUid)) {
+      regMatchedCount++;
+    } else {
+      regMissingGuardCount++;
+      missingGuardMembers.push(m);
+    }
+  }
+
+  console.log(`   - มี registrations guard ตรงกับ ownerUid แล้ว: ${regMatchedCount} บัญชี`);
+  console.log(`   - ขาด registrations guard (มี ownerUid แต่ยังไม่มี registrations doc): ${regMissingGuardCount} บัญชี`);
+  console.log(`   - ไม่มี ownerUid ในระบบ (ไม่สามารถสร้าง guard อัตโนมัติได้): ${regNoOwnerUidCount} บัญชี`);
+
+  if (missingGuardMembers.length > 0) {
+    console.log('   ⚠️ รายชื่อสมาชิกที่ขาด registrations guard (ตรวจสอบย้อนหลัง):');
+    missingGuardMembers.forEach((m) => {
+      console.log(`      • [${m.id}] "${m.fullName}" (ownerUid: ${m.ownerUid}, status: ${m.status}, farmId: ${m.farmId || 'ไม่มี'})`);
     });
   }
 
@@ -404,6 +440,26 @@ async function auditAndScan() {
       farmWriteCount++;
     }
     console.log(`✅ Farms migration completed: ${farmWriteCount} documents processed.`);
+
+    // ย้อนสร้าง registrations guard ย้อนหลังสำหรับสมาชิกที่มี ownerUid
+    let regBackfillCount = 0;
+    for (const m of missingGuardMembers) {
+      if (m.ownerUid) {
+        const regRef = db.collection('registrations').doc(m.ownerUid);
+        await regRef.set({
+          ownerUid: m.ownerUid,
+          memberId: m.id,
+          farmId: m.farmId || '',
+          status: m.status || 'pending',
+          createdAt: m.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+        regBackfillCount++;
+      }
+    }
+    if (regBackfillCount > 0) {
+      console.log(`✅ Registrations guard backfilled: ${regBackfillCount} documents created.`);
+    }
   }
 
   // ==========================================

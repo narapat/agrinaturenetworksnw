@@ -211,6 +211,9 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
         set: vi.fn((docRef: any, data: any) => {
           mockBatchWrites.push({ refPath: docRef.path, data });
         }),
+        create: vi.fn((docRef: any, data: any) => {
+          mockBatchWrites.push({ refPath: docRef.path, data });
+        }),
         commit: vi.fn(async () => {}),
       };
 
@@ -263,7 +266,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       // Verify batch commit was called
       expect(mockBatch.commit).toHaveBeenCalledTimes(1);
 
-      // Verify all 4 core documents + audit + idempotency were prepared in the batch
+      // Verify all 4 core documents + audit + idempotency + registrations guard were prepared in the batch
       const writtenPaths = mockBatchWrites.map((w) => w.refPath);
       expect(writtenPaths.some((p) => p.startsWith('members/mem-'))).toBe(true);
       expect(writtenPaths.some((p) => p.includes('/private/pii'))).toBe(true);
@@ -271,6 +274,14 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       expect(writtenPaths.some((p) => p.includes('/private/contact'))).toBe(true);
       expect(writtenPaths.some((p) => p.startsWith('auditLogs/log-'))).toBe(true);
       expect(writtenPaths.some((p) => p === 'idempotency/req-test-unique-123')).toBe(true);
+      expect(writtenPaths.some((p) => p === 'registrations/U_GENUINE_LINE_UID_999')).toBe(true);
+
+      // Verify registrations guard doc invariants
+      const regWrite = mockBatchWrites.find((w) => w.refPath === 'registrations/U_GENUINE_LINE_UID_999');
+      expect(regWrite?.data.ownerUid).toBe('U_GENUINE_LINE_UID_999');
+      expect(regWrite?.data.status).toBe('pending');
+      expect(regWrite?.data.memberId).toBe(resJson.member.id);
+      expect(regWrite?.data.farmId).toBe(resJson.farm.id);
 
       // Verify member doc invariants
       const memberWrite = mockBatchWrites.find((w) => w.refPath.startsWith('members/mem-') && !w.refPath.includes('/private/'));
@@ -294,6 +305,171 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       expect(contactWrite?.data.phone).toBe('081-234-5678');
     });
 
+    it('should return 409 Conflict when registrations/{ownerUid} already exists (duplicate registration prevention)', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'U_ALREADY_REGISTERED_USER',
+          name: 'เกษตรกร สมหวัง',
+        }),
+      } as Response);
+
+      const mockBatch = {
+        set: vi.fn(),
+        create: vi.fn(),
+        commit: vi.fn(async () => {}),
+      };
+
+      const mockDb = {
+        collection: vi.fn((colName: string) => {
+          if (colName === 'registrations') {
+            return {
+              doc: vi.fn((uid: string) => ({
+                get: vi.fn(async () => ({
+                  exists: true,
+                  data: () => ({
+                    ownerUid: uid,
+                    memberId: 'mem-already-101',
+                    farmId: 'farm-already-101',
+                    status: 'pending',
+                  }),
+                })),
+              })),
+            };
+          }
+          if (colName === 'members') {
+            return {
+              doc: vi.fn((id: string) => ({
+                get: vi.fn(async () => ({
+                  exists: true,
+                  data: () => ({
+                    id,
+                    status: 'pending',
+                    fullName: 'เกษตรกร สมหวัง',
+                  }),
+                })),
+              })),
+            };
+          }
+          return {
+            doc: vi.fn(() => ({ get: vi.fn(async () => ({ exists: false })) })),
+          };
+        }),
+        batch: () => mockBatch,
+      };
+
+      vi.spyOn(firebaseAdmin, 'getAdminDb').mockReturnValue(mockDb as any);
+
+      const req = new NextRequest('http://localhost:3000/api/member/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer valid.line.token',
+        },
+        body: JSON.stringify({
+          fullName: 'เกษตรกร สมหวัง',
+          farmName: 'สวนเกษตรสมหวัง',
+          phone: '089-999-8888',
+        }),
+      });
+
+      const res = await registerPOST(req);
+      expect(res.status).toBe(409);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('DUPLICATE_REGISTRATION');
+      expect(data.memberId).toBe('mem-already-101');
+      expect(data.farmId).toBe('farm-already-101');
+      expect(data.status).toBe('pending');
+      expect(data.message).toContain('ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว');
+
+      // Crucial: batch.commit must NOT be called when registration already exists
+      expect(mockBatch.commit).not.toHaveBeenCalled();
+    });
+
+    it('should catch ALREADY_EXISTS race condition on batch.commit and return 409 Conflict', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'U_RACE_CONDITION_USER',
+          name: 'เกษตรกร สายฟ้า',
+        }),
+      } as Response);
+
+      let getCallCount = 0;
+      const mockBatch = {
+        set: vi.fn(),
+        create: vi.fn(),
+        commit: vi.fn(async () => {
+          const err: any = new Error('Document ALREADY_EXISTS');
+          err.code = 6;
+          throw err;
+        }),
+      };
+
+      const mockDoc = (path: string) => ({
+        path,
+        get: vi.fn(async () => {
+          if (path.startsWith('registrations/')) {
+            getCallCount++;
+            if (getCallCount === 1) {
+              return { exists: false, data: () => null };
+            }
+            return {
+              exists: true,
+              data: () => ({
+                ownerUid: 'U_RACE_CONDITION_USER',
+                memberId: 'mem-race-winner-99',
+                farmId: 'farm-race-winner-99',
+                status: 'pending',
+              }),
+            };
+          }
+          if (path === 'members/mem-race-winner-99') {
+            return {
+              exists: true,
+              data: () => ({ id: 'mem-race-winner-99', status: 'pending' }),
+            };
+          }
+          return { exists: false, data: () => null };
+        }),
+        collection: (subName: string) => mockCollection(`${path}/${subName}`),
+      });
+
+      const mockCollection = (colPath: string): any => ({
+        path: colPath,
+        doc: (docId: string) => mockDoc(`${colPath}/${docId}`),
+      });
+
+      const mockDb = {
+        collection: (name: string) => mockCollection(name),
+        batch: () => mockBatch,
+      };
+
+      vi.spyOn(firebaseAdmin, 'getAdminDb').mockReturnValue(mockDb as any);
+
+      const req = new NextRequest('http://localhost:3000/api/member/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer valid.line.token',
+        },
+        body: JSON.stringify({
+          fullName: 'เกษตรกร สายฟ้า',
+          farmName: 'สวนสายฟ้าแลบ',
+          phone: '081-111-2222',
+        }),
+      });
+
+      const res = await registerPOST(req);
+      expect(res.status).toBe(409);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.code).toBe('DUPLICATE_REGISTRATION');
+      expect(data.memberId).toBe('mem-race-winner-99');
+      expect(data.status).toBe('pending');
+    });
+
     it('should return idempotent success when identical requestId is re-sent without double-writing', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
@@ -305,6 +481,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
 
       const mockBatch = {
         set: vi.fn(),
+        create: vi.fn(),
         commit: vi.fn(async () => {}),
       };
 

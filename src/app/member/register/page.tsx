@@ -59,7 +59,8 @@ export default function MemberRegisterPage() {
 
   // Submission & Validation State
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'saving' | 'success' | 'duplicate' | 'error'>('idle');
+  const [duplicateMessage, setDuplicateMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [phoneError, setPhoneError] = useState('');
   const [submittingStep, setSubmittingStep] = useState('');
@@ -234,7 +235,13 @@ export default function MemberRegisterPage() {
         photos: farmPhotos,
       }, idToken);
 
-      if (res.success) {
+      if (res.isDuplicate) {
+        setSubmitStatus('duplicate');
+        setDuplicateMessage(res.message || 'ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว');
+        setTimeout(() => {
+          router.push('/member/dashboard');
+        }, 2500);
+      } else if (res.success) {
         setSubmitStatus('success');
         setTimeout(() => {
           router.push('/member/dashboard');
@@ -808,11 +815,32 @@ export default function MemberRegisterPage() {
               </div>
             )}
 
+            {submitStatus === 'duplicate' && (
+              <div className="p-5 bg-amber-50 border-2 border-amber-300 rounded-2xl text-center text-amber-950 font-bold space-y-2 animate-in fade-in">
+                <p className="text-base flex items-center justify-center gap-2 text-amber-800">
+                  <UserCheck className="w-5 h-5 text-amber-600" />
+                  <span>พบข้อมูลการสมัครสมาชิกของท่านในระบบแล้ว</span>
+                </p>
+                <p className="text-xs sm:text-sm text-amber-900 leading-relaxed font-medium">
+                  {duplicateMessage}
+                </p>
+                <p className="text-xs text-amber-700">กำลังนำท่านไปยังหน้าแปลงและแดชบอร์ดสมาชิก...</p>
+                <div className="pt-2">
+                  <Link
+                    href="/member/dashboard"
+                    className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-amber-600 hover:bg-amber-700 text-white text-sm font-black shadow-md transition-colors"
+                  >
+                    ไปที่หน้าแดชบอร์ดสมาชิกทันที
+                  </Link>
+                </div>
+              </div>
+            )}
+
             {/* Submit Button */}
             <div className="pt-4 border-t border-stone-100">
               <button
                 type="submit"
-                disabled={isSubmitting || submitStatus === 'saving' || submitStatus === 'success' || isCheckingLine || !lineProfile}
+                disabled={isSubmitting || submitStatus === 'saving' || submitStatus === 'success' || submitStatus === 'duplicate' || isCheckingLine || !lineProfile}
                 className="w-full py-4 px-6 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-stone-400 text-white font-black text-lg shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 transition-all touch-target-big cursor-pointer disabled:cursor-not-allowed"
               >
                 {submitStatus === 'saving' ? (
@@ -824,6 +852,11 @@ export default function MemberRegisterPage() {
                   <>
                     <Check className="w-6 h-6" />
                     <span>บันทึกสำเร็จเรียบร้อย!</span>
+                  </>
+                ) : submitStatus === 'duplicate' ? (
+                  <>
+                    <UserCheck className="w-6 h-6" />
+                    <span>กำลังนำท่านไปที่แดชบอร์ด...</span>
                   </>
                 ) : (isCheckingLine || !lineProfile) ? (
                   <>
