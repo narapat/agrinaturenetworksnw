@@ -43,6 +43,8 @@ import {
   Activity
 } from 'lucide-react';
 
+const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
+
 export default function AdminPage() {
   const { getTextClass } = useFontSize();
   const [activeTab, setActiveTab] = useState<'pending' | 'rejected' | 'roles' | 'news' | 'assist' | 'categories' | 'practices' | 'logs'>('pending');
@@ -922,11 +924,13 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || DEFAULT_AVATAR}
                           alt={member.fullName}
                           className="w-16 h-16 rounded-2xl object-cover border-2 border-brand-200 shrink-0 shadow-xs"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = DEFAULT_AVATAR;
                           }}
                         />
                         <div className="min-w-0">
@@ -1044,11 +1048,13 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-4 pt-1">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || DEFAULT_AVATAR}
                           alt={member.fullName}
                           className="w-16 h-16 rounded-2xl object-cover border-2 border-rose-200 shrink-0 opacity-80"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = DEFAULT_AVATAR;
                           }}
                         />
                         <div className="min-w-0">
@@ -1233,11 +1239,13 @@ export default function AdminPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3.5 min-w-0">
                         <img
-                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || '/images/default-avatar.png'}
+                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || DEFAULT_AVATAR}
                           alt={member.fullName}
                           className="w-14 h-14 rounded-2xl object-cover border-2 border-stone-100 shrink-0 shadow-xs"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/images/default-avatar.png';
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = DEFAULT_AVATAR;
                           }}
                         />
                         <div className="min-w-0">
