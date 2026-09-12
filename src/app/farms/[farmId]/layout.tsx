@@ -1,8 +1,5 @@
 import type { Metadata } from 'next';
-import { db } from '@/services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { INITIAL_FARMS } from '@/data/mockData';
-import { Farm } from '@/types';
+import { getFarmByIdServer } from '@/lib/serverData';
 
 export async function generateMetadata({
   params,
@@ -10,22 +7,7 @@ export async function generateMetadata({
   params: { farmId: string };
 }): Promise<Metadata> {
   const farmId = params.farmId;
-  let farm: Farm | null = null;
-
-  try {
-    if (db) {
-      const snap = await getDoc(doc(db, 'farms', farmId));
-      if (snap.exists()) {
-        farm = snap.data() as Farm;
-      }
-    }
-  } catch (err) {
-    console.warn('Server getDoc farm for OG failed:', err);
-  }
-
-  if (!farm) {
-    farm = INITIAL_FARMS.find((f) => f.id === farmId) || null;
-  }
+  const farm = await getFarmByIdServer(farmId);
 
   const farmName = farm?.farmName || 'แปลงกสิกรรมธรรมชาติ';
   const district = farm?.district ? `อ.${farm.district}` : '';
@@ -59,7 +41,7 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title: shareTitle,
-      description: `มาชมของดีแปลง "${farmName}" จ.นครสวรรค์`,
+      description: `มาชมของดีแปลง "${farmName}" (${locationText}) เครือข่ายกสิกรรมธรรมชาติ`,
       images: [defaultPhoto],
     },
   };

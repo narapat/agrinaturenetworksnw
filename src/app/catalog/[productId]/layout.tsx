@@ -1,8 +1,5 @@
 import type { Metadata } from 'next';
-import { db } from '@/services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
-import { INITIAL_PRODUCTS } from '@/data/mockData';
-import { Product } from '@/types';
+import { getProductByIdServer } from '@/lib/serverData';
 
 export async function generateMetadata({
   params,
@@ -10,22 +7,7 @@ export async function generateMetadata({
   params: { productId: string };
 }): Promise<Metadata> {
   const productId = params.productId;
-  let product: Product | null = null;
-
-  try {
-    if (db) {
-      const snap = await getDoc(doc(db, 'products', productId));
-      if (snap.exists()) {
-        product = snap.data() as Product;
-      }
-    }
-  } catch (err) {
-    console.warn('Server getDoc product for OG failed:', err);
-  }
-
-  if (!product) {
-    product = INITIAL_PRODUCTS.find((p) => p.id === productId) || null;
-  }
+  const product = await getProductByIdServer(productId);
 
   const title = product?.title || 'ของดีกสิกรรมธรรมชาติ';
   const farmName = product?.farmName || 'เครือข่ายกสิกรรมธรรมชาติ';
@@ -59,13 +41,13 @@ export async function generateMetadata({
     twitter: {
       card: 'summary_large_image',
       title: shareTitle,
-      description: `มาชมของดี "${title}" จากแปลง "${farmName}" จ.นครสวรรค์`,
+      description: `มาชมของดี "${title}" จากแปลง "${farmName}" ${district} จ.นครสวรรค์`,
       images: [defaultPhoto],
     },
   };
 }
 
-export default function CatalogDetailLayout({
+export default function ProductDetailLayout({
   children,
 }: {
   children: React.ReactNode;
