@@ -36,6 +36,15 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
    - Production Build Check: `npm run build`
    - NEVER weaken rules to bypass code issues; fix the data model or application code instead.
 
+6. **Admin Auth vs Admin Firestore Isolation (No Auth in Pages/SSR)**
+   - Never import `getAdminAuth` or `@/lib/firebaseAdminAuth` from Server Components, layouts, or pages.
+   - Admin Auth is strictly restricted to API Route Handlers (`src/app/api/...`) to prevent bundling `jwks-rsa` into public SSR trees.
+   - Server Components may only import `getAdminDb` from `@/lib/firebaseAdmin`.
+
+7. **Admin Dual-Auth Structural Debt**
+   - Currently, admins must authenticate via BOTH passcode (to access `/admin` via HMAC HTTP-Only cookie) AND LINE Login (to receive the `role: 'admin'` Firebase custom claim allowing Firestore reads).
+   - This is recognized structural debt from having two overlaid authentication systems and will be consolidated into a single unified flow in the future.
+
 ---
 
 ## 📚 Detailed Skill Documentation

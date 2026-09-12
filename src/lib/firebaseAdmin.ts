@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp, cert, type App } from 'firebase-admin/app';
-import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 let adminApp: App | null = null;
@@ -62,14 +61,6 @@ export function getFirebaseAdminApp(): App | null {
     console.error('[FirebaseAdmin] Failed to initialize Firebase Admin SDK:', err);
     return null;
   }
-}
-
-/**
- * เรียกใช้ Firebase Admin Auth
- */
-export function getAdminAuth(): Auth | null {
-  const app = getFirebaseAdminApp();
-  return app ? getAuth(app) : null;
 }
 
 /**

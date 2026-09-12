@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminAuth } from '@/lib/firebaseAdmin';
+import { getAdminAuth } from '@/lib/firebaseAdminAuth';
+
+export const dynamic = 'force-dynamic';
 
 const getAdminLineUserIds = (): string[] => {
   const raw = process.env.ADMIN_LINE_USER_IDS || '';
