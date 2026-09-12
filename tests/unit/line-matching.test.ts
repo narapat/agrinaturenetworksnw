@@ -67,4 +67,21 @@ describe('LINE Profile Matching & Account Linking Tests', () => {
     // System must treat as guest, not accidentally logging into demo accounts
     expect(dataService.getCurrentUser()).toBeNull();
   });
+
+  it('5. should match member by exact ownerUid if already linked', () => {
+    const member = dataService.getMemberById('mem-002');
+    expect(member).toBeDefined();
+    member!.lineUserId = undefined;
+    member!.ownerUid = 'U_OWNER_UID_002';
+
+    const result = dataService.loginWithLineProfile({
+      userId: 'U_OWNER_UID_002',
+      displayName: 'Any Changed Name',
+    });
+
+    expect(result.isRegistered).toBe(true);
+    expect(result.member).toBeDefined();
+    expect(result.member?.id).toBe('mem-002');
+    expect(result.member?.ownerUid).toBe('U_OWNER_UID_002');
+  });
 });

@@ -1174,8 +1174,8 @@ class DataService {
     pictureUrl?: string;
     statusMessage?: string;
   }): { member: MemberProfile | null; isRegistered: boolean } {
-    // 1. ค้นหาสมาชิกเดิมที่มี lineUserId ตรงกัน
-    let member = this.members.find((m) => m.lineUserId === profile.userId);
+    // 1. ค้นหาสมาชิกเดิมที่มี ownerUid หรือ lineUserId ตรงกัน
+    let member = this.members.find((m) => (m.ownerUid && m.ownerUid === profile.userId) || (m.lineUserId && m.lineUserId === profile.userId));
 
     // 2. ถ้าไม่พบ ลองค้นหาด้วย lineId หรือชื่อ (Smart & Partial Matching)
     if (!member && profile.displayName) {
@@ -1201,16 +1201,20 @@ class DataService {
       });
     }
 
-    // 3. หากยังไม่พบ แต่ในเครื่องนี้มีผู้ใช้ปัจจุบันที่สมัครไว้แล้ว (currentUserId) และยังไม่มี lineUserId
+    // 3. หากยังไม่พบ แต่ในเครื่องนี้มีผู้ใช้ปัจจุบันที่สมัครไว้แล้ว (currentUserId) และยังไม่มี ownerUid หรือ lineUserId
     if (!member && this.currentUserId && !DEMO_MEMBER_IDS.includes(this.currentUserId)) {
       const activeMember = this.members.find((m) => m.id === this.currentUserId);
-      if (activeMember && !activeMember.lineUserId) {
+      if (activeMember && !activeMember.ownerUid && !activeMember.lineUserId) {
         member = activeMember;
       }
     }
 
     if (member) {
       let changed = false;
+      if (!member.ownerUid || member.ownerUid !== profile.userId) {
+        member.ownerUid = profile.userId;
+        changed = true;
+      }
       if (!member.lineUserId || member.lineUserId !== profile.userId) {
         member.lineUserId = profile.userId;
         changed = true;
@@ -1239,6 +1243,7 @@ class DataService {
         this.save();
         if (changed) {
           this.firestoreUpdate('members', member.id, {
+            ownerUid: member.ownerUid,
             lineUserId: member.lineUserId,
             facePhotoUrl: member.facePhotoUrl,
             role: member.role,
@@ -1287,17 +1292,32 @@ class DataService {
     if (db) {
       try {
         const { collection, getDocs, query, where } = await import('firebase/firestore');
-        // 3.1 ค้นหาด้วย lineUserId
-        const q = query(collection(db, 'members'), where('lineUserId', '==', profile.userId));
-        const snap = await getDocs(q);
+        // 3.1 ค้นหาด้วย ownerUid ก่อน หากไม่พบให้ค้นหาด้วย lineUserId
+        let q = query(collection(db, 'members'), where('ownerUid', '==', profile.userId));
+        let snap = await getDocs(q);
+        if (snap.empty) {
+          q = query(collection(db, 'members'), where('lineUserId', '==', profile.userId));
+          snap = await getDocs(q);
+        }
         if (!snap.empty) {
           const remoteMem = snap.docs[0].data() as MemberProfile;
+          if (!remoteMem.ownerUid) {
+            remoteMem.ownerUid = profile.userId;
+          }
+          if (!remoteMem.lineUserId) {
+            remoteMem.lineUserId = profile.userId;
+          }
           if (this.isAdminSession() && !hasAdminRole(remoteMem)) {
             remoteMem.roles = Array.from(new Set<UserRole>([...(remoteMem.roles || []), 'member', 'admin']));
             remoteMem.role = 'admin';
           }
           if (!this.members.some((m) => m.id === remoteMem.id)) {
             this.members.unshift(remoteMem);
+          } else {
+            const idx = this.members.findIndex((m) => m.id === remoteMem.id);
+            if (idx !== -1) {
+              this.members[idx] = { ...this.members[idx], ...remoteMem };
+            }
           }
           this.currentUserId = remoteMem.id;
           this.save();
@@ -1316,6 +1336,7 @@ class DataService {
             const snapLineId = await getDocs(qLineId);
             if (!snapLineId.empty) {
               const remoteMem = snapLineId.docs[0].data() as MemberProfile;
+              remoteMem.ownerUid = profile.userId;
               remoteMem.lineUserId = profile.userId;
               if (this.isAdminSession() && !hasAdminRole(remoteMem)) {
                 remoteMem.roles = Array.from(new Set<UserRole>([...(remoteMem.roles || []), 'member', 'admin']));
@@ -1326,6 +1347,7 @@ class DataService {
               } else {
                 const idx = this.members.findIndex((m) => m.id === remoteMem.id);
                 if (idx !== -1) {
+                  this.members[idx].ownerUid = profile.userId;
                   this.members[idx].lineUserId = profile.userId;
                   if (this.isAdminSession()) {
                     this.members[idx].role = 'admin';
@@ -1336,6 +1358,7 @@ class DataService {
               this.currentUserId = remoteMem.id;
               this.save();
               this.firestoreUpdate('members', remoteMem.id, { 
+                ownerUid: profile.userId,
                 lineUserId: profile.userId,
                 role: remoteMem.role,
                 roles: remoteMem.roles,
