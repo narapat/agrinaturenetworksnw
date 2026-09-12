@@ -39,6 +39,8 @@ Farmers' personal information must be protected at all costs:
    - If `isPublicPhone === false`, the `.phone` property **must be omitted/undefined** in public views.
    - If `isPublicLine === false`, the `.lineId` property **must be omitted/undefined** in public views.
    - Verified by: [`tests/unit/data-privacy-roles.test.ts`](file:///Users/narapat/Documents/antigravity/quick-rutherford/tests/unit/data-privacy-roles.test.ts)
+3. **Profile Photo Intentional Placement**:
+   - `facePhotoUrl` in `members` collection is **intentionally retained** for applicant profile photos to foster community trust and peer identification across the network. The subcollection `members/{memberId}/private/pii` also stores `facePhotoUrl` as backup.
 
 ### 🛡️ Invariant 2: Zero Secrets in Client Bundles
 1. **Never prefix admin secrets with `NEXT_PUBLIC_`**:
@@ -75,6 +77,26 @@ To prevent infinite redirect loops in mobile browsers and LINE LIFF in-app brows
 2. **Immutability for Regular Members**:
    - Normal users can only register/create with `status: 'pending'`.
    - Update rules forbid users from changing their own `status` or their farm's `status` (`request.resource.data.status == resource.data.status`). Only admins can approve or reject.
+
+### 🏛️ Invariant 6: Server-Only Document Creation (`members` & `farms`)
+1. **No Client Document Creation**:
+   - Client-side creation of `members` and `farms` documents is strictly forbidden in `firestore.rules` (`allow create: if false`).
+2. **Atomic Route Handlers**:
+   - All registrations and farm creations MUST execute via atomic Server API route handlers (`POST /api/member/register` and `POST /api/farm/create`).
+   - Registration enforces idempotency (`idempotency/{requestId}`) and atomic anti-duplicate guards (`registrations/{ownerUid}`).
+
+### 🚫 Invariant 7: Admin Auth vs Admin Firestore SSR Isolation
+1. **No Admin Auth in Pages / SSR**:
+   - Never import `getAdminAuth` or `@/lib/firebaseAdminAuth` from Server Components, layouts, or pages.
+   - Admin Auth is strictly restricted to API Route Handlers (`src/app/api/...`) to prevent bundling `jwks-rsa` into public SSR trees.
+   - Server Components may only import `getAdminDb` from `@/lib/firebaseAdmin`.
+
+### 📦 Invariant 8: Firebase Admin SDK 13.10.0 Lock & Node 24.x
+1. **Locked Firebase Admin**:
+   - `firebase-admin` must remain locked at version `13.10.0` (with nested CommonJS `jose@4.15.9` under `jwks-rsa`).
+   - Never modify package resolutions or lockfile dependencies in ways that force ES Module resolution of `jose` into Node CommonJS runtimes.
+2. **Node 24.x Runtime**:
+   - Vercel production deployment must execute on Node.js 24.x (matching `package.json` engines `"node": ">=20.0.0"`).
 
 ---
 
