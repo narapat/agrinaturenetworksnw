@@ -158,7 +158,12 @@ export default function CreateFarmPage() {
       }, 1200);
     } catch (err: any) {
       console.error('Error creating farm:', err);
-      setCreateError('เกิดข้อผิดพลาดในการบันทึกข้อมูลแปลง: ' + (err?.message || 'กรุณาลองใหม่อีกครั้ง'));
+      const msg = err?.message || '';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch failed')) {
+        setCreateError('ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบสัญญาณ');
+      } else {
+        setCreateError(msg || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับระบบฐานข้อมูล กรุณาลองใหม่อีกครั้ง');
+      }
       setIsSubmitting(false);
     }
   };

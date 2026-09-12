@@ -398,7 +398,7 @@ class DataService {
                     photos: relatedFarm?.photos,
                   }, token);
                 } catch (rescueErr) {
-                  console.warn(`[Auto-Rescue via Server] Could not rescue member ${localM.id}:`, rescueErr);
+                  console.error(`[Auto-Rescue via Server] Failed to rescue member ${localM.id}:`, rescueErr);
                 }
               }
             }
@@ -488,7 +488,7 @@ class DataService {
                       isPublicLine: localF.isPublicLine,
                     }, token);
                   } catch (fErr) {
-                    console.warn(`[Auto-Rescue via Server] Could not rescue farm ${localF.id}:`, fErr);
+                    console.error(`[Auto-Rescue via Server] Failed to rescue farm ${localF.id}:`, fErr);
                   }
                 }
               }
@@ -600,7 +600,7 @@ class DataService {
             remoteProdMap.set(productToUpload.id, productToUpload);
             console.log(`[Auto-Rescue] Successfully uploaded local product ${productToUpload.id} to Firestore!`);
           } catch (pErr) {
-            console.warn(`[Auto-Rescue] Error uploading local product ${localP.id} to Firestore:`, pErr);
+            console.error(`[Auto-Rescue] Error uploading local product ${localP.id} to Firestore:`, pErr);
           }
         }
 
@@ -805,13 +805,15 @@ class DataService {
     subId: string,
     data: any
   ): Promise<boolean> {
-    if (typeof window === 'undefined' || !db) return false;
+    if (typeof window === 'undefined' || !db) {
+      throw new Error(`Firestore client is not available for [${parentCollection}/${parentId}/${subCollection}/${subId}]`);
+    }
     try {
       await setDoc(doc(db, parentCollection, parentId, subCollection, subId), this.cleanForFirestore(data), { merge: true });
       return true;
     } catch (e) {
-      console.warn(`Firestore set subdoc error [${parentCollection}/${parentId}/${subCollection}/${subId}]:`, e);
-      return false;
+      console.error(`Firestore set subdoc error [${parentCollection}/${parentId}/${subCollection}/${subId}]:`, e);
+      throw new Error(`บันทึกข้อมูลย่อย (${subCollection}) ไม่สำเร็จ: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1559,6 +1561,13 @@ class DataService {
 
       const resData = await response.json().catch(() => ({}));
       if (!response.ok || !resData.success) {
+        if (response.status === 401) {
+          throw new Error('การยืนยันตัวตนกับ LINE หมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่');
+        } else if (response.status === 400) {
+          throw new Error(resData.error || 'ข้อมูลการสมัครไม่ถูกต้อง กรุณาตรวจสอบข้อมูลอีกครั้ง');
+        } else if (response.status === 500) {
+          throw new Error(resData.error || 'ระบบขัดข้องชั่วคราว กรุณาลองใหม่ หรือติดต่อผู้ประสานงาน');
+        }
         throw new Error(resData.error || 'การลงทะเบียนผ่านเซิร์ฟเวอร์ล้มเหลว กรุณาลองใหม่อีกครั้ง');
       }
 
@@ -1585,7 +1594,12 @@ class DataService {
       };
     }
 
-    // 2. Fallback สำหรับสภาพแวดล้อมทดสอบที่ไม่มี LINE Token (In-memory Unit Tests)
+    // ป้องกัน Silent Fallback: หากทำงานในเบราว์เซอร์จริงแต่ไม่มี Token ให้ปฏิเสธทันที
+    if (typeof window !== 'undefined') {
+      throw new Error('ไม่พบข้อมูลการยืนยันตัวตน LINE กรุณาล็อกอิน LINE ก่อนส่งใบสมัคร');
+    }
+
+    // 2. Fallback สำหรับสภาพแวดล้อมทดสอบที่ไม่มี LINE Token (In-memory Unit Tests เท่านั้น)
     const memberId = `mem-${Date.now()}`;
     const farmId = `farm-${Date.now()}`;
 
@@ -1661,10 +1675,6 @@ class DataService {
     this.members.unshift(newMember);
     this.currentUserId = memberId;
     this.save();
-
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('nsw_data_updated'));
-    }
 
     return { 
       member: newMember, 
@@ -2087,6 +2097,13 @@ class DataService {
 
       const resData = await response.json().catch(() => ({}));
       if (!response.ok || !resData.success) {
+        if (response.status === 401) {
+          throw new Error('การยืนยันตัวตนกับ LINE หมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่');
+        } else if (response.status === 400) {
+          throw new Error(resData.error || 'ข้อมูลแปลงไม่ถูกต้อง กรุณาตรวจสอบข้อมูลอีกครั้ง');
+        } else if (response.status === 500) {
+          throw new Error(resData.error || 'ระบบขัดข้องชั่วคราว กรุณาลองใหม่ หรือติดต่อผู้ประสานงาน');
+        }
         throw new Error(resData.error || 'การสร้างแปลงผ่านเซิร์ฟเวอร์ล้มเหลว กรุณาลองใหม่อีกครั้ง');
       }
 
@@ -2105,7 +2122,12 @@ class DataService {
       return createdFarm;
     }
 
-    // 2. Fallback สำหรับสภาพแวดล้อม Local / Offline Unit Tests
+    // ป้องกัน Silent Fallback: หากทำงานในเบราว์เซอร์จริงแต่ไม่มี Token ให้ปฏิเสธทันที
+    if (typeof window !== 'undefined') {
+      throw new Error('ไม่พบข้อมูลการยืนยันตัวตน LINE กรุณาล็อกอิน LINE ก่อนสร้างแปลง');
+    }
+
+    // 2. Fallback สำหรับสภาพแวดล้อม Local / Offline Unit Tests เท่านั้น
     const farmId = `farm-${Date.now()}`;
     const newFarm: Farm = {
       id: farmId,
@@ -2156,9 +2178,6 @@ class DataService {
       }
     );
 
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('nsw_data_updated'));
-    }
     return newFarm;
   }
 

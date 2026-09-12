@@ -62,6 +62,7 @@ export default function MemberRegisterPage() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [submittingStep, setSubmittingStep] = useState('');
   const [hasConsentedPdpa, setHasConsentedPdpa] = useState(false);
 
   // LINE Auth Profile State
@@ -186,6 +187,11 @@ export default function MemberRegisterPage() {
       return;
     }
 
+    if (isCropperOpen || !facePhotoUrl) {
+      setErrorMessage('กรุณารอรูปหน้าตรงโหลดเสร็จสมบูรณ์ก่อนส่งใบสมัคร');
+      return;
+    }
+
     if (!hasConsentedPdpa) {
       setErrorMessage('กรุณาทำเครื่องหมายยินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) ก่อนส่งใบสมัคร');
       return;
@@ -193,17 +199,22 @@ export default function MemberRegisterPage() {
 
     setIsSubmitting(true);
     setSubmitStatus('saving');
+    setSubmittingStep('กำลังยืนยันตัวตนกับ LINE...');
     setErrorMessage('');
 
     try {
       const idToken = liffService.getIdToken();
       if (!idToken) {
         setSubmitStatus('error');
-        setErrorMessage('ไม่พบข้อมูลการยืนยันตัวตน LINE หรือการเชื่อมต่อหมดอายุ กรุณาลองเข้าสู่ระบบ LINE ใหม่อีกครั้งครับ');
+        setErrorMessage('การยืนยันตัวตนกับ LINE หมดอายุ กรุณารีเฟรชหน้าแล้วลองใหม่');
         setIsSubmitting(false);
         return;
       }
 
+      setSubmittingStep('กำลังบันทึกข้อมูลสมาชิกและแปลง...');
+      await new Promise((r) => setTimeout(r, 150));
+
+      setSubmittingStep('กำลังส่งข้อมูลเข้าสู่ระบบ...');
       const res = await dataService.registerNewMember({
         fullName: cleanName,
         facePhotoUrl,
@@ -230,13 +241,18 @@ export default function MemberRegisterPage() {
         }, 1600);
       } else {
         setSubmitStatus('error');
-        setErrorMessage('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        setErrorMessage('ไม่สามารถบันทึกข้อมูลได้ กรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ประสานงาน');
         setIsSubmitting(false);
       }
     } catch (err: any) {
       console.error('Registration error:', err);
       setSubmitStatus('error');
-      setErrorMessage(err?.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับระบบฐานข้อมูล กรุณาลองใหม่อีกครั้ง');
+      const msg = err?.message || '';
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch failed')) {
+        setErrorMessage('ไม่สามารถเชื่อมต่ออินเทอร์เน็ตได้ กรุณาตรวจสอบสัญญาณ');
+      } else {
+        setErrorMessage(msg || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับระบบฐานข้อมูล กรุณาลองใหม่อีกครั้ง');
+      }
       setIsSubmitting(false);
     }
   };
@@ -776,7 +792,7 @@ export default function MemberRegisterPage() {
             {submitStatus === 'saving' && (
               <div className="p-4 bg-brand-50 border border-brand-200 rounded-2xl flex items-center justify-center gap-3 text-brand-900 font-bold animate-in fade-in">
                 <Loader2 className="w-5 h-5 text-brand-600 animate-spin" />
-                <span>กำลังบันทึกข้อมูลเข้าสู่ระบบฐานข้อมูลเครือข่าย กรุณารอสักครู่...</span>
+                <span>{submittingStep || 'กำลังบันทึกข้อมูลเข้าสู่ระบบฐานข้อมูลเครือข่าย กรุณารอสักครู่...'}</span>
               </div>
             )}
 
@@ -796,18 +812,23 @@ export default function MemberRegisterPage() {
             <div className="pt-4 border-t border-stone-100">
               <button
                 type="submit"
-                disabled={isSubmitting || submitStatus === 'saving' || submitStatus === 'success'}
+                disabled={isSubmitting || submitStatus === 'saving' || submitStatus === 'success' || isCheckingLine || !lineProfile}
                 className="w-full py-4 px-6 rounded-full bg-brand-600 hover:bg-brand-700 disabled:bg-stone-400 text-white font-black text-lg shadow-lg shadow-brand-600/25 flex items-center justify-center gap-2 transition-all touch-target-big cursor-pointer disabled:cursor-not-allowed"
               >
                 {submitStatus === 'saving' ? (
                   <>
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    <span>กำลังบันทึกข้อมูล...</span>
+                    <span>{submittingStep || 'กำลังบันทึกข้อมูล...'}</span>
                   </>
                 ) : submitStatus === 'success' ? (
                   <>
                     <Check className="w-6 h-6" />
                     <span>บันทึกสำเร็จเรียบร้อย!</span>
+                  </>
+                ) : (isCheckingLine || !lineProfile) ? (
+                  <>
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span>กรุณารอสักครู่ กำลังเชื่อมต่อ LINE...</span>
                   </>
                 ) : (
                   <>
