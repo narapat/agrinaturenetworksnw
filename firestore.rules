@@ -4,18 +4,29 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ==========================================
-    // HELPER FUNCTIONS & VALIDATIONS
+    // HELPER FUNCTIONS & AUTH VERIFICATION
     // ==========================================
 
-    // ตรวจสอบว่าผู้ใช้มีบทบาทผู้ดูแลระบบ (Admin)
+    // ตรวจสอบว่าผู้ใช้ผ่านการยืนยันตัวตน (Firebase Auth)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // ตรวจสอบสิทธิ์ผู้ดูแลระบบ (Admin Claim หรือ Email เฉพาะ)
     function isAdmin() {
-      return request.auth != null && (
+      return isAuthenticated() && (
         request.auth.token.role == 'admin' ||
+        request.auth.token.admin == true ||
         request.auth.token.email == 'agrinature.network.nsw@gmail.com'
       );
     }
 
-    // ตรวจสอบความถูกต้องของสตริงทั่วไป (ป้องกัน DoS / Storage Abuse)
+    // ตรวจสอบความเป็นเจ้าของเอกสารด้วย UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ตรวจสอบความถูกต้องของสตริงทั่วไป
     function isValidString(str, minLen, maxLen) {
       return str is string && str.size() >= minLen && str.size() <= maxLen;
     }
@@ -26,39 +37,43 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 1. MEMBERS COLLECTION (ข้อมูลสมาชิก)
+    // 1. MEMBERS COLLECTION & SUBCOLLECTIONS
     // ==========================================
     match /members/{memberId} {
-      // บุคคลทั่วไปสามารถอ่านรายชื่อสมาชิกเพื่อดูผู้ผลิตได้
-      allow read: if true;
+      // สมาชิกที่ยืนยันตัวตนแล้ว หรือ แอดมิน เท่านั้นที่อ่านรายชื่อสมาชิกได้
+      allow read: if isAuthenticated();
 
-      // การสมัครสมาชิกใหม่ (Self-registration)
-      // กำหนดให้สถานะเริ่มต้นต้องเป็น 'pending' เสมอ ห้ามแต่งตั้งตนเองเป็น 'admin'
+      // การสมัครสมาชิกใหม่ (Self-registration):
+      // บังคับสถานะเริ่มต้นต้องเป็น 'pending' เสมอ (ห้ามตั้งเป็น 'approved' หรือ 'admin' เอง)
       allow create: if isValidString(request.resource.data.fullName, 2, 120)
                     && (request.resource.data.role == 'member' || request.resource.data.role == 'guest')
-                    && request.resource.data.status in ['pending', 'approved']
-                    && request.resource.data.phone is string
-                    && request.resource.data.phone.size() <= 30;
+                    && request.resource.data.status == 'pending';
 
-      // การแก้ไขข้อมูลสมาชิก: เจ้าของบัญชีหรือแอดมิน
+      // การแก้ไขข้อมูลสมาชิก:
+      // เจ้าของบัญชีแก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด
+      // การอนุมัติ (status == 'approved') ทำได้โดยแอดมินเท่านั้น
       allow update: if (
-                      request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-                        'fullName', 'facePhotoUrl', 'lineId', 'phone', 'isPublicPhone',
-                        'isPublicLine', 'isPublicSocials', 'socials', 'fontSizePref',
-                        'farmId', 'delegationStatus', 'delegationNote', 'lineUserId', 'status'
-                      ]) && request.resource.data.status in ['pending', 'approved', 'rejected']
+                      isOwner(memberId) &&
+                      request.resource.data.status == resource.data.status
                     ) || isAdmin();
 
-      // ลบสมาชิก
-      allow delete: if true;
+      // ไม่อนุญาตให้ลบข้อมูลสมาชิกโดยตรง สงวนให้แอดมินเท่านั้น
+      allow delete: if isAdmin();
+
+      // Subcollection ข้อมูลส่วนบุคคลอ่อนไหว (PII: เบอร์โทร, LINE ID, รูปหน้า, ประวัติการอบรม)
+      match /private/pii {
+        allow read, write: if isOwner(memberId) || isAdmin();
+      }
     }
 
     // ==========================================
-    // 2. FARMS COLLECTION (ข้อมูลแปลงกสิกรรม)
+    // 2. FARMS COLLECTION & SUBCOLLECTIONS
     // ==========================================
     match /farms/{farmId} {
-      // ข้อมูลแปลงและเรื่องเล่าปรัชญาอ่านได้สาธารณะ
-      allow read: if true;
+      // แปลงที่ได้รับการอนุมัติ (approved) เปิดให้อ่านสาธารณะ
+      // แปลงที่รอดำเนินการอ่านได้เฉพาะเจ้าของหรือแอดมิน
+      allow read: if (resource.data.status == 'approved') ||
+                     (isAuthenticated() && (resource.data.memberId == request.auth.uid || isAdmin()));
 
       // สร้างแปลงใหม่พร้อมข้อมูลที่ถูกต้อง
       allow create: if isValidString(request.resource.data.farmName, 2, 150)
@@ -67,72 +82,76 @@ service cloud.firestore {
                     && request.resource.data.photos is list
                     && request.resource.data.photos.size() <= 10;
 
-      // อัปเดตข้อมูลแปลง
-      allow update: if isValidString(request.resource.data.farmName, 2, 150)
-                    && request.resource.data.photos is list
-                    && request.resource.data.photos.size() <= 10;
+      // อัปเดตข้อมูลแปลง: เจ้าของแปลง หรือ แอดมิน
+      allow update: if isAuthenticated() && (
+        resource.data.memberId == request.auth.uid || isAdmin()
+      );
 
-      // ลบแปลง
-      allow delete: if true;
+      // ไม่อนุญาตให้ลบแปลงโดยตรง สงวนให้แอดมิน
+      allow delete: if isAdmin();
+
+      // Subcollection สำหรับพิกัด GPS จริง (internalCoordinates) และเบอร์ติดต่อส่วนบุคคล
+      // เฉพาะเจ้าของแปลงและแอดมินเท่านั้นที่เข้าถึงได้ (Anti-Scammer Guarantee)
+      match /private/contact {
+        allow read, write: if isAuthenticated() && (
+          get(/databases/$(database)/documents/farms/$(farmId)).data.memberId == request.auth.uid ||
+          isAdmin()
+        );
+      }
     }
 
     // ==========================================
     // 3. PRODUCTS COLLECTION (ผลผลิต & ปัจจัยการผลิต)
     // ==========================================
     match /products/{productId} {
-      // ผลผลิตในตลาดเครือข่ายเปิดให้อ่านสาธารณะ
+      // อ่านข้อมูลผลผลิตสาธารณะได้
       allow read: if true;
 
-      // สมาชิกเพิ่มผลผลิตเข้าสู่ระบบ
-      allow create: if isValidString(request.resource.data.title, 2, 150)
+      // สมาชิกที่ล็อกอินหรือแอดมิน เพิ่มและแก้ไขผลผลิต
+      allow create: if isAuthenticated()
+                    && isValidString(request.resource.data.title, 2, 150)
                     && isValidNumber(request.resource.data.price, 0, 1000000)
                     && request.resource.data.status in ['sale', 'share', 'preorder', 'out_of_stock', 'hidden']
                     && request.resource.data.images is list
                     && request.resource.data.images.size() <= 6;
 
-      // อัปเดตข้อมูลผลผลิตและสต็อก
-      allow update: if isValidString(request.resource.data.title, 2, 150)
-                    && isValidNumber(request.resource.data.price, 0, 1000000)
-                    && request.resource.data.status in ['sale', 'share', 'preorder', 'out_of_stock', 'hidden'];
-
-      // ลบผลผลิตได้
-      allow delete: if true;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() || isAdmin();
     }
 
     // ==========================================
-    // 4. CATEGORIES COLLECTION (หมวดหมู่ & SKU)
+    // 4. CATEGORIES, PRACTICES, NEWS
     // ==========================================
     match /categories/{categoryId} {
       allow read: if true;
-      allow create, update, delete: if isValidString(request.resource.data.name, 2, 80);
+      allow write: if isAdmin();
     }
 
-    // ==========================================
-    // 5. NEWS COLLECTION (ข่าวสาร & ตารางเอามื้อ)
-    // ==========================================
-    match /news/{newsId} {
-      allow read: if true;
-      allow create, update, delete: if isValidString(request.resource.data.title, 2, 200)
-                                    && isValidString(request.resource.data.content, 5, 20000);
-    }
-
-    // ==========================================
-    // 6. AUDIT LOGS COLLECTION (ประวัติความโปร่งใส)
-    // ==========================================
-    match /auditLogs/{logId} {
-      // ประวัติการคัดกรองและการช่วยเหลือของแอดมิน
-      allow read: if true;
-      // บันทึก Log เพิ่มเติมได้ แต่ห้ามแก้ไขหรือลบย้อนหลังโดยเด็ดขาด (Append-only)
-      allow create: if isValidString(request.resource.data.action, 2, 50);
-      allow update, delete: if false;
-    }
-
-    // ==========================================
-    // 7. PRACTICES COLLECTION (วิถีและศาสตร์กสิกรรมธรรมชาติ)
-    // ==========================================
     match /practices/{practiceId} {
       allow read: if true;
-      allow create, update, delete: if isValidString(request.resource.data.name, 2, 120);
+      allow write: if isAdmin();
+    }
+
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ==========================================
+    // 5. AUDIT LOGS (Zero Client Writes)
+    // ==========================================
+    match /auditLogs/{logId} {
+      // ประวัติความโปร่งใสอ่านได้เฉพาะแอดมิน
+      allow read: if isAdmin();
+      // ปฏิเสธการเขียนตรงจากเบราว์เซอร์ 100% (เขียนผ่าน Firebase Admin SDK บน Server API เท่านั้น)
+      allow write: if false;
+    }
+
+    // ==========================================
+    // 6. DEFAULT DENY-ALL RULE
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
     }
 
   }

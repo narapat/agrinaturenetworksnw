@@ -325,20 +325,8 @@ class DataService {
         this.members = this.members.map((localM) => {
           const remoteM = remoteMemMap.get(localM.id);
           if (!remoteM) return localM;
-          // จุดสำคัญ: ถ้าสมาชิกได้รับการอนุมัติในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
-          if (localM.status === 'approved') {
-            if (remoteM.status !== 'approved') {
-              this.firestoreUpdate('members', localM.id, { status: 'approved' });
-            }
-            return { ...remoteM, ...localM, status: 'approved' };
-          }
-          // จุดสำคัญ: ถ้าสมาชิกถูกปฏิเสธ (rejected) ในเครื่องแล้ว ห้ามโดนข้อมูลเก่าใน Firestore ทับกลับเป็น pending!
-          if (localM.status === 'rejected') {
-            if (remoteM.status !== 'rejected') {
-              this.firestoreUpdate('members', localM.id, { status: 'rejected' });
-            }
-            return { ...remoteM, ...localM, status: 'rejected' };
-          }
+          // ความปลอดภัย: Cloud Firestore เป็น Single Source of Truth สำหรับสถานะสมาชิก
+          // ไม่ดันสถานะ approved จาก local cache ขึ้น Firestore เองเด็ดขาด
           return { ...localM, ...remoteM };
         });
 
@@ -369,29 +357,75 @@ class DataService {
               } catch {}
             }
 
-            const sanitizedMember: MemberProfile = {
-              ...localM,
-              phone: cleanPhone,
-              facePhotoUrl: safePhoto,
+            // แยก Document หลัก (Public/Member view) และ Subcollection private/pii
+            const publicMemberDoc: Partial<MemberProfile> = {
+              id: localM.id,
+              fullName: localM.fullName,
+              role: localM.role || 'member',
+              status: 'pending', // บังคับสถานะเริ่มต้นต้องเป็น pending เสมอ
+              farmId: localM.farmId || '',
+              farmName: localM.farmName || '',
+              createdAt: localM.createdAt || new Date().toISOString(),
+              delegationStatus: localM.delegationStatus || 'none',
             };
 
-            await this.firestoreSet('members', localM.id, sanitizedMember);
+            const privatePiiDoc = {
+              phone: cleanPhone,
+              lineId: localM.lineId || '',
+              lineUserId: localM.lineUserId || '',
+              facePhotoUrl: safePhoto,
+              trainingCourse: localM.trainingCourse || '',
+              trainingLocation: localM.trainingLocation || '',
+              updatedAt: new Date().toISOString(),
+            };
+
+            await this.firestoreSet('members', localM.id, publicMemberDoc);
+            await this.firestoreSetSubdoc('members', localM.id, 'private', 'pii', privatePiiDoc);
 
             // ซิงค์แปลงกสิกรรมที่ผูกกันด้วย
             const relatedFarm = this.farms.find((f) => f.id === localM.farmId || f.memberId === localM.id);
             if (relatedFarm) {
-              await this.firestoreSet('farms', relatedFarm.id, relatedFarm);
+              const publicFarmDoc: Partial<Farm> = {
+                id: relatedFarm.id,
+                memberId: relatedFarm.memberId,
+                ownerName: relatedFarm.ownerName,
+                farmName: relatedFarm.farmName,
+                tagline: relatedFarm.tagline,
+                story: relatedFarm.story,
+                photos: relatedFarm.photos,
+                district: relatedFarm.district,
+                subdistrict: relatedFarm.subdistrict,
+                publicZone: relatedFarm.publicZone,
+                practices: relatedFarm.practices,
+                isPublicPhone: relatedFarm.isPublicPhone,
+                isPublicLine: relatedFarm.isPublicLine,
+                phone: relatedFarm.isPublicPhone ? relatedFarm.phone : undefined,
+                lineId: relatedFarm.isPublicLine ? relatedFarm.lineId : undefined,
+                socials: relatedFarm.socials,
+              };
+
+              const privateContactDoc = {
+                internalCoordinates: relatedFarm.internalCoordinates,
+                phone: relatedFarm.phone,
+                lineId: relatedFarm.lineId,
+                updatedAt: new Date().toISOString(),
+              };
+
+              await this.firestoreSet('farms', relatedFarm.id, publicFarmDoc);
+              await this.firestoreSetSubdoc('farms', relatedFarm.id, 'private', 'contact', privateContactDoc);
             }
 
-            // บันทึก Audit Log
-            await this.firestoreSet('auditLogs', `log-rescue-${Date.now()}`, {
+            // บันทึก Audit Log ผ่าน Server API
+            await this.recordAuditLog({
               id: `log-rescue-${Date.now()}`,
-              timestamp: new Date().toISOString(),
               action: 'register_member',
-              actorRole: 'member',
-              actorName: localM.fullName,
+              performedByAdminId: localM.lineUserId || localM.id,
+              performedByAdminName: localM.fullName,
+              targetMemberId: localM.id,
+              targetMemberName: localM.fullName,
+              targetFarmName: relatedFarm?.farmName || '-',
+              timestamp: new Date().toLocaleString('th-TH'),
               details: `ระบบ Auto-Rescue ซิงค์ข้อมูลใบสมัครที่ค้างในเครื่องขึ้น Cloud Firestore อัตโนมัติ (แปลง: ${relatedFarm?.farmName || '-'})`,
-              targetId: localM.id,
             });
             console.log(`[Auto-Rescue] Successfully uploaded member ${localM.id} and farm to Cloud Firestore!`);
           } catch (rescueErr) {
@@ -730,6 +764,51 @@ class DataService {
     } catch (e) {
       console.warn(`Firestore delete error [${collectionName}/${id}]:`, e);
       return false;
+    }
+  }
+
+  private async firestoreSetSubdoc(
+    parentCollection: string,
+    parentId: string,
+    subCollection: string,
+    subId: string,
+    data: any
+  ): Promise<boolean> {
+    if (typeof window === 'undefined' || !db) return false;
+    try {
+      await setDoc(doc(db, parentCollection, parentId, subCollection, subId), this.cleanForFirestore(data), { merge: true });
+      return true;
+    } catch (e) {
+      console.warn(`Firestore set subdoc error [${parentCollection}/${parentId}/${subCollection}/${subId}]:`, e);
+      return false;
+    }
+  }
+
+  /**
+   * บันทึก Audit Log ผ่าน Server API (/api/audit) ป้องกันการเขียนตรงจากเบราว์เซอร์ 100%
+   */
+  async recordAuditLog(log: AuditLog): Promise<void> {
+    if (!this.auditLogs.some((l) => l.id === log.id)) {
+      this.auditLogs.unshift(log);
+      this.save();
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        await fetch('/api/audit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: log.action,
+            actorRole: 'admin',
+            actorName: log.performedByAdminName || 'Admin',
+            targetId: log.targetMemberId || log.targetFarmName || undefined,
+            details: log.details,
+            metadata: { logId: log.id, timestamp: log.timestamp },
+          }),
+        });
+      } catch (e) {
+        console.warn('Could not record audit log via server API:', e);
+      }
     }
   }
 
@@ -1415,19 +1494,78 @@ class DataService {
     this.currentUserId = memberId; // สลับผู้ใช้เป็นสมาชิกใหม่ทันที
     this.save();
 
-    // 2. บันทึกและรอผลจาก Cloud Firestore (Await guarantee)
+    // 2. บันทึกและรอผลจาก Cloud Firestore แยก Subcollections ป้องกันข้อมูลรั่วไหล 100%
     let memberSaved = false;
     let farmSaved = false;
     try {
-      [memberSaved, farmSaved] = await Promise.all([
-        this.firestoreSet('members', newMember.id, newMember),
-        this.firestoreSet('farms', newFarm.id, newFarm),
+      // 2.1 แยกข้อมูล Farm: Document หลัก (สาธารณะ) vs Subcollection private/contact
+      const publicFarmDoc: Partial<Farm> = {
+        id: newFarm.id,
+        memberId: newFarm.memberId,
+        ownerName: newFarm.ownerName,
+        farmName: newFarm.farmName,
+        tagline: newFarm.tagline,
+        story: newFarm.story,
+        photos: newFarm.photos,
+        district: newFarm.district,
+        subdistrict: newFarm.subdistrict,
+        publicZone: newFarm.publicZone,
+        practices: newFarm.practices,
+        isPublicPhone: newFarm.isPublicPhone,
+        isPublicLine: newFarm.isPublicLine,
+        phone: newFarm.isPublicPhone ? newFarm.phone : undefined,
+        lineId: newFarm.isPublicLine ? newFarm.lineId : undefined,
+        socials: newFarm.socials,
+      };
+
+      const privateContactDoc = {
+        internalCoordinates: newFarm.internalCoordinates,
+        phone: newFarm.phone,
+        lineId: newFarm.lineId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // 2.2 แยกข้อมูล Member: Document หลัก vs Subcollection private/pii
+      const publicMemberDoc: Partial<MemberProfile> = {
+        id: newMember.id,
+        fullName: newMember.fullName,
+        role: newMember.role,
+        status: newMember.status,
+        farmId: newMember.farmId,
+        farmName: cleanFarmName,
+        createdAt: newMember.createdAt,
+        delegationStatus: newMember.delegationStatus,
+      };
+
+      const privatePiiDoc = {
+        phone: cleanPhone,
+        lineId: cleanLineId,
+        lineUserId: data.lineUserId || '',
+        facePhotoUrl: data.facePhotoUrl,
+        trainingCourse: (data.trainingCourse || '').trim(),
+        trainingLocation: (data.trainingLocation || '').trim(),
+        isPublicPhone: data.isPublicPhone,
+        isPublicLine: data.isPublicLine,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const [mRes, fRes] = await Promise.all([
+        this.firestoreSet('members', newMember.id, publicMemberDoc),
+        this.firestoreSet('farms', newFarm.id, publicFarmDoc),
+      ]);
+      memberSaved = mRes;
+      farmSaved = fRes;
+
+      // บันทึก Subcollections
+      await Promise.all([
+        this.firestoreSetSubdoc('members', newMember.id, 'private', 'pii', privatePiiDoc),
+        this.firestoreSetSubdoc('farms', newFarm.id, 'private', 'contact', privateContactDoc),
       ]);
     } catch (err) {
       console.warn('Firestore write error in registerNewMember:', err);
     }
 
-    // 3. จัดเก็บ Audit Log บันทึกประวัติการสมัครสมาชิกเพื่อความโปร่งใส
+    // 3. จัดเก็บ Audit Log บันทึกประวัติการสมัครสมาชิกผ่าน Server API
     const auditLog: AuditLog = {
       id: `log-${Date.now()}`,
       action: 'register_member',
@@ -1437,13 +1575,9 @@ class DataService {
       targetMemberName: cleanFullName,
       targetFarmName: cleanFarmName,
       timestamp: new Date().toLocaleString('th-TH'),
-      details: `สมาชิก ${cleanFullName} ลงทะเบียนแปลง ${cleanFarmName} (เบอร์: ${cleanPhone}, LINE: ${data.lineUserId || cleanLineId || 'N/A'}) รอดำเนินการอนุมัติ`,
+      details: `สมาชิก ${cleanFullName} ลงทะเบียนแปลง ${cleanFarmName} รอดำเนินการอนุมัติ`,
     };
-    this.auditLogs.unshift(auditLog);
-    this.save();
-    try {
-      await this.firestoreSet('auditLogs', auditLog.id, auditLog);
-    } catch {}
+    await this.recordAuditLog(auditLog);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
@@ -1542,7 +1676,7 @@ class DataService {
     // ซิงค์ไปยัง Cloud Firestore
     await this.firestoreSet('products', newProduct.id, newProduct);
     await this.firestoreUpdate('members', member.id, { delegationStatus: 'completed' });
-    await this.firestoreSet('auditLogs', newLog.id, newLog);
+    await this.recordAuditLog(newLog);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
@@ -2001,8 +2135,7 @@ class DataService {
       details: `แก้ไขข้อมูลชนิดผลผลิต (SKU): "${cat.name}" (${this.getCategoryName(cat.category)})`,
       timestamp: new Date().toLocaleString('th-TH'),
     };
-    this.auditLogs.unshift(newLog);
-    this.firestoreSet('auditLogs', newLog.id, newLog);
+    this.recordAuditLog(newLog);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
@@ -2063,8 +2196,7 @@ class DataService {
         : `ลบชนิดผลผลิต "${deletedName}" (ไม่มีผลผลิตตกค้าง)`,
       timestamp: new Date().toLocaleString('th-TH'),
     };
-    this.auditLogs.unshift(newLog);
-    this.firestoreSet('auditLogs', newLog.id, newLog);
+    this.recordAuditLog(newLog);
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('nsw_data_updated'));
@@ -2101,9 +2233,7 @@ class DataService {
       details,
       timestamp: new Date().toLocaleString('th-TH'),
     };
-    this.auditLogs.unshift(newLog);
-    this.save();
-    await this.firestoreSet('auditLogs', newLog.id, newLog);
+    await this.recordAuditLog(newLog);
   }
 
   // ==================== ADMIN: FARM PRACTICES (วิถีและศาสตร์กสิกรรมธรรมชาติ) ====================
@@ -2289,7 +2419,7 @@ class DataService {
       this.save();
 
       this.firestoreUpdate('members', memberId, { status: 'approved' });
-      this.firestoreSet('auditLogs', newLog.id, newLog);
+      this.recordAuditLog(newLog);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('nsw_data_updated'));
@@ -2323,9 +2453,9 @@ class DataService {
       };
       this.auditLogs.unshift(newLog);
       this.save();
+      this.recordAuditLog(newLog);
 
       this.firestoreUpdate('members', memberId, { status: 'rejected' });
-      this.firestoreSet('auditLogs', newLog.id, newLog);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('nsw_data_updated'));
@@ -2353,7 +2483,7 @@ class DataService {
       timestamp: new Date().toLocaleString('th-TH'),
     };
     this.auditLogs.unshift(newLog);
-    this.firestoreSet('auditLogs', newLog.id, newLog);
+    this.recordAuditLog(newLog);
 
     this.members = this.members.filter((m) => m.id !== memberId);
     if (farmId) {

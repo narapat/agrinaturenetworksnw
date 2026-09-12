@@ -6,11 +6,19 @@ const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 วัน
 
 // Secret สำหรับ HMAC Signing บน Server เท่านั้น (Client จะมองไม่เห็น 100%)
 const getSecret = (): string => {
-  return process.env.ADMIN_SESSION_SECRET || 'nsw_agri_secure_hmac_secret_2026_9f8d7c6b5a4';
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  if (!secret) {
+    throw new Error('Server configuration error: ADMIN_SESSION_SECRET is not configured');
+  }
+  return secret;
 };
 
 const getAdminPasscode = (): string => {
-  return process.env.ADMIN_PASSCODE || 'agrinature2026';
+  const passcode = process.env.ADMIN_PASSCODE;
+  if (!passcode) {
+    throw new Error('Server configuration error: ADMIN_PASSCODE is not configured');
+  }
+  return passcode;
 };
 
 const getAdminLineUserIds = (): string[] => {
@@ -136,7 +144,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('Server Admin Auth Error:', err);
     return NextResponse.json(
-      { success: false, message: 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์' },
+      { success: false, message: err?.message || 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์' },
       { status: 500 }
     );
   }

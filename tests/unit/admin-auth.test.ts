@@ -158,4 +158,36 @@ describe('Admin Authentication & HMAC-SHA256 Security Tests', () => {
     expect(setCookie).toContain('nsw_admin_auth_session=;');
     expect(setCookie).toContain('Max-Age=0');
   });
+
+  it('9. POST /api/admin/auth without ADMIN_PASSCODE must return 500 and not use hardcoded fallback', async () => {
+    delete process.env.ADMIN_PASSCODE;
+
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      method: 'POST',
+      body: JSON.stringify({ passcode: 'agrinature2026' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toContain('Server configuration error');
+  });
+
+  it('10. POST /api/admin/auth without ADMIN_SESSION_SECRET must return 500 and fail securely', async () => {
+    delete process.env.ADMIN_SESSION_SECRET;
+
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      method: 'POST',
+      body: JSON.stringify({ passcode: 'test-admin-secret-passcode' }),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
+    const json = await res.json();
+    expect(json.success).toBe(false);
+    expect(json.message).toContain('Server configuration error');
+  });
 });

@@ -62,6 +62,7 @@ export default function MemberRegisterPage() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [phoneError, setPhoneError] = useState('');
+  const [hasConsentedPdpa, setHasConsentedPdpa] = useState(false);
 
   // LINE Auth Profile State
   const [isCheckingLine, setIsCheckingLine] = useState(true);
@@ -182,6 +183,11 @@ export default function MemberRegisterPage() {
     if (digitsOnly.length < 9 || digitsOnly.length > 10) {
       setPhoneError('กรุณากรอกเบอร์โทรศัพท์ 9-10 หลักให้ถูกต้อง (เช่น 081-234-5678)');
       setErrorMessage('กรุณาตรวจสอบความถูกต้องของเบอร์โทรศัพท์');
+      return;
+    }
+
+    if (!hasConsentedPdpa) {
+      setErrorMessage('กรุณาทำเครื่องหมายยินยอมตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) ก่อนส่งใบสมัคร');
       return;
     }
 
@@ -700,6 +706,63 @@ export default function MemberRegisterPage() {
                 className="w-full p-4 rounded-2xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               ></textarea>
             </div>
+
+            {/* 8. PDPA Privacy Policy & Consent Notice */}
+            <div className="bg-emerald-50/80 border-2 border-emerald-300/80 rounded-3xl p-5 sm:p-6 space-y-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center shrink-0 text-emerald-800">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-black text-emerald-950 flex items-center gap-2">
+                    <span>นโยบายความเป็นส่วนตัวและมาตรการป้องกันมิจฉาชีพ (PDPA)</span>
+                  </h3>
+                  <p className="text-xs text-emerald-800 leading-relaxed font-semibold">
+                    เครือข่ายกสิกรรมธรรมชาตินครสวรรค์ ให้ความสำคัญสูงสุดกับความปลอดภัยและความเป็นส่วนตัวของเกษตรกรทุกท่าน
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-white/90 rounded-2xl p-4 border border-emerald-200/80 text-xs text-stone-700 space-y-2.5 leading-relaxed">
+                <p>
+                  🛡️ <strong className="text-stone-900">ข้อมูลที่จัดเก็บ:</strong> ชื่อ-นามสกุล, ภาพถ่ายใบหน้าตรงสำหรับยืนยันตัวตน, เบอร์โทรศัพท์, LINE ID, ประวัติการอบรมกสิกรรมธรรมชาติ, และพิกัดที่ตั้งแปลง
+                </p>
+                <p>
+                  🔒 <strong className="text-stone-900">การคุ้มครองข้อมูลสูงสุด (Anti-Scammer Guarantee):</strong> ภาพถ่ายใบหน้าตรงและพิกัดแปลงจริง (GPS) จะถูกจัดเก็บเป็นความลับเฉพาะตัวท่านและแอดมินเครือข่ายในการตรวจสอบสิทธิ์เท่านั้น จะไม่มีการเปิดเผยพิกัดจริงหรือเบอร์ติดต่อส่วนตัวสู่สาธารณะโดยไม่ได้รับอนุญาต ประชาชนทั่วไปจะมองเห็นเพียง "ระดับโซนตำบล/อำเภอโดยประมาณ" เท่านั้น
+                </p>
+                <p>
+                  🌿 <strong className="text-stone-900">วัตถุประสงค์:</strong> ใช้เพื่อการประสานงานภายในเครือข่าย การเผยแพร่ผลผลิต การจัดกิจกรรมเอามื้อสามัคคี และการแบ่งปันเมล็ดพันธุ์
+                </p>
+                <p>
+                  📝 <strong className="text-stone-900">สิทธิของท่าน:</strong> ท่านมีสิทธิ์ขอตรวจสอบ ปรับปรุง หรือขอลบข้อมูลของตนเองออกจากระบบได้ตลอดเวลาผ่านผู้ประสานงานเครือข่าย
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 p-4 rounded-2xl bg-white border-2 border-emerald-300 hover:border-emerald-500 transition-colors cursor-pointer touch-target shadow-sm">
+                <input
+                  type="checkbox"
+                  checked={hasConsentedPdpa}
+                  onChange={(e) => {
+                    setHasConsentedPdpa(e.target.checked);
+                    if (e.target.checked && errorMessage.includes('PDPA')) {
+                      setErrorMessage('');
+                    }
+                  }}
+                  className="mt-0.5 w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 border-stone-300 shrink-0 cursor-pointer"
+                />
+                <span className="text-xs sm:text-sm font-bold text-emerald-950 leading-snug">
+                  ข้าพเจ้าได้อ่าน เข้าใจ และยินยอมให้เครือข่ายกสิกรรมธรรมชาตินครสวรรค์ จัดเก็บและประมวลผลข้อมูลส่วนบุคคลข้างต้นตามนโยบายคุ้มครองข้อมูลส่วนบุคคล (PDPA) <span className="text-rose-600">*</span>
+                </span>
+              </label>
+            </div>
+
+            {/* Error Feedback Before Submit */}
+            {errorMessage && (
+              <div className="p-4 bg-rose-50 border-2 border-rose-200 rounded-2xl flex items-start gap-3 text-rose-800 text-sm font-bold animate-in fade-in">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
 
             {/* Submission Feedback */}
             {submitStatus === 'saving' && (

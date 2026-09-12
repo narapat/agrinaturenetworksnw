@@ -79,6 +79,9 @@ class LiffService {
               sessionStorage.setItem('nsw_line_profile', JSON.stringify(this.currentProfile));
             } catch {}
 
+            // ซิงค์ Token กับ Firebase Auth Bridge (เชื่อมต่อ LINE ID กับ Firebase Auth)
+            await this.syncFirebaseAuthBridge();
+
             // ตรวจสอบกับระบบสมาชิกเครือข่าย (รอ Firestore sync เพื่อให้ได้ข้อมูลจริงล่าสุด)
             const { member, isRegistered } = await dataService.loginWithLineProfileAsync(this.currentProfile);
 
@@ -138,6 +141,7 @@ class LiffService {
       if (this.liffInstance) {
         if (this.liffInstance.isLoggedIn()) {
           // ถ้าล็อกอินอยู่แล้ว
+          await this.syncFirebaseAuthBridge();
           const profile = this.currentProfile || (await this.liffInstance.getProfile());
           if (profile) {
             this.currentProfile = profile;
@@ -176,6 +180,44 @@ class LiffService {
   }
 
   /**
+   * เชื่อมต่อ LINE ID Token กับ Firebase Auth (Firebase Custom Token Bridge)
+   */
+  async syncFirebaseAuthBridge(): Promise<boolean> {
+    if (typeof window === 'undefined' || !this.liffInstance) return false;
+    try {
+      if (!this.liffInstance.isLoggedIn()) return false;
+      const idToken = this.liffInstance.getIDToken();
+      if (!idToken) return false;
+
+      const res = await fetch('/api/auth/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!res.ok) {
+        console.warn('LINE Auth Bridge HTTP status:', res.status);
+        return false;
+      }
+
+      const data = await res.json();
+      if (data.success && data.customToken) {
+        const { signInWithCustomToken } = await import('firebase/auth');
+        const { auth } = await import('./firebase');
+        if (auth) {
+          await signInWithCustomToken(auth, data.customToken);
+          console.log('[Auth Bridge] Successfully authenticated with Firebase Custom Token! Role:', data.role);
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.warn('LINE Auth Bridge notice:', err);
+      return false;
+    }
+  }
+
+  /**
    * ออกจากระบบ LINE และระบบทั้งหมด (Sign Out)
    */
   async logout(): Promise<void> {
@@ -187,9 +229,24 @@ class LiffService {
         sessionStorage.setItem('nsw_user_logged_out', 'true');
         sessionStorage.removeItem('nsw_line_profile');
         sessionStorage.removeItem('nsw_auth_redirect');
+        // ล้างข้อมูลแคชที่อาจมีข้อมูลส่วนตัวในเครื่องสาธารณะ
+        localStorage.removeItem('nsw_members_v1');
+        localStorage.removeItem('nsw_admin_session');
+        localStorage.removeItem('nsw_current_user');
       } catch {}
 
-      // 2. ออกจากระบบ LINE LIFF SDK
+      // 2. ออกจากระบบ Firebase Authentication
+      try {
+        const { signOut } = await import('firebase/auth');
+        const { auth } = await import('./firebase');
+        if (auth && auth.currentUser) {
+          await signOut(auth);
+        }
+      } catch (signOutErr) {
+        console.warn('Firebase Auth signOut notice:', signOutErr);
+      }
+
+      // 3. ออกจากระบบ LINE LIFF SDK
       if (this.liffInstance && this.liffInstance.isLoggedIn()) {
         try {
           this.liffInstance.logout();
@@ -199,16 +256,16 @@ class LiffService {
       }
       this.currentProfile = null;
 
-      // 3. ส่งคำขอไปยังเซิร์ฟเวอร์เพื่อลบ HTTP-Only Cookie
+      // 4. ส่งคำขอไปยังเซิร์ฟเวอร์เพื่อลบ HTTP-Only Cookie
       try {
         await fetch('/api/admin/auth', { method: 'DELETE', keepalive: true });
       } catch {}
 
-      // 4. ล้างค่าใน local storage
+      // 5. ล้างค่าใน local storage
       dataService.clearAdminSession();
       dataService.switchUser('guest');
 
-      // 5. นำทางกลับหน้าแรก
+      // 6. นำทางกลับหน้าแรก
       window.location.href = '/';
     } catch (err) {
       console.error('Error logging out:', err);
