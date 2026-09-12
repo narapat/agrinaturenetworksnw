@@ -15,7 +15,7 @@ const getLineChannelId = (): string => {
   if (process.env.LINE_CHANNEL_ID) {
     return process.env.LINE_CHANNEL_ID.trim();
   }
-  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || '';
+  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '2011512009-Zjd5Loph';
   if (liffId.includes('-')) {
     return liffId.split('-')[0].trim();
   }
