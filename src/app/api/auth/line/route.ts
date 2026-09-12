@@ -17,7 +17,9 @@ const getLineChannelId = (): string => {
   }
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '2011512009-Zjd5Loph';
   if (liffId.includes('-')) {
-    return liffId.split('-')[0].trim();
+    const fallbackChannelId = liffId.split('-')[0].trim();
+    console.warn(`[LINE Auth Warning] LINE_CHANNEL_ID is not configured in environment. Falling back to Channel ID extracted from LIFF ID: "${fallbackChannelId}".`);
+    return fallbackChannelId;
   }
   return '';
 };
@@ -88,20 +90,18 @@ export async function POST(req: NextRequest) {
       lineUserId,
     };
 
-    // 3. ตรวจสอบว่ามี Firebase Admin Auth พร้อมใช้งานหรือไม่
+    // 3. ตรวจสอบว่ามี Firebase Admin Auth พร้อมใช้งานหรือไม่ (Zero Silent Fallback)
     const adminAuth = getAdminAuth();
     if (!adminAuth) {
-      // กรณียังไม่ได้ตั้งค่า Service Account ใน .env
-      return NextResponse.json({
-        success: true,
-        customToken: null,
-        configured: false,
-        userId: lineUserId,
-        displayName: lineProfile.name,
-        pictureUrl: lineProfile.picture,
-        role,
-        message: 'Firebase Admin credentials not configured yet. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.',
-      });
+      console.error('[LINE Auth Bridge Error] Firebase Admin Auth is not configured or unavailable. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.');
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Firebase Admin Auth is not configured or unavailable.',
+          message: 'ระบบยืนยันตัวตนเซิร์ฟเวอร์ขัดข้อง กรุณาติดต่อผู้ดูแลระบบ',
+        },
+        { status: 500 }
+      );
     }
 
     // 4. ออก Firebase Custom Token ด้วย Firebase Admin SDK

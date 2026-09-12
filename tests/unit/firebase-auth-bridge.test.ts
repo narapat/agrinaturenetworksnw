@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { formatPrivateKey, isFirebaseAdminConfigured } from '@/lib/firebaseAdmin';
+import * as firebaseAdminAuth from '@/lib/firebaseAdminAuth';
 import { POST as authLinePOST } from '@/app/api/auth/line/route';
 import { POST as auditPOST } from '@/app/api/audit/route';
 
@@ -87,7 +88,33 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
       expect(data.message).toContain('LINE ID Token ไม่ถูกต้อง');
     });
 
-    it('should assign role=admin for whitelisted admin LINE User IDs', async () => {
+    it('should return 500 when getAdminAuth() returns null (Zero Silent Fallback)', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'U_TEST_USER_123',
+          name: 'สมหวัง ปลูกผัก',
+          picture: 'https://profile.line-scdn.net/pic',
+        }),
+      } as Response);
+
+      vi.spyOn(firebaseAdminAuth, 'getAdminAuth').mockReturnValue(null);
+
+      const req = new NextRequest('http://localhost:3000/api/auth/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: 'valid.token.but.no.admin' }),
+      });
+
+      const res = await authLinePOST(req);
+      expect(res.status).toBe(500);
+      const data = await res.json();
+      expect(data.success).toBe(false);
+      expect(data.error).toContain('Firebase Admin Auth is not configured or unavailable');
+      expect(data.customToken).toBeUndefined();
+    });
+
+    it('should assign role=admin and return customToken for whitelisted admin LINE User IDs', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -96,6 +123,14 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
           picture: 'https://profile.line-scdn.net/abc',
         }),
       } as Response);
+
+      const mockCreateCustomToken = vi.fn(async (uid: string, claims: any) => {
+        return `mock-custom-token-for-${uid}-${claims.role}`;
+      });
+
+      vi.spyOn(firebaseAdminAuth, 'getAdminAuth').mockReturnValue({
+        createCustomToken: mockCreateCustomToken,
+      } as any);
 
       const req = new NextRequest('http://localhost:3000/api/auth/line', {
         method: 'POST',
@@ -109,9 +144,15 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
       expect(data.success).toBe(true);
       expect(data.role).toBe('admin');
       expect(data.userId).toBe('U_ADMIN_1111');
+      expect(data.customToken).toBe('mock-custom-token-for-U_ADMIN_1111-admin');
+      expect(mockCreateCustomToken).toHaveBeenCalledWith('U_ADMIN_1111', {
+        role: 'admin',
+        admin: true,
+        lineUserId: 'U_ADMIN_1111',
+      });
     });
 
-    it('should assign role=member for regular LINE User IDs', async () => {
+    it('should assign role=member and return customToken for regular LINE User IDs', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -120,6 +161,14 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
           picture: 'https://profile.line-scdn.net/somwang',
         }),
       } as Response);
+
+      const mockCreateCustomToken = vi.fn(async (uid: string, claims: any) => {
+        return `mock-custom-token-for-${uid}-${claims.role}`;
+      });
+
+      vi.spyOn(firebaseAdminAuth, 'getAdminAuth').mockReturnValue({
+        createCustomToken: mockCreateCustomToken,
+      } as any);
 
       const req = new NextRequest('http://localhost:3000/api/auth/line', {
         method: 'POST',
@@ -133,6 +182,40 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
       expect(data.success).toBe(true);
       expect(data.role).toBe('member');
       expect(data.userId).toBe('U_REGULAR_FARMER_9999');
+      expect(data.customToken).toBe('mock-custom-token-for-U_REGULAR_FARMER_9999-member');
+      expect(mockCreateCustomToken).toHaveBeenCalledWith('U_REGULAR_FARMER_9999', {
+        role: 'member',
+        admin: false,
+        lineUserId: 'U_REGULAR_FARMER_9999',
+      });
+    });
+
+    it('should warn when falling back to LINE Channel ID from NEXT_PUBLIC_LIFF_ID', async () => {
+      delete process.env.LINE_CHANNEL_ID;
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          sub: 'U_WARN_TEST',
+          name: 'ทดสอบ แจ้งเตือน',
+        }),
+      } as Response);
+
+      vi.spyOn(firebaseAdminAuth, 'getAdminAuth').mockReturnValue({
+        createCustomToken: vi.fn(async () => 'tok'),
+      } as any);
+
+      const req = new NextRequest('http://localhost:3000/api/auth/line', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: 'token.for.warn' }),
+      });
+
+      await authLinePOST(req);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[LINE Auth Warning] LINE_CHANNEL_ID is not configured')
+      );
     });
   });
 

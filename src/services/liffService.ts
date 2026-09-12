@@ -17,6 +17,16 @@ class LiffService {
   private isInitializing: boolean = false;
   private initPromise: Promise<boolean> | null = null;
   private currentProfile: LineUserProfile | null = null;
+  private authBridgeFailed: boolean = false;
+  private authBridgeErrorMessage: string = '';
+
+  isAuthBridgeFailed(): boolean {
+    return this.authBridgeFailed;
+  }
+
+  getAuthBridgeErrorMessage(): string {
+    return this.authBridgeErrorMessage;
+  }
 
   /**
    * เริ่มต้นการเชื่อมต่อ LINE LIFF SDK (ป้องกันการเรียกซ้ำ 100%)
@@ -196,7 +206,11 @@ class LiffService {
       });
 
       if (!res.ok) {
-        console.warn('LINE Auth Bridge HTTP status:', res.status);
+        const errorData = await res.json().catch(() => ({}));
+        this.authBridgeFailed = true;
+        this.authBridgeErrorMessage = errorData.message || errorData.error || `HTTP ${res.status}`;
+        console.error(`[Auth Bridge Error] HTTP status ${res.status}: Failed to synchronize LINE ID Token with Firebase Auth:`, errorData);
+        window.dispatchEvent(new Event('nsw_auth_bridge_failed'));
         return false;
       }
 
@@ -206,13 +220,24 @@ class LiffService {
         const { auth } = await import('./firebase');
         if (auth) {
           await signInWithCustomToken(auth, data.customToken);
+          this.authBridgeFailed = false;
+          this.authBridgeErrorMessage = '';
           console.log('[Auth Bridge] Successfully authenticated with Firebase Custom Token! Role:', data.role);
+          window.dispatchEvent(new Event('nsw_auth_bridge_success'));
           return true;
         }
       }
+
+      this.authBridgeFailed = true;
+      this.authBridgeErrorMessage = data.message || 'ไม่ได้รับ Firebase Custom Token จากเซิร์ฟเวอร์';
+      console.error('[Auth Bridge Error] Response did not contain a valid customToken:', data);
+      window.dispatchEvent(new Event('nsw_auth_bridge_failed'));
       return false;
-    } catch (err) {
-      console.warn('LINE Auth Bridge notice:', err);
+    } catch (err: any) {
+      this.authBridgeFailed = true;
+      this.authBridgeErrorMessage = err?.message || 'ข้อผิดพลาดเครือข่ายในการติดต่อ Auth Bridge';
+      console.error('[Auth Bridge Error] Network or runtime error during LINE Auth Bridge sync:', err);
+      window.dispatchEvent(new Event('nsw_auth_bridge_failed'));
       return false;
     }
   }
@@ -223,6 +248,8 @@ class LiffService {
   async logout(): Promise<void> {
     if (typeof window === 'undefined') return;
     try {
+      this.authBridgeFailed = false;
+      this.authBridgeErrorMessage = '';
       // 1. ตั้งสถานะ Explicit Logout
       try {
         localStorage.setItem('nsw_user_logged_out', 'true');

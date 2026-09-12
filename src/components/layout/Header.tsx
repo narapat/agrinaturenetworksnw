@@ -36,6 +36,24 @@ export default function Header() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showFontMenu, setShowFontMenu] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isBridgeFailed, setIsBridgeFailed] = useState(false);
+  const [bridgeErrorMsg, setBridgeErrorMsg] = useState('');
+
+  useEffect(() => {
+    const checkBridgeStatus = () => {
+      setIsBridgeFailed(liffService.isAuthBridgeFailed());
+      setBridgeErrorMsg(liffService.getAuthBridgeErrorMessage());
+    };
+
+    checkBridgeStatus();
+
+    window.addEventListener('nsw_auth_bridge_failed', checkBridgeStatus);
+    window.addEventListener('nsw_auth_bridge_success', checkBridgeStatus);
+    return () => {
+      window.removeEventListener('nsw_auth_bridge_failed', checkBridgeStatus);
+      window.removeEventListener('nsw_auth_bridge_success', checkBridgeStatus);
+    };
+  }, []);
 
   useEffect(() => {
     // Initialize LINE LIFF in background on mount
@@ -142,8 +160,27 @@ export default function Header() {
       : []),
   ];
 
+  const isAuthRoute = pathname.startsWith('/admin') || pathname.startsWith('/member');
+
   return (
     <>
+      {isBridgeFailed && isAuthRoute && (
+        <div className="bg-red-600 text-white px-4 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-between gap-3 shadow-md z-50 sticky top-0 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="text-base shrink-0">⚠️</span>
+            <span>
+              การเชื่อมต่อฐานข้อมูลล้มเหลว กรุณารีเฟรชหน้าเว็บเพื่อเข้าสู่ระบบใหม่
+              {bridgeErrorMsg ? ` (${bridgeErrorMsg})` : ''}
+            </span>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="shrink-0 px-3 py-1 bg-white text-red-700 hover:bg-red-50 rounded-full font-black text-xs transition-colors cursor-pointer shadow-xs"
+          >
+            รีเฟรชหน้าเว็บ
+          </button>
+        </div>
+      )}
       <header 
         className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-stone-200/80 shadow-xs text-stone-800 w-full max-w-full"
       >
