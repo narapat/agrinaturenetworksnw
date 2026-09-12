@@ -357,9 +357,12 @@ class DataService {
               } catch {}
             }
 
+            const ownerUid = localM.ownerUid || localM.lineUserId || '';
+
             // แยก Document หลัก (Public/Member view) และ Subcollection private/pii
             const publicMemberDoc: Partial<MemberProfile> = {
               id: localM.id,
+              ownerUid: ownerUid,
               fullName: localM.fullName,
               role: localM.role || 'member',
               status: 'pending', // บังคับสถานะเริ่มต้นต้องเป็น pending เสมอ
@@ -370,6 +373,7 @@ class DataService {
             };
 
             const privatePiiDoc = {
+              ownerUid: ownerUid,
               phone: cleanPhone,
               lineId: localM.lineId || '',
               lineUserId: localM.lineUserId || '',
@@ -388,6 +392,7 @@ class DataService {
               const publicFarmDoc: Partial<Farm> = {
                 id: relatedFarm.id,
                 memberId: relatedFarm.memberId,
+                ownerUid: relatedFarm.ownerUid || ownerUid,
                 ownerName: relatedFarm.ownerName,
                 farmName: relatedFarm.farmName,
                 tagline: relatedFarm.tagline,
@@ -405,6 +410,7 @@ class DataService {
               };
 
               const privateContactDoc = {
+                ownerUid: relatedFarm.ownerUid || ownerUid,
                 internalCoordinates: relatedFarm.internalCoordinates,
                 phone: relatedFarm.phone,
                 lineId: relatedFarm.lineId,
@@ -826,6 +832,7 @@ class DataService {
     return {
       id: farm.id,
       memberId: farm.memberId || member?.id || '',
+      ownerUid: farm.ownerUid || member?.ownerUid || member?.lineUserId || '',
       ownerName: farm.ownerName || member?.fullName || 'เกษตรกรเครือข่าย',
       farmName: farm.farmName || member?.farmName || (member?.fullName ? `แปลงกสิกรรม ${member.fullName}` : 'แปลงกสิกรรมธรรมชาติ'),
       tagline: farm.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง',
@@ -1432,9 +1439,12 @@ class DataService {
     const cleanDistrict = data.district.trim();
     const cleanSubdistrict = data.subdistrict.trim().slice(0, 50);
 
+    const ownerUid = data.lineUserId || (typeof window !== 'undefined' ? this.getCurrentUser()?.ownerUid : undefined) || '';
+
     const newFarm: Farm = {
       id: farmId,
       memberId: memberId,
+      ownerUid: ownerUid,
       ownerName: cleanFullName,
       farmName: cleanFarmName,
       tagline: (data.tagline || 'วิถีกสิกรรมธรรมชาติเพื่อการพึ่งพาตนเอง').trim().slice(0, 120),
@@ -1467,6 +1477,7 @@ class DataService {
     const newMember: MemberProfile = {
       id: memberId,
       lineUserId: data.lineUserId || '',
+      ownerUid: ownerUid,
       fullName: cleanFullName,
       facePhotoUrl: data.facePhotoUrl,
       role: 'member',
@@ -1502,6 +1513,7 @@ class DataService {
       const publicFarmDoc: Partial<Farm> = {
         id: newFarm.id,
         memberId: newFarm.memberId,
+        ownerUid: ownerUid,
         ownerName: newFarm.ownerName,
         farmName: newFarm.farmName,
         tagline: newFarm.tagline,
@@ -1519,6 +1531,7 @@ class DataService {
       };
 
       const privateContactDoc = {
+        ownerUid: ownerUid,
         internalCoordinates: newFarm.internalCoordinates,
         phone: newFarm.phone,
         lineId: newFarm.lineId,
@@ -1528,6 +1541,7 @@ class DataService {
       // 2.2 แยกข้อมูล Member: Document หลัก vs Subcollection private/pii
       const publicMemberDoc: Partial<MemberProfile> = {
         id: newMember.id,
+        ownerUid: ownerUid,
         fullName: newMember.fullName,
         role: newMember.role,
         status: newMember.status,
@@ -1538,6 +1552,7 @@ class DataService {
       };
 
       const privatePiiDoc = {
+        ownerUid: ownerUid,
         phone: cleanPhone,
         lineId: cleanLineId,
         lineUserId: data.lineUserId || '',

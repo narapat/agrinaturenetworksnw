@@ -15,9 +15,9 @@ service cloud.firestore {
     // ตรวจสอบสิทธิ์ผู้ดูแลระบบ (Admin Claim หรือ Email เฉพาะ)
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.role == 'admin' ||
-        request.auth.token.admin == true ||
-        request.auth.token.email == 'agrinature.network.nsw@gmail.com'
+        ('role' in request.auth.token && request.auth.token.role == 'admin') ||
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
+        ('email' in request.auth.token && request.auth.token.email == 'agrinature.network.nsw@gmail.com')
       );
     }
 
@@ -50,10 +50,11 @@ service cloud.firestore {
                     && request.resource.data.status == 'pending';
 
       // การแก้ไขข้อมูลสมาชิก:
-      // เจ้าของบัญชีแก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด
+      // เจ้าของบัญชี (ตรงตาม ownerUid หรือ memberId) แก้ไขได้ แต่ห้ามเปลี่ยนสถานะ (status) ของตนเองเด็ดขาด
       // การอนุมัติ (status == 'approved') ทำได้โดยแอดมินเท่านั้น
       allow update: if (
-                      isOwner(memberId) &&
+                      isAuthenticated() &&
+                      (resource.data.ownerUid == request.auth.uid || isOwner(memberId)) &&
                       request.resource.data.status == resource.data.status
                     ) || isAdmin();
 
@@ -62,7 +63,16 @@ service cloud.firestore {
 
       // Subcollection ข้อมูลส่วนบุคคลอ่อนไหว (PII: เบอร์โทร, LINE ID, รูปหน้า, ประวัติการอบรม)
       match /private/pii {
-        allow read, write: if isOwner(memberId) || isAdmin();
+        allow read: if isAuthenticated() && (
+          resource.data.ownerUid == request.auth.uid ||
+          isOwner(memberId) ||
+          isAdmin()
+        );
+        allow write: if isAuthenticated() && (
+          (resource != null && (resource.data.ownerUid == request.auth.uid || isOwner(memberId))) ||
+          (resource == null && (request.resource.data.ownerUid == request.auth.uid || isOwner(memberId))) ||
+          isAdmin()
+        );
       }
     }
 
@@ -73,7 +83,11 @@ service cloud.firestore {
       // แปลงที่ได้รับการอนุมัติ (approved) เปิดให้อ่านสาธารณะ
       // แปลงที่รอดำเนินการอ่านได้เฉพาะเจ้าของหรือแอดมิน
       allow read: if (resource.data.status == 'approved') ||
-                     (isAuthenticated() && (resource.data.memberId == request.auth.uid || isAdmin()));
+                     (isAuthenticated() && (
+                       resource.data.ownerUid == request.auth.uid ||
+                       resource.data.memberId == request.auth.uid ||
+                       isAdmin()
+                     ));
 
       // สร้างแปลงใหม่พร้อมข้อมูลที่ถูกต้อง
       allow create: if isValidString(request.resource.data.farmName, 2, 150)
@@ -82,19 +96,26 @@ service cloud.firestore {
                     && request.resource.data.photos is list
                     && request.resource.data.photos.size() <= 10;
 
-      // อัปเดตข้อมูลแปลง: เจ้าของแปลง หรือ แอดมิน
+      // อัปเดตข้อมูลแปลง: เจ้าของแปลง (ตรงตาม ownerUid หรือ memberId) หรือ แอดมิน
       allow update: if isAuthenticated() && (
-        resource.data.memberId == request.auth.uid || isAdmin()
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.memberId == request.auth.uid ||
+        isAdmin()
       );
 
       // ไม่อนุญาตให้ลบแปลงโดยตรง สงวนให้แอดมิน
       allow delete: if isAdmin();
 
       // Subcollection สำหรับพิกัด GPS จริง (internalCoordinates) และเบอร์ติดต่อส่วนบุคคล
-      // เฉพาะเจ้าของแปลงและแอดมินเท่านั้นที่เข้าถึงได้ (Anti-Scammer Guarantee)
+      // เก็บ ownerUid ใน subdocument เองเพื่อไม่ต้อง get() parent document
       match /private/contact {
-        allow read, write: if isAuthenticated() && (
-          get(/databases/$(database)/documents/farms/$(farmId)).data.memberId == request.auth.uid ||
+        allow read: if isAuthenticated() && (
+          resource.data.ownerUid == request.auth.uid ||
+          isAdmin()
+        );
+        allow write: if isAuthenticated() && (
+          (resource != null && resource.data.ownerUid == request.auth.uid) ||
+          (resource == null && request.resource.data.ownerUid == request.auth.uid) ||
           isAdmin()
         );
       }

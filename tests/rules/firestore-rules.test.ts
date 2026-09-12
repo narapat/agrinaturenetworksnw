@@ -51,6 +51,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
 
       // 1. Members
       await db.collection('members').doc(ALICE_MEM_ID).set({
+        ownerUid: ALICE_UID,
         fullName: 'อลิซ กสิกรรม',
         status: 'approved',
         role: 'member',
@@ -59,6 +60,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       });
 
       await db.collection('members').doc(BOB_MEM_ID).set({
+        ownerUid: BOB_UID,
         fullName: 'บ็อบ กสิกรรม',
         status: 'pending',
         role: 'member',
@@ -68,12 +70,14 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
 
       // 2. Member Private PII
       await db.collection('members').doc(ALICE_MEM_ID).collection('private').doc('pii').set({
+        ownerUid: ALICE_UID,
         phone: '0811111111',
         lineId: 'alice_line_id',
         facePhotoUrl: 'https://example.com/alice-face.jpg',
       });
 
       await db.collection('members').doc(BOB_MEM_ID).collection('private').doc('pii').set({
+        ownerUid: BOB_UID,
         phone: '0822222222',
         lineId: 'bob_line_id',
         facePhotoUrl: 'https://example.com/bob-face.jpg',
@@ -81,6 +85,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
 
       // 3. Farms
       await db.collection('farms').doc(ALICE_FARM_ID).set({
+        ownerUid: ALICE_UID,
         farmName: 'แปลงอลิซ เกษตรอินทรีย์',
         ownerName: 'อลิซ กสิกรรม',
         district: 'เมืองนครสวรรค์',
@@ -93,6 +98,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
       });
 
       await db.collection('farms').doc(BOB_FARM_ID).set({
+        ownerUid: BOB_UID,
         farmName: 'แปลงบ็อบ โคกหนองนา',
         ownerName: 'บ็อบ กสิกรรม',
         district: 'ชุมแสง',
@@ -106,12 +112,14 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
 
       // 4. Farm Private Contact
       await db.collection('farms').doc(ALICE_FARM_ID).collection('private').doc('contact').set({
+        ownerUid: ALICE_UID,
         internalCoordinates: { lat: 15.7001, lng: 100.0501 },
         phone: '0811111111',
         lineId: 'alice_line_id',
       });
 
       await db.collection('farms').doc(BOB_FARM_ID).collection('private').doc('contact').set({
+        ownerUid: BOB_UID,
         internalCoordinates: { lat: 15.8891, lng: 100.2345 },
         phone: '0822222222',
         lineId: 'bob_line_id',
@@ -195,7 +203,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
     );
   });
 
-  it('8. สมาชิกอ่านและแก้ members/{ตัวเอง}/private/pii ได้ -> allow (EXPECTED TO FAIL ON CURRENT RULES)', async () => {
+  it('8. สมาชิกอ่านและแก้ members/{ตัวเอง}/private/pii ได้ -> allow', async () => {
     const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
     // สมาชิกอ่าน PII ตนเอง
     await assertSucceeds(
@@ -209,7 +217,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
     );
   });
 
-  it('9. สมาชิกแก้เอกสารแปลงของตัวเอง (เปลี่ยนเรื่องเล่า เพิ่มรูป) -> allow (EXPECTED TO FAIL ON CURRENT RULES)', async () => {
+  it('9. สมาชิกแก้เอกสารแปลงของตัวเอง (เปลี่ยนเรื่องเล่า เพิ่มรูป) -> allow', async () => {
     const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
     await assertSucceeds(
       aliceDb.collection('farms').doc(ALICE_FARM_ID).update({
@@ -219,7 +227,7 @@ describe('Firestore Security Rules Integration Tests (Emulator)', () => {
     );
   });
 
-  it('10. สมาชิกอ่าน farms/{แปลงตัวเอง}/private/contact -> allow (EXPECTED TO FAIL ON CURRENT RULES)', async () => {
+  it('10. สมาชิกอ่าน farms/{แปลงตัวเอง}/private/contact -> allow', async () => {
     const aliceDb = testEnv.authenticatedContext(ALICE_UID, { role: 'member' }).firestore();
     await assertSucceeds(
       aliceDb.collection('farms').doc(ALICE_FARM_ID).collection('private').doc('contact').get()

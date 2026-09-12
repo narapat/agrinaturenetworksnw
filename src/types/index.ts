@@ -19,6 +19,7 @@ export interface SocialLinks {
 export interface MemberProfile {
   id: string;
   lineUserId?: string;
+  ownerUid?: string; // LINE User ID (Firebase Auth UID) สำหรับตรวจสอบ ownership
   fullName: string; // ชื่อ-นามสกุล / ชื่อเล่น
   facePhotoUrl: string; // รูปหน้าสมาชิกตัวจริง (ใช้สำหรับแอดมินคัดกรอง Verify)
   role: UserRole;
@@ -43,6 +44,7 @@ export interface MemberProfile {
 export interface Farm {
   id: string;
   memberId: string;
+  ownerUid?: string; // LINE User ID (Firebase Auth UID) ของเจ้าของแปลง
   ownerName: string;
   farmName: string; // ชื่อแปลง / ศูนย์เรียนรู้
   tagline?: string;

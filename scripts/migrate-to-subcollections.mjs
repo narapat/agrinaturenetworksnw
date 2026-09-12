@@ -44,56 +44,25 @@ if (clientEmail && privateKey) {
   process.exit(0);
 }
 
-async function migrateFarms() {
-  console.log('\n--- 🚜 Migrating Farms to Subcollections ---');
-  const farmsSnapshot = await db.collection('farms').get();
-  console.log(`Found ${farmsSnapshot.size} farms in Firestore.`);
-
-  let migratedCount = 0;
-
-  for (const doc of farmsSnapshot.docs) {
-    const data = doc.data();
-    const farmId = doc.id;
-
-    // ตรวจสอบว่ามีข้อมูลพิกัดจริงหรือเบอร์โทรหรือไม่
-    const hasSensitiveData = data.internalCoordinates || data.phone || data.lineId;
-
-    if (hasSensitiveData) {
-      const contactData = {
-        internalCoordinates: data.internalCoordinates || null,
-        phone: data.phone || null,
-        lineId: data.lineId || null,
-        migratedAt: new Date().toISOString(),
-      };
-
-      // 1. บันทึกลง Subcollection farms/{farmId}/private/contact
-      await db.collection('farms').doc(farmId).collection('private').doc('contact').set(contactData, { merge: true });
-
-      // 2. ลบ internalCoordinates ออกจาก Document สาธารณะ (คงเหลือเฉพาะ publicZone)
-      const sanitizedBaseFarm = { ...data };
-      delete sanitizedBaseFarm.internalCoordinates;
-      if (!data.isPublicPhone) delete sanitizedBaseFarm.phone;
-      if (!data.isPublicLine) delete sanitizedBaseFarm.lineId;
-
-      await db.collection('farms').doc(farmId).set(sanitizedBaseFarm);
-      console.log(`  ✓ Migrated farm [${farmId}] (${data.farmName || 'Unnamed'}) -> Subcollection private/contact`);
-      migratedCount++;
-    }
-  }
-
-  console.log(`✅ Finished migrating ${migratedCount} farms.`);
-}
-
 async function migrateMembers() {
   console.log('\n--- 👤 Migrating Members to Subcollections ---');
   const membersSnapshot = await db.collection('members').get();
   console.log(`Found ${membersSnapshot.size} members in Firestore.`);
 
   let migratedCount = 0;
+  const memberMap = new Map();
+  const missingOwnerMembers = [];
 
   for (const doc of membersSnapshot.docs) {
     const data = doc.data();
     const memberId = doc.id;
+
+    const ownerUid = data.ownerUid || data.lineUserId || null;
+    if (ownerUid) {
+      memberMap.set(memberId, ownerUid);
+    } else {
+      missingOwnerMembers.push({ id: memberId, fullName: data.fullName || 'Unnamed' });
+    }
 
     const piiData = {
       phone: data.phone || null,
@@ -104,13 +73,16 @@ async function migrateMembers() {
       trainingLocation: data.trainingLocation || null,
       migratedAt: new Date().toISOString(),
     };
+    if (ownerUid) {
+      piiData.ownerUid = ownerUid;
+    }
 
     // 1. บันทึกลง Subcollection members/{memberId}/private/pii
     await db.collection('members').doc(memberId).collection('private').doc('pii').set(piiData, { merge: true });
 
-    // 2. ปรับ Document หลัก ให้คงเหลือเฉพาะข้อมูลระดับโครงสร้าง
+    // 2. ปรับ Document หลัก ให้คงเหลือเฉพาะข้อมูลระดับโครงสร้าง พร้อม ownerUid
     const sanitizedBaseMember = {
-      id: data.id,
+      id: data.id || memberId,
       fullName: data.fullName,
       role: data.role || 'member',
       status: data.status || 'pending',
@@ -119,20 +91,97 @@ async function migrateMembers() {
       createdAt: data.createdAt || new Date().toISOString(),
       delegationStatus: data.delegationStatus || 'none',
     };
+    if (ownerUid) {
+      sanitizedBaseMember.ownerUid = ownerUid;
+    }
 
     await db.collection('members').doc(memberId).set(sanitizedBaseMember);
-    console.log(`  ✓ Migrated member [${memberId}] (${data.fullName}) -> Subcollection private/pii`);
+    console.log(`  ✓ Migrated member [${memberId}] (${data.fullName}) -> ownerUid: ${ownerUid || 'MISSING'}`);
     migratedCount++;
   }
 
   console.log(`✅ Finished migrating ${migratedCount} members.`);
+  if (missingOwnerMembers.length > 0) {
+    console.warn(`⚠️ Warning: ${missingOwnerMembers.length} members have NO lineUserId/ownerUid:`);
+    missingOwnerMembers.forEach((m) => console.warn(`   - Member [${m.id}] "${m.fullName}"`));
+  } else {
+    console.log(`✅ All members have valid lineUserId/ownerUid.`);
+  }
+
+  return { memberMap, migratedCount, missingOwnerMembers };
+}
+
+async function migrateFarms(memberMap) {
+  console.log('\n--- 🚜 Migrating Farms to Subcollections ---');
+  const farmsSnapshot = await db.collection('farms').get();
+  console.log(`Found ${farmsSnapshot.size} farms in Firestore.`);
+
+  let migratedCount = 0;
+  const missingOwnerFarms = [];
+
+  for (const doc of farmsSnapshot.docs) {
+    const data = doc.data();
+    const farmId = doc.id;
+
+    // หา ownerUid จาก data.ownerUid หรือค้นหาจาก memberId ใน memberMap
+    const memberOwnerUid = data.memberId ? memberMap.get(data.memberId) : null;
+    const ownerUid = data.ownerUid || memberOwnerUid || null;
+
+    if (!ownerUid) {
+      missingOwnerFarms.push({
+        id: farmId,
+        farmName: data.farmName || 'Unnamed',
+        memberId: data.memberId || 'None',
+      });
+    }
+
+    // ข้อมูลติดต่อส่วนบุคคลสำหรับ subcollection
+    const contactData = {
+      internalCoordinates: data.internalCoordinates || null,
+      phone: data.phone || null,
+      lineId: data.lineId || null,
+      migratedAt: new Date().toISOString(),
+    };
+    if (ownerUid) {
+      contactData.ownerUid = ownerUid;
+    }
+
+    // 1. บันทึกลง Subcollection farms/{farmId}/private/contact
+    await db.collection('farms').doc(farmId).collection('private').doc('contact').set(contactData, { merge: true });
+
+    // 2. ลบ internalCoordinates ออกจาก Document สาธารณะ (คงเหลือเฉพาะ publicZone) และใส่ ownerUid
+    const sanitizedBaseFarm = { ...data };
+    if (ownerUid) {
+      sanitizedBaseFarm.ownerUid = ownerUid;
+    }
+    delete sanitizedBaseFarm.internalCoordinates;
+    if (!data.isPublicPhone) delete sanitizedBaseFarm.phone;
+    if (!data.isPublicLine) delete sanitizedBaseFarm.lineId;
+
+    await db.collection('farms').doc(farmId).set(sanitizedBaseFarm);
+    console.log(`  ✓ Migrated farm [${farmId}] (${data.farmName || 'Unnamed'}) -> ownerUid: ${ownerUid || 'MISSING'}`);
+    migratedCount++;
+  }
+
+  console.log(`✅ Finished migrating ${migratedCount} farms.`);
+  if (missingOwnerFarms.length > 0) {
+    console.warn(`⚠️ Warning: ${missingOwnerFarms.length} farms have NO ownerUid:`);
+    missingOwnerFarms.forEach((f) => console.warn(`   - Farm [${f.id}] "${f.farmName}" (memberId: ${f.memberId})`));
+  } else {
+    console.log(`✅ All farms successfully mapped to an ownerUid.`);
+  }
+
+  return { migratedCount, missingOwnerFarms };
 }
 
 async function run() {
   try {
-    await migrateFarms();
-    await migrateMembers();
+    const { memberMap, missingOwnerMembers } = await migrateMembers();
+    const { missingOwnerFarms } = await migrateFarms(memberMap);
     console.log('\n🎉 All Firestore data successfully migrated to secure Subcollection architecture!');
+    console.log(`\n📋 Migration Summary:`);
+    console.log(`- Members missing ownerUid: ${missingOwnerMembers.length}`);
+    console.log(`- Farms missing ownerUid: ${missingOwnerFarms.length}`);
   } catch (err) {
     console.error('❌ Migration failed:', err);
     process.exit(1);
