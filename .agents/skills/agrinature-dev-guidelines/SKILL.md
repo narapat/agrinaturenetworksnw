@@ -59,6 +59,23 @@ To prevent infinite redirect loops in mobile browsers and LINE LIFF in-app brows
 3. **Clearing on Login**:
    - Both `liffService.login()` and `AdminLayout.tsx` (`handleLogin`) must remove `nsw_user_logged_out` upon intentional login.
 
+### 🔑 Invariant 4: Ownership Model (`ownerUid`) & Subcollections
+1. **UID Mapping**:
+   - Firebase Auth UID corresponds to LINE User ID. Document IDs in Firestore (`mem-xxx`, `farm-xxx`, `prod-xxx`) are generated IDs and do NOT equal the user's UID.
+   - All rules and queries checking document ownership must compare `resource.data.ownerUid == request.auth.uid`.
+   - Never compare `resource.id == request.auth.uid`.
+2. **Subcollection Data Separation**:
+   - Sensitive PII resides in `members/{memberId}/private/pii`.
+   - Sensitive farm contact and true GPS coordinates reside in `farms/{farmId}/private/contact`.
+   - Subcollections store `ownerUid` directly to avoid expensive `get()` calls on parents.
+
+### ⚖️ Invariant 5: Approval Lifecycle & Status Immutability
+1. **Dual Approval (Option A)**:
+   - Both `MemberProfile` and `Farm` require admin approval (`status: 'pending' | 'approved' | 'rejected'`).
+2. **Immutability for Regular Members**:
+   - Normal users can only register/create with `status: 'pending'`.
+   - Update rules forbid users from changing their own `status` or their farm's `status` (`request.resource.data.status == resource.data.status`). Only admins can approve or reject.
+
 ---
 
 ## 3. Automated Regression Testing Commands
@@ -66,13 +83,16 @@ To prevent infinite redirect loops in mobile browsers and LINE LIFF in-app brows
 Every AI developer must execute and verify the following tests before declaring any task complete:
 
 ```bash
-# 1. Run Unit, Security & RBAC Tests (< 0.5s)
+# 1. Run Firestore Security Rules Integration Tests on Local Emulator (~2s)
+npm run test:rules
+
+# 2. Run Unit, Security & RBAC Tests (< 0.8s)
 npm test
 
-# 2. Run E2E Smoke Tests in Headless Browser (~3-5s)
+# 3. Run E2E Smoke Tests in Headless Browser (~3-5s)
 npm run test:e2e
 
-# 3. Verify Next.js Production Compilation
+# 4. Verify Next.js Production Compilation
 npm run build
 ```
 

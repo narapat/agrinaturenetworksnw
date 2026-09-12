@@ -6,26 +6,35 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
 
 ---
 
-## 🛑 Top 4 Core Commandments (Never Violate)
+## 🛑 Top 5 Core Commandments (Never Violate)
 
 1. **Zero Data Leakage for Farmers (Anti-Scammer Guarantee)**
    - Never expose `internalCoordinates` (real GPS) to public users. Only `publicZone` approximate coordinates may be displayed publicly.
-   - Never expose `phone` or `lineId` unless `isPublicPhone === true` or `isPublicLine === true`.
+   - Real GPS coordinates and sensitive contact info must reside strictly in `farms/{farmId}/private/contact`.
+   - Never expose `phone`, `lineId`, or face photo to unauthenticated users. Sensitive PII must reside in `members/{memberId}/private/pii`.
    - Always run queries through `sanitizeFarmForPublic()` / `sanitizeProductForPublic()`.
 
-2. **No Secrets in Client Bundles**
+2. **Ownership Model Invariant (`ownerUid`)**
+   - In Firebase Auth, `request.auth.uid` corresponds to the farmer's LINE User ID.
+   - Firestore document IDs (`mem-xxx`, `farm-xxx`, `prod-xxx`) do NOT equal the user's UID.
+   - ALL security rules and queries checking document ownership MUST check `resource.data.ownerUid == request.auth.uid`, NEVER `resource.id == request.auth.uid`.
+   - `members`, `members/private/pii`, `farms`, `farms/private/contact`, and `products` MUST store `ownerUid`.
+
+3. **Approval Lifecycle & Status Immutability**
+   - Both `MemberProfile` and `Farm` require admin approval (`status: 'pending' | 'approved' | 'rejected'`).
+   - Normal users cannot self-approve or create documents with `status: 'approved'`.
+   - Normal users cannot alter `status` in update rules (`request.resource.data.status == resource.data.status`). Only admins (`isAdmin()`) can transition status to `approved` or `rejected`.
+
+4. **No Secrets in Client Bundles**
    - Never use `NEXT_PUBLIC_` for `ADMIN_PASSCODE` or `ADMIN_SESSION_SECRET`.
    - All admin access must be verified on the server via `POST /api/admin/auth` using HMAC-SHA256 and HTTP-Only cookies.
 
-3. **Prevent Auth & Redirect Loops**
-   - Honor the `nsw_user_logged_out` flag in both `liffService.ts` and `AdminLayout.tsx`.
-   - Never initiate automatic redirection or auto-login if the user has explicitly logged out.
-   - Always use `{ keepalive: true }` when calling `DELETE /api/admin/auth` during logout.
-
-4. **Always Run Regression Tests Before Finishing Work**
+5. **Always Run Regression Tests Before Finishing Work**
+   - Firestore Security Rules: `npm run test:rules` (Emulator-based unit tests)
    - Unit & Security Tests: `npm test`
    - E2E Smoke Tests: `npm run test:e2e`
    - Production Build Check: `npm run build`
+   - NEVER weaken rules to bypass code issues; fix the data model or application code instead.
 
 ---
 
