@@ -11,6 +11,7 @@ export async function generateStaticParams() {
       { farmId: 'farm-002' },
       { farmId: 'farm-003' },
       { farmId: 'farm-1788900219588' },
+      { farmId: 'farm-1788935859777' },
     ];
   }
 }

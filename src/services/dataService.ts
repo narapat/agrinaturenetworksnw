@@ -1037,7 +1037,9 @@ class DataService {
   }
 
   getFarmById(id: string): Farm | undefined {
-    const farm = this.farms.find((f) => f.id === id);
+    if (!id || typeof id !== 'string') return undefined;
+    const cleanId = id.replace(/"/g, '').trim();
+    const farm = this.farms.find((f) => f.id === id || f.id === cleanId || f.id?.replace(/"/g, '') === cleanId);
     return farm ? this.sanitizeFarmForPublic(farm) : undefined;
   }
 
@@ -1048,12 +1050,16 @@ class DataService {
 
   // สำหรับผู้ดูแลระบบดูพิกัดจริง (Internal Network Only)
   getInternalFarmById(id: string): Farm | undefined {
-    return this.farms.find((f) => f.id === id);
+    if (!id || typeof id !== 'string') return undefined;
+    const cleanId = id.replace(/"/g, '').trim();
+    return this.farms.find((f) => f.id === id || f.id === cleanId || f.id?.replace(/"/g, '') === cleanId);
   }
 
   getProductsByFarmId(farmId: string, includeHidden = false): Product[] {
+    if (!farmId || typeof farmId !== 'string') return [];
+    const cleanId = farmId.replace(/"/g, '').trim();
     return this.products
-      .filter((p) => p.farmId === farmId && (includeHidden || p.status !== 'hidden'))
+      .filter((p) => (p.farmId === farmId || p.farmId === cleanId || p.farmId?.replace(/"/g, '') === cleanId) && (includeHidden || p.status !== 'hidden'))
       .map((p) => this.sanitizeProductForPublic(p));
   }
 

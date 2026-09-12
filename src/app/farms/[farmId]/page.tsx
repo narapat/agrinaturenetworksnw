@@ -33,12 +33,15 @@ export default function FarmDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { getTextClass } = useFontSize();
-  const farmId = params.farmId as string;
+  const rawFarmId = (params?.farmId as string) || '';
+  const farmId = rawFarmId ? decodeURIComponent(rawFarmId).replace(/"/g, '').trim() : '';
 
   const [farm, setFarm] = useState<Farm | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isNotFound, setIsNotFound] = useState(false);
 
   // Practices Edit State for Owner
   const [isEditingPractices, setIsEditingPractices] = useState(false);
@@ -54,10 +57,23 @@ export default function FarmDetailPage() {
   useEffect(() => {
     if (!farmId) return;
 
-    const loadFarm = () => {
-      const f = dataService.getFarmById(farmId);
+    let isMounted = true;
+
+    const loadFarm = (isSyncDone = false) => {
+      let f = dataService.getFarmById(farmId);
+      if (!f && farmId) {
+        f = dataService.getFarmById(farmId + '"');
+      }
+
       if (!f) {
-        router.push('/farms');
+        if (!isSyncDone) {
+          // ยังรอ Firestore sync อยู่ ไม่ต้อง redirect ทันที
+          return;
+        }
+        if (isMounted) {
+          setIsLoading(false);
+          setIsNotFound(true);
+        }
         return;
       }
 
@@ -66,30 +82,41 @@ export default function FarmDetailPage() {
       const user = dataService.getCurrentUser();
       const isOwnerOrAdmin = user && (user.id === f.memberId || user.role === 'admin');
       if (member && member.status !== 'approved' && !isOwnerOrAdmin) {
-        router.push('/farms');
+        if (isMounted) {
+          setIsLoading(false);
+          setIsNotFound(true);
+        }
         return;
       }
 
-      setFarm({ ...f });
-      setProducts(dataService.getProductsByFarmId(farmId));
-      setSelectedPractices(f.practices ? [...f.practices] : []);
-      setCurrentUser(user);
+      if (isMounted) {
+        setFarm({ ...f });
+        setProducts(dataService.getProductsByFarmId(farmId));
+        setSelectedPractices(f.practices ? [...f.practices] : []);
+        setCurrentUser(user);
+        setIsLoading(false);
+        setIsNotFound(false);
 
-      // รวมศาสตร์ที่มีในแปลงเข้ากับศาสตร์มาตรฐาน เพื่อให้แสดงครบทุกตัวเลือกที่แปลงเลือกไว้เสมอ
-      const activeOptions = dataService.getActivePracticeNames();
-      const currentFarmPractices = f.practices || [];
-      const combinedOptions = Array.from(new Set([...activeOptions, ...currentFarmPractices]));
-      setPracticeOptions(combinedOptions);
+        // รวมศาสตร์ที่มีในแปลงเข้ากับศาสตร์มาตรฐาน เพื่อให้แสดงครบทุกตัวเลือกที่แปลงเลือกไว้เสมอ
+        const activeOptions = dataService.getActivePracticeNames();
+        const currentFarmPractices = f.practices || [];
+        const combinedOptions = Array.from(new Set([...activeOptions, ...currentFarmPractices]));
+        setPracticeOptions(combinedOptions);
+      }
     };
 
-    loadFarm();
-    dataService.ensureFirestoreSync(true).then(() => loadFarm());
+    loadFarm(false);
+    dataService.ensureFirestoreSync(true).then(() => {
+      if (isMounted) loadFarm(true);
+    });
 
-    window.addEventListener('nsw_data_updated', loadFarm);
-    window.addEventListener('storage', loadFarm);
+    const handleUpdate = () => loadFarm(true);
+    window.addEventListener('nsw_data_updated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
     return () => {
-      window.removeEventListener('nsw_data_updated', loadFarm);
-      window.removeEventListener('storage', loadFarm);
+      isMounted = false;
+      window.removeEventListener('nsw_data_updated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
     };
   }, [farmId, router]);
 
@@ -110,6 +137,38 @@ export default function FarmDetailPage() {
       setCurrentSlideIndex(0);
     }
   }, [farm?.photos, currentSlideIndex]);
+
+  if (isNotFound && !farm) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center space-y-4">
+        <div className="w-16 h-16 rounded-full bg-stone-100 text-stone-500 mx-auto flex items-center justify-center shadow-inner">
+          <MapPin className="w-8 h-8 text-stone-400" />
+        </div>
+        <h2 className="text-xl font-bold text-stone-900">ไม่พบข้อมูลแปลงกสิกรรม</h2>
+        <p className="text-xs text-stone-500 leading-relaxed max-w-xs mx-auto">
+          แปลงนี้อาจยังไม่ได้รับการอนุมัติ หรือรหัสแปลงไม่ถูกต้องในระบบ
+        </p>
+        <div className="pt-2">
+          <Link
+            href="/farms"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm shadow-md transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>กลับสู่หน้ารวมแปลงกสิกรรม</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading && !farm) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-16 text-center">
+        <div className="inline-block w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm text-stone-500 mt-3 font-semibold">กำลังโหลดข้อมูลแปลงกสิกรรม...</p>
+      </div>
+    );
+  }
 
   if (!farm) return null;
 

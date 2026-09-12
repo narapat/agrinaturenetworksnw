@@ -177,24 +177,34 @@ export async function getPublicFarmsServer(district?: string): Promise<Farm[]> {
  */
 export async function getFarmByIdServer(id: string): Promise<Farm | null> {
   if (!id || typeof id !== 'string') return null;
-  const cleanId = id.trim().replace(/"/g, '');
+  const decoded = decodeURIComponent(id).trim();
+  const cleanId = decoded.replace(/"/g, '').trim();
 
   const db = getAdminDb();
   if (db) {
     try {
-      let doc = await db.collection('farms').doc(id).get();
-      if (!doc.exists && cleanId !== id) {
-        doc = await db.collection('farms').doc(cleanId).get();
+      // 1. ค้นหาด้วย ID ที่ผ่านการทำความสะอาดแล้ว
+      let doc = await db.collection('farms').doc(cleanId).get();
+      
+      // 2. Fallback: ค้นหาด้วย id เดิม
+      if (!doc.exists && id !== cleanId) {
+        doc = await db.collection('farms').doc(id).get();
       }
+
+      // 3. Fallback: ค้นหาแบบมี quote ปิดท้าย เผื่อ legacy URL
+      if (!doc.exists) {
+        doc = await db.collection('farms').doc(cleanId + '"').get();
+      }
+
       if (doc.exists) {
-        return sanitizeFarmForPublic({ ...doc.data(), id: doc.id } as Farm);
+        return sanitizeFarmForPublic({ ...doc.data(), id: doc.id.replace(/"/g, '') } as Farm);
       }
     } catch (err) {
       console.warn(`[ServerData] getFarmByIdServer(${id}) fallback:`, err);
     }
   }
 
-  const fallback = INITIAL_FARMS.find((f) => f.id === id || f.id === cleanId);
+  const fallback = INITIAL_FARMS.find((f) => f.id === cleanId || f.id === id);
   return fallback ? sanitizeFarmForPublic(fallback) : null;
 }
 
