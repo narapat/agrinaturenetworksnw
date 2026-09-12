@@ -14,10 +14,20 @@
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+function formatKey(key) {
+  if (!key) return undefined;
+  let trimmed = key.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    trimmed = trimmed.slice(1, -1);
+  } else if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+    trimmed = trimmed.slice(1, -1);
+  }
+  return trimmed.replace(/\\n/g, '\n').trim();
+}
+
 const projectId = process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'agrinature-network-nsw';
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const rawKey = process.env.FIREBASE_PRIVATE_KEY;
-const privateKey = rawKey ? rawKey.replace(/\\n/g, '\n').replace(/^"(.*)"$/, '$1').trim() : undefined;
+const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
+const privateKey = formatKey(process.env.FIREBASE_PRIVATE_KEY);
 
 let db;
 
