@@ -59,10 +59,15 @@ export default function FarmDetailPage() {
 
     let isMounted = true;
 
-    const loadFarm = (isSyncDone = false) => {
+    const loadFarm = async (isSyncDone = false) => {
       let f = dataService.getFarmById(farmId);
       if (!f && farmId) {
         f = dataService.getFarmById(farmId + '"');
+      }
+
+      // ถ้ายังไม่พบในแคช ให้ลองดึงตรงจาก Firestore
+      if (!f && farmId) {
+        f = await dataService.fetchFarmById(farmId);
       }
 
       if (!f) {
@@ -91,11 +96,20 @@ export default function FarmDetailPage() {
 
       if (isMounted) {
         setFarm({ ...f });
-        setProducts(dataService.getProductsByFarmId(farmId));
+        let prods = dataService.getProductsByFarmId(farmId);
+        setProducts(prods);
         setSelectedPractices(f.practices ? [...f.practices] : []);
         setCurrentUser(user);
         setIsLoading(false);
         setIsNotFound(false);
+
+        if (prods.length === 0) {
+          dataService.fetchProductsByFarmId(farmId).then((fetchedProds) => {
+            if (isMounted && fetchedProds.length > 0) {
+              setProducts(fetchedProds);
+            }
+          });
+        }
 
         // รวมศาสตร์ที่มีในแปลงเข้ากับศาสตร์มาตรฐาน เพื่อให้แสดงครบทุกตัวเลือกที่แปลงเลือกไว้เสมอ
         const activeOptions = dataService.getActivePracticeNames();

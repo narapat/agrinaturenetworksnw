@@ -28,10 +28,13 @@ import { db } from './firebase';
 import { 
   collection, 
   getDocs, 
+  getDoc,
   doc, 
   setDoc, 
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  query,
+  where
 } from 'firebase/firestore';
 
 // Local Storage Keys
@@ -445,7 +448,20 @@ class DataService {
 
       // 2. ซิงค์ Farms (ข้อมูลแปลงกสิกรรม)
       try {
-        const farmsSnap = await getDocs(collection(db, 'farms'));
+        let farmsSnap;
+        if (this.isAdminSession()) {
+          try {
+            farmsSnap = await getDocs(collection(db, 'farms'));
+          } catch {
+            const q = query(collection(db, 'farms'), where('status', '==', 'approved'));
+            farmsSnap = await getDocs(q);
+          }
+        } else {
+          // สำหรับบุคคลทั่วไป ต้อง query เฉพาะแปลงที่ approved เพื่อให้สอดคล้องกับ Firestore Security Rules
+          const q = query(collection(db, 'farms'), where('status', '==', 'approved'));
+          farmsSnap = await getDocs(q);
+        }
+
         if (!farmsSnap.empty) {
           const remoteFarms = farmsSnap.docs.map((d) => this.normalizeFarm(d.data() as Farm));
           const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
@@ -1043,6 +1059,31 @@ class DataService {
     return farm ? this.sanitizeFarmForPublic(farm) : undefined;
   }
 
+  async fetchFarmById(id: string): Promise<Farm | undefined> {
+    if (!id || typeof id !== 'string') return undefined;
+    const cleanId = id.replace(/"/g, '').trim();
+    const existing = this.getFarmById(cleanId);
+    if (existing) return existing;
+
+    if (typeof window !== 'undefined' && db) {
+      try {
+        const farmRef = doc(db, 'farms', cleanId);
+        const snap = await getDoc(farmRef);
+        if (snap.exists()) {
+          const farmData = this.normalizeFarm({ ...snap.data(), id: snap.id } as Farm);
+          if (!this.farms.some((f) => f.id === farmData.id)) {
+            this.farms.push(farmData);
+            this.save();
+          }
+          return this.sanitizeFarmForPublic(farmData);
+        }
+      } catch (err) {
+        console.warn(`[dataService] fetchFarmById(${cleanId}) error:`, err);
+      }
+    }
+    return undefined;
+  }
+
   getFarmByMemberId(memberId: string): Farm | undefined {
     const farm = this.farms.find((f) => f.memberId === memberId);
     return farm ? this.sanitizeFarmForPublic(farm) : undefined;
@@ -1061,6 +1102,30 @@ class DataService {
     return this.products
       .filter((p) => (p.farmId === farmId || p.farmId === cleanId || p.farmId?.replace(/"/g, '') === cleanId) && (includeHidden || p.status !== 'hidden'))
       .map((p) => this.sanitizeProductForPublic(p));
+  }
+
+  async fetchProductsByFarmId(farmId: string): Promise<Product[]> {
+    if (!farmId || typeof farmId !== 'string') return [];
+    const cleanId = farmId.replace(/"/g, '').trim();
+    if (typeof window !== 'undefined' && db) {
+      try {
+        const q = query(collection(db, 'products'), where('farmId', '==', cleanId));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const prods = snap.docs.map((d) => d.data() as Product);
+          for (const p of prods) {
+            if (!this.products.some((existing) => existing.id === p.id)) {
+              this.products.push(p);
+            }
+          }
+          this.save();
+          return prods.filter((p) => p.status !== 'hidden').map((p) => this.sanitizeProductForPublic(p));
+        }
+      } catch (err) {
+        console.warn(`[dataService] fetchProductsByFarmId(${cleanId}) error:`, err);
+      }
+    }
+    return this.getProductsByFarmId(cleanId);
   }
 
   // ==================== USER PROFILE & PERMISSIONS ====================
