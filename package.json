@@ -7,8 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run tests/unit",
+    "test:watch": "vitest tests/unit",
+    "test:rules": "export JAVA_HOME=$(/usr/libexec/java_home 2>/dev/null || echo '/Library/Java/JavaVirtualMachines/zulu-21.jdk/Contents/Home'); firebase emulators:exec --only firestore \"vitest run tests/rules\"",
     "test:e2e": "node --env-file=.env.local tests/e2e/admin-smoke.mjs"
   },
   "dependencies": {
@@ -25,10 +26,12 @@
     "tailwind-merge": "^2.4.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^20.14.11",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.19",
+    "firebase-tools": "^15.30.0",
     "postcss": "^8.4.40",
     "puppeteer": "^25.10.0",
     "tailwindcss": "^3.4.7",
