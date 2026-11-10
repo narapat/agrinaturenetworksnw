@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { Farm, Product, MemberProfile } from '@/types';
+import { Farm, Product, MemberProfile, hasAdminRole } from '@/types';
+import { isFarmOwner } from '@/lib/ownership';
 import { FARM_PRACTICE_OPTIONS } from '@/data/mockData';
 import { 
   ArrowLeft, 
@@ -85,7 +86,7 @@ export default function FarmDetailPage() {
       // 🌟 กฎความปลอดภัย: ตรวจสอบว่าสมาชิกเจ้าของแปลงได้รับการอนุมัติแล้วหรือยัง
       const member = dataService.getMemberById(f.memberId);
       const user = dataService.getCurrentUser();
-      const isOwnerOrAdmin = user && (user.id === f.memberId || user.role === 'admin');
+      const isOwnerOrAdmin = isFarmOwner(user, f) || hasAdminRole(user);
       if (member && member.status !== 'approved' && !isOwnerOrAdmin) {
         if (isMounted) {
           setIsLoading(false);
@@ -186,7 +187,10 @@ export default function FarmDetailPage() {
 
   if (!farm) return null;
 
-  const isOwner = currentUser && farm && (currentUser.id === farm.memberId || currentUser.role === 'admin');
+  // เจ้าของแปลงจริงเท่านั้น — แอดมินที่เปิดดูแปลงของคนอื่นไม่ใช่เจ้าของ
+  // (เดิมรวม role === 'admin' ทำให้แอดมินเห็นป้าย "เจ้าของแปลง" และปุ่มแก้ไขบนทุกแปลง)
+  const isOwner = isFarmOwner(currentUser, farm);
+  const isAdminViewer = !isOwner && hasAdminRole(currentUser);
 
   const handleTogglePractice = (opt: string) => {
     setSelectedPractices((prev) =>
@@ -264,6 +268,21 @@ export default function FarmDetailPage() {
           </Link>
         )}
       </div>
+
+      {/* แอดมินที่เปิดดูแปลงของสมาชิกคนอื่น */}
+      {isAdminViewer && (
+        <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs sm:text-sm text-stone-700">
+          <p>
+            ท่านกำลังดูแปลงนี้ในฐานะ <b>ผู้ดูแลระบบ</b> (ไม่ใช่เจ้าของแปลง) — หน้านี้แสดงเหมือนที่สาธารณะเห็น
+          </p>
+          <Link
+            href="/admin/members/approved"
+            className="shrink-0 inline-flex items-center gap-1 font-bold text-stone-800 hover:underline"
+          >
+            จัดการสมาชิกในศูนย์แอดมิน <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Owner Alert Banner when Logged In */}
       {isOwner && (
