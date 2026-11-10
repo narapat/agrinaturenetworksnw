@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { dataService } from '@/services/dataService';
 import { adminApi } from '@/services/adminApi';
 import {
@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { DEFAULT_AVATAR } from '@/app/admin/_components/defaultAvatar';
 import { useAdminData, LINE_ONLY_HINT } from '@/app/admin/_components/AdminDataContext';
+import { DeleteMemberDialog, type DeleteMemberTarget } from '@/app/admin/_components/DeleteMemberDialog';
+import { toDeleteTarget } from '@/app/admin/_components/memberSummary';
 
 /** /admin/members/rejected — สมาชิกที่ไม่อนุมัติ: เปลี่ยนเป็นอนุมัติ หรือลบถาวร (LINE เท่านั้น) */
 export default function AdminRejectedMembersPage() {
@@ -31,15 +33,22 @@ export default function AdminRejectedMembersPage() {
   };
 
 
-  const handlePermanentDelete = async (memberId: string, memberName: string) => {
+  const [deleting, setDeleting] = useState<DeleteMemberTarget | null>(null);
+
+  const handlePermanentDelete = (memberId: string) => {
     if (isPasscodeSession) {
       setActionError(LINE_ONLY_HINT);
       return;
     }
-    if (!confirm(`⚠️ ยืนยันการ "ลบข้อมูลถาวร" ของ "${memberName}" หรือไม่?\n\nข้อมูลสมาชิก แปลง ผลผลิต และข้อมูลส่วนตัวทั้งหมดจะถูกลบออกจาก Cloud Firestore อย่างถาวร ไม่สามารถกู้คืนได้!`)) {
-      return;
-    }
-    await runAction(`delete:${memberId}`, () => adminApi.deleteMember(memberId));
+    const member = rejectedMembers.find((m) => m.id === memberId);
+    if (member) setDeleting(toDeleteTarget(member));
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const id = deleting.id;
+    await runAction(`delete:${id}`, () => adminApi.deleteMember(id));
+    setDeleting(null);
   };
 
   return (
@@ -139,7 +148,7 @@ export default function AdminRejectedMembersPage() {
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
                     <button
                       type="button"
-                      onClick={() => handlePermanentDelete(member.id, member.fullName)}
+                      onClick={() => handlePermanentDelete(member.id)}
                       disabled={busyKey !== null || isPasscodeSession}
                       className="disabled:opacity-40 disabled:cursor-not-allowed px-3.5 py-2 bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border border-stone-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
                       title={isPasscodeSession ? LINE_ONLY_HINT : 'ลบข้อมูลออกจากระบบและ Cloud Firestore ถาวร'}
@@ -164,6 +173,14 @@ export default function AdminRejectedMembersPage() {
           </div>
         )}
       </div>
+      {deleting && (
+        <DeleteMemberDialog
+          target={deleting}
+          busy={busyKey === `delete:${deleting.id}`}
+          onCancel={() => setDeleting(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
     </>
   );
 }

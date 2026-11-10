@@ -233,6 +233,26 @@ describe('Admin Server API (Phase 1)', () => {
     });
   });
 
+  describe('Permanent delete — safeguards', () => {
+    it('an admin cannot delete their own member record', async () => {
+      db.seed('members/mem-me', { fullName: 'ตัวแอดมินเอง', status: 'approved', ownerUid: ADMIN_UID, farmId: 'farm-me' });
+      db.seed('farms/farm-me', { memberId: 'mem-me', ownerUid: ADMIN_UID, farmName: 'แปลงแอดมิน', status: 'approved' });
+      const res = await memberDELETE(req('/x', 'DELETE', 'line'), { params: { memberId: 'mem-me' } });
+      expect(res.status).toBe(400);
+      expect(db.read('members/mem-me')).toBeTruthy();
+      expect(db.read('farms/farm-me')).toBeTruthy();
+    });
+
+    it('deleting an approved member removes their products from the public catalog', async () => {
+      expect(db.read('members/mem-a1')!.status).toBe('approved');
+      const res = await memberDELETE(req('/x', 'DELETE', 'line'), { params: { memberId: 'mem-a1' } });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.deleted.products.sort()).toEqual(['prod-a1', 'prod-a2']);
+      expect(db.paths('products/')).toEqual(['products/prod-x']);
+    });
+  });
+
   // -------------------- Assisted entry --------------------
 
   describe('Assist add product', () => {
