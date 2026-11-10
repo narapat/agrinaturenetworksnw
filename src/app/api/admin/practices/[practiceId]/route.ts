@@ -13,7 +13,7 @@ import {
 } from '@/lib/adminRoute';
 import { buildAdminAuditDoc } from '@/lib/adminAudit';
 import { PRACTICE_CATEGORIES, practiceCategoryName } from '@/lib/taxonomy';
-import { listTaxonomy, loadTaxonomyItem } from '@/lib/taxonomyDefaults';
+import { isBuiltIn, listTaxonomy, loadTaxonomyItem } from '@/lib/taxonomyDefaults';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +43,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const found = await loadTaxonomyItem(db, 'practices', practiceId);
     if (!found) throw new NotFoundError('ไม่พบวิถี/ศาสตร์นี้');
-    const oldName: string = found.data.name;
+    // ชื่ออาจว่าง (เอกสารเสีย) — ถ้าว่างแปลว่าไม่มีแปลงใดอ้างอิงได้ ห้ามนำไปค้นใน Firestore (undefined ใช้เป็นเงื่อนไขไม่ได้)
+    const oldName: string = typeof found.data.name === 'string' ? found.data.name : '';
     const merged: Record<string, any> = { ...found.data, ...updates, id: practiceId };
 
     const renamed = updates.name !== undefined && updates.name !== oldName;
+    if (!merged.name) throw new ValidationError('กรุณาตั้งชื่อวิถี/ศาสตร์');
     if (renamed) {
       const all = await listTaxonomy(db, 'practices');
       if (all.some((p) => p.id !== practiceId && p.name === updates.name)) {
@@ -54,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }
     }
 
-    const farms = renamed
+    const farms = renamed && oldName
       ? (await db.collection('farms').where('practices', 'array-contains', oldName).get()).docs
       : [];
     if (farms.length + 2 > MAX_BATCH_OPS) {
@@ -72,7 +74,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const ref = db.collection('practices').doc(practiceId);
     const batch = db.batch();
-    if (found.persisted) batch.update(ref, updates);
+    // เอกสารยังไม่มี หรือมีแต่ไม่สมบูรณ์ → เขียนทั้งเอกสารเพื่อซ่อม
+    if (found.persisted && !found.incomplete) batch.update(ref, updates);
     else batch.set(ref, merged);
     for (const f of farms) {
       const list: string[] = Array.isArray(f.data().practices) ? f.data().practices : [];
@@ -101,7 +104,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     const found = await loadTaxonomyItem(db, 'practices', practiceId);
     if (!found) throw new NotFoundError('ไม่พบวิถี/ศาสตร์นี้');
-    const deletedName: string = found.data.name;
+    const deletedName: string = typeof found.data.name === 'string' ? found.data.name : '';
 
     let targetName: string | null = null;
     if (targetId) {
@@ -110,7 +113,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       targetName = t.data.name;
     }
 
-    const farms = (await db.collection('farms').where('practices', 'array-contains', deletedName).get()).docs;
+    const farms = deletedName
+      ? (await db.collection('farms').where('practices', 'array-contains', deletedName).get()).docs
+      : [];
     if (farms.length + 2 > MAX_BATCH_OPS) {
       throw new ValidationError(`มีแปลงที่ต้องซิงค์มากเกินไป (${farms.length} แปลง)`);
     }
@@ -119,7 +124,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       action: 'delete_practice',
       details: targetName
         ? `ลบศาสตร์ "${deletedName}" และโยกย้าย ${farms.length} แปลงไปยัง "${targetName}"`
-        : `ลบศาสตร์ "${deletedName}" ออกจากระบบ (${farms.length} แปลงได้รับผลกระทบ)`,
+        : `ลบศาสตร์ "${deletedName || `(ไม่มีชื่อ: ${practiceId})`}" ออกจากระบบ (${farms.length} แปลงได้รับผลกระทบ)`,
       metadata: { practiceId, targetId, farmIds: farms.map((f) => f.id) },
     });
 
@@ -131,7 +136,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         : list.filter((p) => p !== deletedName);
       batch.update(f.ref as any, { practices: next });
     }
-    batch.delete(db.collection('practices').doc(practiceId));
+    // รายการมาตรฐาน: เขียนป้ายลบไว้ ไม่อย่างนั้นค่าเริ่มต้นจะถูกเติมกลับมาเอง
+    if (isBuiltIn('practices', practiceId)) batch.set(db.collection('practices').doc(practiceId), { id: practiceId, deleted: true, deletedAt: new Date().toISOString() });
+    else batch.delete(db.collection('practices').doc(practiceId));
     batch.set(db.collection('auditLogs').doc(audit.id), audit);
     await batch.commit();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { dataService } from '@/services/dataService';
 import { adminApi } from '@/services/adminApi';
 import type { FarmPracticeTag, PracticeCategory } from '@/types';
@@ -17,6 +17,7 @@ import {
   Filter,
   ArrowRight,
 } from 'lucide-react';
+import { ModalError } from '@/app/admin/_components/ModalError';
 import { useAdminData, LINE_ONLY_HINT } from '@/app/admin/_components/AdminDataContext';
 
 /** /admin/practices — จัดการวิถีและศาสตร์กสิกรรมธรรมชาติ */
@@ -25,6 +26,7 @@ export default function AdminPracticesPage() {
     practices,
     isPasscodeSession,
     runAction,
+    busyKey,
   } = useAdminData();
 
   const [practiceSearch, setPracticeSearch] = useState('');
@@ -47,6 +49,9 @@ export default function AdminPracticesPage() {
   const [editPracticeActive, setEditPracticeActive] = useState(true);
 
   const [deletingPractice, setDeletingPractice] = useState<FarmPracticeTag | null>(null);
+  // ข้อผิดพลาดที่ต้องแสดงในกล่อง modal (แถบแจ้งเตือนของหน้าถูกฉากมืดบัง)
+  const [modalError, setModalError] = useState<string | null>(null);
+  useEffect(() => setModalError(null), [editingPractice, deletingPractice]);
   const [targetReassignPracticeId, setTargetReassignPracticeId] = useState<string>('');
 
   // ==================== FARM PRACTICES HANDLERS ====================
@@ -122,7 +127,7 @@ export default function AdminPracticesPage() {
           description: editPracticeDesc.trim() || 'วิถีและศาสตร์กสิกรรมธรรมชาติ',
           isActive: editPracticeActive,
         }),
-      (msg) => showPracticeFeedback('error', msg)
+      (msg) => setModalError(msg)
     );
     if (!res) return;
 
@@ -155,7 +160,7 @@ export default function AdminPracticesPage() {
     const res = await runAction(
       `practice:delete:${deletingPractice.id}`,
       () => adminApi.deletePractice(deletingPractice.id, targetReassignPracticeId || undefined),
-      (msg) => showPracticeFeedback('error', msg)
+      (msg) => setModalError(msg)
     );
     if (!res) return;
 
@@ -305,6 +310,7 @@ export default function AdminPracticesPage() {
               </button>
               <button
                 type="submit"
+                    disabled={busyKey !== null}
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors"
               >
                 บันทึกวิถี/ศาสตร์
@@ -421,6 +427,7 @@ export default function AdminPracticesPage() {
         {editingPractice && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
             <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-7 space-y-4 border border-stone-200 shadow-2xl animate-in fade-in">
+              {modalError && <ModalError message={modalError} />}
               <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                 <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-brand-600" />
@@ -518,6 +525,7 @@ export default function AdminPracticesPage() {
                   </button>
                   <button
                     type="submit"
+                    disabled={busyKey !== null}
                     className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-sm transition-colors"
                   >
                     บันทึกการแก้ไข
@@ -536,6 +544,7 @@ export default function AdminPracticesPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
               <div className="bg-white w-full max-w-lg rounded-3xl p-6 sm:p-7 space-y-4 border border-stone-200 shadow-2xl animate-in fade-in">
+                {modalError && <ModalError message={modalError} />}
                 <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                   <h3 className="font-bold text-rose-900 text-base flex items-center gap-2">
                     <AlertCircle className="w-5 h-5 text-rose-600" />
@@ -565,6 +574,7 @@ export default function AdminPracticesPage() {
                       <button
                         type="button"
                         onClick={handleConfirmDeletePractice}
+                        disabled={busyKey !== null}
                         className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors"
                       >
                         ยืนยันลบ
@@ -612,6 +622,7 @@ export default function AdminPracticesPage() {
                       <button
                         type="button"
                         onClick={handleConfirmDeletePractice}
+                        disabled={busyKey !== null}
                         className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
                       >
                         <ArrowRight className="w-4 h-4" />
