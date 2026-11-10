@@ -125,6 +125,30 @@ async function runSmokeTests() {
     console.log('  ✓ Admin dashboard unlocked and login gate disappeared');
 
     // -------------------------------------------------------------
+    // Test 3b: Admin sub-pages (แต่ละส่วนมี URL ของตัวเอง)
+    // -------------------------------------------------------------
+    console.log('\n[Test 3b] Visiting each admin sub-page...');
+    const adminSubPages = [
+      '/admin/members',
+      '/admin/members/rejected',
+      '/admin/news',
+      '/admin/assist',
+      '/admin/categories',
+      '/admin/practices',
+      '/admin/logs',
+    ];
+    for (const path of adminSubPages) {
+      await page.goto(`${BASE_URL}${path}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      await page.waitForSelector('nav[aria-label="เมนูศูนย์แอดมิน"]', { timeout: 15000 });
+      const current = await page.$eval('nav[aria-label="เมนูศูนย์แอดมิน"] a[aria-current="page"]', (a) => a.getAttribute('href'));
+      if (current !== path) throw new Error(`Expected active menu ${path}, got ${current}`);
+      console.log(`  ✓ ${path} rendered with its menu item active`);
+    }
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForFunction(() => location.pathname === '/admin/members', { timeout: 15000 });
+    console.log('  ✓ /admin redirects to /admin/members');
+
+    // -------------------------------------------------------------
     // Test 4: Real User Sign Out Flow
     // -------------------------------------------------------------
     console.log('\n[Test 4] Testing Real User Sign Out Flow...');

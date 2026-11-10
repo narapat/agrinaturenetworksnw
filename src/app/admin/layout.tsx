@@ -2,13 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { dataService } from '@/services/dataService';
 import { liffService } from '@/services/liffService';
 import { ShieldCheck, Lock, ArrowLeft, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { AdminDataProvider } from './_components/AdminDataContext';
+import { AdminShell } from './_components/AdminShell';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname() || '';
+  // หน้าเครื่องมือเดี่ยว (ภาพริชเมนู) ไม่ต้องใช้ข้อมูล/เมนูของศูนย์แอดมิน
+  const isStandaloneTool = pathname.startsWith('/admin/rich-menu');
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -286,7 +291,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </div>
 
-      {children}
+      {isStandaloneTool ? (
+        children
+      ) : (
+        <AdminDataProvider>
+          <AdminShell>{children}</AdminShell>
+        </AdminDataProvider>
+      )}
     </div>
   );
 }

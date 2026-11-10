@@ -1,0 +1,2 @@
+/** รูปโปรไฟล์สำรองเมื่อไม่มีรูปหรือโหลดรูปไม่สำเร็จ (SVG inline ไม่ต้องโหลดจากภายนอก) */
+export const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
