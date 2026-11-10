@@ -14,7 +14,7 @@ import {
 import { buildAdminAuditDoc } from '@/lib/adminAudit';
 import { PRODUCT_CATEGORIES, productCategoryName } from '@/lib/taxonomy';
 import type { ProductCategory } from '@/types';
-import { loadTaxonomyItem } from '@/lib/taxonomyDefaults';
+import { isBuiltIn, loadTaxonomyItem } from '@/lib/taxonomyDefaults';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const found = await loadTaxonomyItem(db, 'categories', categoryId);
     if (!found) throw new NotFoundError('ไม่พบชนิดผลผลิตนี้');
     const merged: Record<string, any> = { ...found.data, ...updates, id: categoryId };
+    if (!merged.name) throw new ValidationError('กรุณาตั้งชื่อชนิดผลผลิต');
 
     const cascade = updates.name !== undefined || updates.category !== undefined;
     const products = cascade ? (await db.collection('products').where('skuTagId', '==', categoryId).get()).docs : [];
@@ -62,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     const batch = db.batch();
     // รายการมาตรฐานที่ยังไม่เคยถูกบันทึก: สร้างเอกสารเต็ม แทนการ update
-    if (found.persisted) batch.update(ref, updates);
+    if (found.persisted && !found.incomplete) batch.update(ref, updates);
     else batch.set(ref, merged);
     for (const p of products) {
       batch.update(p.ref as any, {
@@ -129,7 +130,9 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         });
       }
     }
-    batch.delete(ref);
+    // รายการมาตรฐาน: เขียนป้ายลบไว้ ไม่อย่างนั้นค่าเริ่มต้นจะถูกเติมกลับมาเอง
+    if (isBuiltIn('categories', categoryId)) batch.set(ref, { id: categoryId, deleted: true, deletedAt: new Date().toISOString() });
+    else batch.delete(ref);
     batch.set(db.collection('auditLogs').doc(audit.id), audit);
     await batch.commit();
 

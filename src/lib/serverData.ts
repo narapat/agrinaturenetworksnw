@@ -1,4 +1,5 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
+import { listTaxonomy } from '@/lib/taxonomyDefaults';
 import { 
   Farm, 
   Product, 
@@ -116,15 +117,9 @@ export async function getCategoriesServer(): Promise<CategoryTag[]> {
   if (!db) return serializeData(INITIAL_CATEGORY_TAGS);
 
   try {
-    const snap = await db.collection('categories').get();
-    if (snap.empty) {
-      return serializeData(INITIAL_CATEGORY_TAGS);
-    }
-    const cats: CategoryTag[] = [];
-    snap.forEach((doc) => {
-      cats.push(serializeData({ ...doc.data(), id: doc.id }) as CategoryTag);
-    });
-    return cats;
+    // รวมค่าเริ่มต้น ซ่อมเอกสารที่ขาดชื่อ และตัดรายการที่มีป้ายลบออก (ให้ตรงกับหน้าแอดมิน)
+    const cats = await listTaxonomy(db, 'categories');
+    return serializeData(cats) as CategoryTag[];
   } catch (err) {
     console.warn('[ServerData] getCategoriesServer fallback:', err);
     return serializeData(INITIAL_CATEGORY_TAGS);

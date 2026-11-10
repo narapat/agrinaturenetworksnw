@@ -634,6 +634,13 @@ class DataService {
           const remoteCats = categoriesSnap.docs.map((d) => d.data() as CategoryTag);
           for (const rc of remoteCats) {
             const localIdx = this.categories.findIndex((c) => c.id === rc.id);
+            // ป้ายลบจากแอดมิน: เอาออกจากรายการ (รวมรายการมาตรฐาน)
+            if ((rc as any).deleted === true) {
+              if (localIdx !== -1) this.categories.splice(localIdx, 1);
+              continue;
+            }
+            // เอกสารไม่สมบูรณ์ที่ไม่มีรายการในเครื่องให้เติม: ข้าม (กันการ์ดว่าง)
+            if (localIdx === -1 && !rc.name) continue;
             if (localIdx === -1) {
               this.categories.push(rc);
             } else {
@@ -672,6 +679,11 @@ class DataService {
           const remotePractices = practicesSnap.docs.map((d) => d.data() as FarmPracticeTag);
           for (const rp of remotePractices) {
             const localIdx = this.practices.findIndex((p) => p.id === rp.id);
+            if ((rp as any).deleted === true) {
+              if (localIdx !== -1) this.practices.splice(localIdx, 1);
+              continue;
+            }
+            if (localIdx === -1 && !rp.name) continue;
             if (localIdx === -1) {
               this.practices.push(rp);
             } else {

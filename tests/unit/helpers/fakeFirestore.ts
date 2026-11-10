@@ -63,6 +63,10 @@ class FakeQuery {
     public filters: Array<{ field: string; op: string; value: any }> = []
   ) {}
   where(field: string, op: string, value: any) {
+    // เหมือน Firestore จริง: undefined ใช้เป็นเงื่อนไขค้นหาไม่ได้
+    if (value === undefined) {
+      throw new Error('Value for argument "value" is not a valid query constraint. Cannot use "undefined" as a Firestore value.');
+    }
     return new FakeQuery(this.store, this.path, [...this.filters, { field, op, value }]);
   }
   async get() {

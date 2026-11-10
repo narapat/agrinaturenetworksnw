@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { dataService } from '@/services/dataService';
 import { adminApi } from '@/services/adminApi';
 import type { CategoryTag, ProductCategory } from '@/types';
@@ -15,6 +15,7 @@ import {
   Filter,
   ArrowRight,
 } from 'lucide-react';
+import { ModalError } from '@/app/admin/_components/ModalError';
 import { useAdminData, LINE_ONLY_HINT } from '@/app/admin/_components/AdminDataContext';
 
 /** /admin/categories — จัดการชนิดผลผลิตมาตรฐาน (SKU) */
@@ -23,6 +24,7 @@ export default function AdminCategoriesPage() {
     categories,
     isPasscodeSession,
     runAction,
+    busyKey,
   } = useAdminData();
 
   // New Category State
@@ -41,6 +43,9 @@ export default function AdminCategoriesPage() {
   const [editCatActive, setEditCatActive] = useState(true);
 
   const [deletingCat, setDeletingCat] = useState<CategoryTag | null>(null);
+  // ข้อผิดพลาดที่ต้องแสดงในกล่อง modal (แถบแจ้งเตือนของหน้าถูกฉากมืดบัง)
+  const [modalError, setModalError] = useState<string | null>(null);
+  useEffect(() => setModalError(null), [editingCat, deletingCat]);
   const [targetReassignCatId, setTargetReassignCatId] = useState<string>('');
   const [catSearch, setCatSearch] = useState('');
   const [catGroupFilter, setCatGroupFilter] = useState<string>('all');
@@ -116,7 +121,7 @@ export default function AdminCategoriesPage() {
           description: editCatDesc.trim() || 'หมวดหมู่ผลผลิตที่กำหนดโดยแอดมินเครือข่าย',
           isActive: editCatActive,
         }),
-      (msg) => showCatFeedback('error', msg)
+      (msg) => setModalError(msg)
     );
     if (!res) return;
 
@@ -157,7 +162,7 @@ export default function AdminCategoriesPage() {
     const res = await runAction(
       `cat:delete:${deletingCat.id}`,
       () => adminApi.deleteCategory(deletingCat.id, pInfo.count > 0 ? targetReassignCatId : undefined),
-      (msg) => showCatFeedback('error', msg)
+      (msg) => setModalError(msg)
     );
     if (!res) return;
 
@@ -301,6 +306,7 @@ export default function AdminCategoriesPage() {
               </button>
               <button
                 type="submit"
+                    disabled={busyKey !== null}
                 className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 transition-colors"
               >
                 บันทึกชนิดผลผลิต
@@ -413,6 +419,7 @@ export default function AdminCategoriesPage() {
         {editingCat && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in">
             <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95">
+              {modalError && <ModalError message={modalError} />}
               <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl p-1.5 bg-brand-50 rounded-xl">{editCatIcon}</span>
@@ -530,6 +537,7 @@ export default function AdminCategoriesPage() {
                   </button>
                   <button
                     type="submit"
+                    disabled={busyKey !== null}
                     className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-brand-600 hover:bg-brand-700 shadow-sm transition-colors"
                   >
                     บันทึกการแก้ไข
@@ -548,6 +556,7 @@ export default function AdminCategoriesPage() {
           return (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs animate-in fade-in">
               <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-stone-200 space-y-4 animate-in zoom-in-95">
+                {modalError && <ModalError message={modalError} />}
                 <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
@@ -586,6 +595,7 @@ export default function AdminCategoriesPage() {
                       <button
                         type="button"
                         onClick={handleConfirmDeleteCat}
+                        disabled={busyKey !== null}
                         className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors"
                       >
                         ยืนยันลบหมวดหมู่นี้
@@ -634,6 +644,7 @@ export default function AdminCategoriesPage() {
                       <button
                         type="button"
                         onClick={handleConfirmDeleteCat}
+                        disabled={busyKey !== null}
                         className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors flex items-center justify-center gap-1.5"
                       >
                         <ArrowRight className="w-4 h-4" />

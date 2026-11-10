@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import * as firebaseAdmin from '@/lib/firebaseAdmin';
 import { createAdminSessionToken, sessionDurationFor } from '@/lib/adminSession';
 import { FakeFirestore } from './helpers/fakeFirestore';
+import { INITIAL_CATEGORY_TAGS, INITIAL_PRACTICE_TAGS } from '@/data/mockData';
 
 import { GET as snapshotGET } from '@/app/api/admin/snapshot/route';
 import { POST as memberPOST, DELETE as memberDELETE } from '@/app/api/admin/members/[memberId]/route';
@@ -357,6 +358,68 @@ describe('Admin Server API (Phase 1)', () => {
       expect(res.status).toBe(200);
       expect(db.read('practices/practice-a')).toBeUndefined();
       expect(db.read('farms/farm-a1')!.practices).toEqual(['โคก หนอง นา', 'ไบโอชาร์ใหม่']);
+    });
+  });
+
+  // -------------------- Broken / built-in taxonomy docs --------------------
+  // Regression: เอกสารที่ไม่สมบูรณ์ (มีแค่ isActive/updatedAt) จากโค้ด client รุ่นเก่า ทำให้ลบไม่ได้
+  // ("Cannot use undefined as a Firestore value") และรายการมาตรฐานที่ลบแล้วกลับมาเอง
+
+  describe('Partial and built-in taxonomy documents', () => {
+    const builtInPractice = INITIAL_PRACTICE_TAGS[0];
+    const builtInCategory = INITIAL_CATEGORY_TAGS[0];
+
+    it('snapshot fills a partial built-in practice from its default (no nameless cards)', async () => {
+      db.seed(`practices/${builtInPractice.id}`, { isActive: false, updatedAt: '2026-10-01' });
+      const snap = await (await snapshotGET(req('/api/admin/snapshot', 'GET', 'line'))).json();
+      const item = snap.practices.find((p: any) => p.id === builtInPractice.id);
+      expect(item.name).toBe(builtInPractice.name);
+      expect(item.isActive).toBe(false); // ค่าใน Firestore ชนะ
+      expect(snap.practices.every((p: any) => typeof p.name === 'string' && p.name)).toBe(true);
+    });
+
+    it('deleting a partial built-in practice succeeds and it does not come back', async () => {
+      db.seed(`practices/${builtInPractice.id}`, { isActive: false, updatedAt: '2026-10-01' });
+      const res = await practiceDELETE(req('/x', 'DELETE', 'line'), { params: { practiceId: builtInPractice.id } });
+      expect(res.status).toBe(200);
+      expect(db.read(`practices/${builtInPractice.id}`)!.deleted).toBe(true);
+
+      const snap = await (await snapshotGET(req('/api/admin/snapshot', 'GET', 'line'))).json();
+      expect(snap.practices.some((p: any) => p.id === builtInPractice.id)).toBe(false);
+
+      // ลบซ้ำ / แก้ไขรายการที่ลบแล้ว → 404
+      expect((await practicePATCH(req('/x', 'PATCH', 'line', { isActive: true }), { params: { practiceId: builtInPractice.id } })).status).toBe(404);
+    });
+
+    it('a nameless doc with no default can be deleted without querying farms by undefined', async () => {
+      db.seed('practices/practice-broken', { isActive: false });
+      const res = await practiceDELETE(req('/x', 'DELETE', 'line'), { params: { practiceId: 'practice-broken' } });
+      expect(res.status).toBe(200);
+      expect(db.read('practices/practice-broken')).toBeUndefined();
+      expect(db.read('farms/farm-a1')!.practices).toEqual(['โคก หนอง นา', 'เผาถ่านไบโอชาร์']);
+    });
+
+    it('editing a partial built-in practice writes the full document (repairs it)', async () => {
+      db.seed(`practices/${builtInPractice.id}`, { isActive: false });
+      const res = await practicePATCH(req('/x', 'PATCH', 'passcode', { isActive: true }), { params: { practiceId: builtInPractice.id } });
+      expect(res.status).toBe(200);
+      const stored = db.read(`practices/${builtInPractice.id}`)!;
+      expect(stored.name).toBe(builtInPractice.name);
+      expect(stored.isActive).toBe(true);
+    });
+
+    it('deleting a built-in category leaves a tombstone so it stays deleted', async () => {
+      const res = await categoryDELETE(req('/x', 'DELETE', 'line'), { params: { categoryId: builtInCategory.id } });
+      expect(res.status).toBe(200);
+      expect(db.read(`categories/${builtInCategory.id}`)!.deleted).toBe(true);
+      const snap = await (await snapshotGET(req('/api/admin/snapshot', 'GET', 'line'))).json();
+      expect(snap.categories.some((c: any) => c.id === builtInCategory.id)).toBe(false);
+    });
+
+    it('deleting a custom category removes the document entirely', async () => {
+      const res = await categoryDELETE(req('/x?targetId=sku-target', 'DELETE', 'line'), { params: { categoryId: 'sku-custom' } });
+      expect(res.status).toBe(200);
+      expect(db.read('categories/sku-custom')).toBeUndefined();
     });
   });
 
