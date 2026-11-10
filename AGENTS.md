@@ -39,6 +39,15 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
    - `POST /api/audit` requires authentication. `actorRole`, `actorUid`, and `authMethod` are derived on the server; client-supplied `actorRole` is ignored. If the Admin SDK is unavailable it must return 500, never a fake success.
    - Client writes to public parent docs must send only an explicit allowlisted patch — never a full in-memory object (e.g. `updateFarm` only writes `FARM_PUBLIC_UPDATABLE_FIELDS`), because in-memory objects may be hydrated with private subcollection data.
 
+5a. **Admin Actions Go Through the Server (`/api/admin/*`)**
+   - Every admin read and write uses an Admin API route wrapped in `runAdminRoute()` (`@/lib/adminRoute`), which calls `requireAdmin()` first and returns 500 when the Admin SDK is unavailable. The admin UI calls these through `adminApi` (`@/services/adminApi`) and must `await` the result and show errors — never fire-and-forget client Firestore writes from admin screens. The old `dataService` admin mutators are `@deprecated`.
+   - Each mutation commits its data change and its audit log in **one batch** (`buildAdminAuditDoc()` in `@/lib/adminAudit`).
+   - **Admin identity source of truth is `ADMIN_LINE_USER_IDS` (server env).** There is no UI to grant/revoke admin, and nothing may write `role: 'admin'` to member docs. To add an admin: get their LINE UID (shown in the member dashboard), add it to the env on Vercel, redeploy, and have them log in with LINE again.
+   - Two ways in: LINE (session 7 days, re-checked against the whitelist on every request) and the **backup passcode** (session 3 hours, requires an actor name for the audit log). Session lifetime is bound to the method inside the signed cookie.
+   - Irreversible actions (delete member, delete category/practice, delete news) use `requireLine: true` — passcode sessions get 403. Keep it that way: the passcode is a shared secret and cannot identify who acted.
+   - Passcode brute-force protection (`@/lib/passcodeRateLimit`): 5 failures/15 min per IP and 20/15 min globally lock passcode login for 15 min (LINE unaffected). It fails closed when Firestore is unavailable. Do not move the counters to memory — Vercel instances do not share it.
+   - Permanent member delete must remove `members/{id}`, `private/pii`, linked farms + `private/contact`, their products, and `registrations/{ownerUid}`.
+
 6. **Admin Auth vs Admin Firestore Isolation (No Auth in Pages/SSR)**
    - Never import `getAdminAuth` or `@/lib/firebaseAdminAuth` from Server Components, layouts, or pages.
    - Admin Auth is strictly restricted to API Route Handlers (`src/app/api/...`) to prevent bundling `jwks-rsa` into public SSR trees.
@@ -62,9 +71,8 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
 
 ## ⚠️ Recognized Technical Debt (Documented for Future Phases)
 
-1. **Admin Dual-Auth Structural Debt**
-   - Currently, admins must authenticate via BOTH passcode (to access `/admin` via HMAC HTTP-Only cookie) AND LINE Login (to receive the `role: 'admin'` Firebase custom claim allowing Firestore reads).
-   - This is recognized structural debt from having two overlaid authentication systems and will be consolidated into a single unified flow in the future.
+1. **Admin Dual-Auth Structural Debt (mostly resolved)**
+   - The admin screen now runs entirely through `/api/admin/*`, so a passcode-only admin (no Firebase custom claim) can work. The remaining overlap: some shared client code (e.g. `ensureFirestoreSync`) still reads Firestore directly and relies on the LINE custom claim for admin-only collections.
 
 2. **Line ID Phone Fallback Vector**
    - Legacy fallback of `cleanLineId` to `cleanPhone` or `tokenPayload.name` has been audited and removed in Task D to prevent phone numbers from leaking into public `lineId` fields.

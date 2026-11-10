@@ -43,6 +43,13 @@ async function runSmokeTests() {
     await page.waitForSelector(inputSelector, { timeout: 8000 });
     console.log('  ✓ Admin passcode input detected');
 
+    // รหัสผ่านสำรองต้องกรอกชื่อผู้ดำเนินการ (ใช้บันทึกใน audit log)
+    const actorSelector = '#admin-actor-name';
+    await page.waitForSelector(actorSelector, { timeout: 8000 });
+    const existingName = await page.$eval(actorSelector, (el) => el.value);
+    if (!existingName) await page.type(actorSelector, 'E2E Smoke Test');
+    console.log('  ✓ Actor name field filled');
+
     // Focus and type wrong password
     await page.focus(inputSelector);
     await page.type(inputSelector, 'invalid_wrong_passcode');

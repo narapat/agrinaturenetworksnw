@@ -38,6 +38,7 @@ export default function MemberDashboardPage() {
   const router = useRouter();
   const { fontSize, setFontSize, getTextClass } = useFontSize();
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
+  const [uidCopied, setUidCopied] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLineGateRequired, setIsLineGateRequired] = useState(false);
   const [isConnectingLine, setIsConnectingLine] = useState(false);
@@ -736,6 +737,32 @@ export default function MemberDashboardPage() {
             </label>
 
           </div>
+
+          {/* LINE User ID: ใช้เมื่อแอดมินเครือข่ายต้องเพิ่มสิทธิ์แอดมินให้ (ตั้งค่าที่หลังบ้าน) */}
+          {(currentUser.ownerUid || currentUser.lineUserId) && (
+            <details className="text-xs text-stone-500">
+              <summary className="cursor-pointer select-none py-1">รหัสผู้ใช้ LINE ของคุณ (สำหรับแจ้งผู้ดูแลระบบ)</summary>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="flex-1 min-w-0 truncate px-2.5 py-2 rounded-lg bg-stone-100 border border-stone-200 font-mono text-[11px] text-stone-700">
+                  {currentUser.ownerUid || currentUser.lineUserId}
+                </code>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(String(currentUser.ownerUid || currentUser.lineUserId));
+                      setUidCopied(true);
+                      setTimeout(() => setUidCopied(false), 2000);
+                    } catch {}
+                  }}
+                  className="shrink-0 px-3 py-2 rounded-lg border border-stone-200 bg-white font-bold text-stone-700 hover:bg-stone-50"
+                >
+                  {uidCopied ? 'คัดลอกแล้ว ✓' : 'คัดลอก'}
+                </button>
+              </div>
+              <p className="mt-1.5 leading-relaxed">ส่งรหัสนี้ให้ผู้ดูแลระบบเฉพาะเมื่อได้รับการขอให้เป็นแอดมินเครือข่าย</p>
+            </details>
+          )}
         </div>
 
         {/* 1-Click Admin Assistance (ผู้ช่วยแอดมินสำหรับผู้สูงอายุ) */}

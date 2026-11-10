@@ -1764,6 +1764,7 @@ class DataService {
   /**
    * แอดมินช่วยลงผลผลิตแทนสมาชิก (พร้อมบันทึก Audit Log เพื่อความโปร่งใส)
    */
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   async adminAssistAddProduct(
     admin: MemberProfile,
     targetMemberId: string,
@@ -2293,6 +2294,7 @@ class DataService {
     return this.categories;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   addCategoryTag(category: Omit<CategoryTag, 'id'>): CategoryTag {
     const newCat: CategoryTag = {
       ...category,
@@ -2304,6 +2306,7 @@ class DataService {
     return newCat;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   toggleCategoryStatus(catId: string) {
     const cat = this.categories.find((c) => c.id === catId);
     if (cat) {
@@ -2340,6 +2343,7 @@ class DataService {
     return { count: prods.length, farmCount: farmIds.size };
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   updateCategoryTag(catId: string, updates: Partial<Omit<CategoryTag, 'id'>>): CategoryTag | null {
     const cat = this.categories.find((c) => c.id === catId);
     if (!cat) return null;
@@ -2388,6 +2392,7 @@ class DataService {
     return cat;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   deleteCategoryTagWithReassign(
     sourceCatId: string,
     targetCatId?: string
@@ -2515,6 +2520,7 @@ class DataService {
     return this.farms.filter((f) => f.practices && f.practices.includes(practiceName)).length;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   addPracticeTag(data: Omit<FarmPracticeTag, 'id'>): FarmPracticeTag {
     const newTag: FarmPracticeTag = {
       ...data,
@@ -2537,6 +2543,7 @@ class DataService {
     return newTag;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   updatePracticeTag(
     id: string,
     updates: Partial<Omit<FarmPracticeTag, 'id'>>
@@ -2574,6 +2581,7 @@ class DataService {
     return { success: true, practice: tag, updatedFarmCount };
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   togglePracticeStatus(id: string): void {
     const tag = this.practices.find((p) => p.id === id);
     if (tag) {
@@ -2587,6 +2595,7 @@ class DataService {
     }
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   deletePracticeTagWithReassign(
     sourceId: string,
     targetId?: string
@@ -2640,6 +2649,7 @@ class DataService {
     return this.members.find((m) => m.id === id);
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   approveMember(admin: MemberProfile, memberId: string) {
     const member = this.members.find((m) => m.id === memberId);
     if (member) {
@@ -2681,6 +2691,7 @@ class DataService {
     return this.members.filter((m) => m.status === 'rejected');
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   rejectMember(admin: MemberProfile, memberId: string, reason?: string) {
     const member = this.members.find((m) => m.id === memberId);
     if (member) {
@@ -2718,6 +2729,7 @@ class DataService {
     }
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   deleteMemberPermanently(admin: MemberProfile, memberId: string) {
     const member = this.members.find((m) => m.id === memberId);
     if (!member) return;
@@ -2761,6 +2773,30 @@ class DataService {
     return this.auditLogs;
   }
 
+  /**
+   * แทนที่ข้อมูลใน memory ด้วยข้อมูลจาก GET /api/admin/snapshot (server เป็นแหล่งความจริง)
+   * ใช้เฉพาะหน้าแอดมิน — ไม่เรียก save() เพื่อไม่ให้ข้อมูลส่วนตัวของผู้สมัครถูกเขียนลง localStorage เพิ่ม
+   */
+  applyAdminSnapshot(snap: {
+    members: any[];
+    farms: any[];
+    products: Product[];
+    categories: CategoryTag[];
+    practices: FarmPracticeTag[];
+    news: NewsEvent[];
+    auditLogs: any[];
+  }): void {
+    this.members = snap.members as MemberProfile[];
+    this.farms = snap.farms.map((f) => this.normalizeFarm(f)) as Farm[];
+    this.products = snap.products;
+    this.categories = snap.categories;
+    this.practices = snap.practices;
+    this.news = [...snap.news].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    this.auditLogs = snap.auditLogs as AuditLog[];
+    this.lastSyncTimestamp = Date.now();
+    this.dispatchDataUpdated();
+  }
+
   // ==================== NEWS & EVENTS ====================
 
   getNews(includeHidden: boolean = false): NewsEvent[] {
@@ -2774,6 +2810,7 @@ class DataService {
     return this.news.find((n) => n.id === id);
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   addNews(event: Omit<NewsEvent, 'id'>): NewsEvent {
     const actor = this.getCurrentUser();
     const newItem: NewsEvent = {
@@ -2803,6 +2840,7 @@ class DataService {
     return newItem;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   updateNews(id: string, updates: Partial<Omit<NewsEvent, 'id'>>): NewsEvent | null {
     const idx = this.news.findIndex((n) => n.id === id);
     if (idx === -1) return null;
@@ -2834,6 +2872,7 @@ class DataService {
     return updatedItem;
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   toggleNewsStatus(id: string): NewsEvent | null {
     const item = this.news.find((n) => n.id === id);
     if (!item) return null;
@@ -2841,6 +2880,7 @@ class DataService {
     return this.updateNews(id, { status: newStatus });
   }
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   deleteNews(id: string): boolean {
     const idx = this.news.findIndex((n) => n.id === id);
     if (idx === -1) return false;
@@ -2869,6 +2909,7 @@ class DataService {
 
   // ==================== ROLE ASSIGNMENT ====================
 
+  /** @deprecated หน้าแอดมินใช้ adminApi (server) แทนแล้ว — เมธอดนี้แก้เฉพาะ state ในเครื่อง + เขียน Firestore จาก client ซึ่งต้องมี custom claim */
   assignAdminRole(memberId: string, makeAdmin: boolean): boolean {
     const member = this.members.find((m) => m.id === memberId);
     if (!member) return false;
