@@ -25,8 +25,7 @@ import {
   Sprout, 
   LogOut, 
   MessageSquare, 
-  Sparkles 
-} from 'lucide-react';
+  Sparkles, BarChart3 } from 'lucide-react';
 
 export default function Header() {
   const pathname = usePathname();
@@ -153,6 +152,7 @@ export default function Header() {
     { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag, desc: 'ผลผลิตอินทรีย์ 15 อำเภอ' },
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin, desc: 'ทำเนียบแปลงและศูนย์เรียนรู้' },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper, desc: 'กิจกรรมและตารางเอามื้อสามัคคี' },
+    { href: '/stats', label: 'สถิติเครือข่าย', icon: BarChart3, desc: 'จำนวนสมาชิก แปลง และของดีรายอำเภอ' },
     { href: '/manual', label: 'คู่มือใช้งาน', icon: BookOpen, desc: 'วิธีใช้งานระบบและคู่มือออนไลน์' },
     { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User, desc: 'จัดการผลผลิตและข้อมูลแปลง' },
     ...(hasAdminRole(currentUser)
