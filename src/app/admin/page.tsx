@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { adminApi, type AdminSessionInfo } from '@/services/adminApi';
 import { MemberProfile, CategoryTag, AuditLog, Product, ProductCategory, NewsEvent, NewsCategory, NewsStatus, hasAdminRole, FarmPracticeTag, PracticeCategory } from '@/types';
 import { compressImage } from '@/utils/imageOptimizer';
 import { 
@@ -40,14 +41,15 @@ import {
   RotateCcw,
   Sprout,
   LogIn,
-  Activity
+  Activity,
+  KeyRound
 } from 'lucide-react';
 
 const DEFAULT_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
 export default function AdminPage() {
   const { getTextClass } = useFontSize();
-  const [activeTab, setActiveTab] = useState<'pending' | 'rejected' | 'roles' | 'news' | 'assist' | 'categories' | 'practices' | 'logs'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'rejected' | 'news' | 'assist' | 'categories' | 'practices' | 'logs'>('pending');
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
 
   const [pendingMembers, setPendingMembers] = useState<MemberProfile[]>([]);
@@ -57,10 +59,6 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [newsList, setNewsList] = useState<NewsEvent[]>([]);
 
-  // Roles Tab State
-  const [rolesSearch, setRolesSearch] = useState('');
-  const [rolesFilter, setRolesFilter] = useState<'all' | 'admin' | 'member'>('all');
-  const [roleFeedback, setRoleFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // News Tab State
   const [showNewsModal, setShowNewsModal] = useState(false);
@@ -81,6 +79,7 @@ export default function AdminPage() {
   const [newsSearch, setNewsSearch] = useState('');
   const [newsFilter, setNewsFilter] = useState<'all' | 'published' | 'hidden'>('all');
   const [newsFeedback, setNewsFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [newsModalError, setNewsModalError] = useState<string | null>(null);
 
   // Assisted Entry Modal State
   const [selectedAssistMember, setSelectedAssistMember] = useState<MemberProfile | null>(null);
@@ -141,35 +140,70 @@ export default function AdminPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState('');
 
-  useEffect(() => {
-    loadData();
+  // สถานะการเข้าสู่ระบบแอดมิน (LINE หรือ รหัสผ่านสำรอง) และข้อผิดพลาดจาก server
+  const [session, setSession] = useState<AdminSessionInfo>({ authenticated: false });
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const isPasscodeSession = session.method === 'passcode';
+  const actorName = session.actorName || currentUser?.fullName || 'แอดมินเครือข่าย';
+  const LINE_ONLY_HINT = 'การลบย้อนกลับไม่ได้ ต้องเข้าสู่ระบบแอดมินด้วย LINE';
 
-    // ดึงข้อมูลสดจาก Cloud Firestore อัตโนมัติเมื่อเปิดหน้า Admin
-    setIsSyncing(true);
-    dataService.ensureFirestoreSync(true).then(() => {
-      loadData();
-      setIsSyncing(false);
-      setLastSyncTime(dataService.getLastSyncTime());
-    });
+  useEffect(() => {
+    adminApi.session().then(setSession).catch(() => {});
+    refreshFromServer();
 
     const handleUpdate = () => {
       loadData();
       setLastSyncTime(dataService.getLastSyncTime());
     };
     window.addEventListener('nsw_data_updated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
     return () => {
       window.removeEventListener('nsw_data_updated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
     };
   }, []);
 
-  const handleRefreshFirestore = async () => {
+  /** ดึงข้อมูลล่าสุดจาก server (Admin SDK) — server เป็นแหล่งความจริงเพียงแหล่งเดียว */
+  const refreshFromServer = async () => {
     setIsSyncing(true);
-    await dataService.ensureFirestoreSync(true);
-    loadData();
-    setIsSyncing(false);
-    setLastSyncTime(dataService.getLastSyncTime());
+    try {
+      const snap = await adminApi.snapshot();
+      dataService.applyAdminSnapshot(snap);
+      setSyncError(null);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ');
+    } finally {
+      loadData();
+      setLastSyncTime(dataService.getLastSyncTime());
+      setIsSyncing(false);
+    }
+  };
+
+  const handleRefreshFirestore = () => refreshFromServer();
+
+  /**
+   * รันการกระทำของแอดมินผ่าน server: รอผลจริง, แสดงข้อผิดพลาดถ้าล้มเหลว, แล้วโหลดข้อมูลใหม่
+   * คืนค่าผลลัพธ์เมื่อสำเร็จ หรือ null เมื่อล้มเหลว (ข้อความผิดพลาดถูกแสดงแล้ว)
+   */
+  const runAction = async <T,>(
+    key: string,
+    fn: () => Promise<T>,
+    onError?: (message: string) => void
+  ): Promise<T | null> => {
+    setBusyKey(key);
+    setActionError(null);
+    try {
+      const result = await fn();
+      await refreshFromServer();
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'เกิดข้อผิดพลาด กรุณาลองใหม่';
+      if (onError) onError(message);
+      else setActionError(message);
+      return null;
+    } finally {
+      setBusyKey(null);
+    }
   };
 
   const loadData = () => {
@@ -183,157 +217,101 @@ export default function AdminPage() {
     setPractices(dataService.getPractices());
   };
 
-  const handleApprove = (memberId: string) => {
-    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
-      || dataService.getAllMembers().find((m) => m.role === 'admin')
-      || currentUser
-      || { 
-          id: 'admin-001', 
-          fullName: 'แอดมินเครือข่าย', 
-          role: 'admin' as const, 
-          status: 'approved' as const, 
-          fontSizePref: 'normal' as const, 
-          phone: '', 
-          lineId: '', 
-          isPublicPhone: false, 
-          isPublicLine: false, 
-          isPublicSocials: false, 
-          socials: {}, 
-          delegationStatus: 'none' as const, 
-          farmId: 'farm-001', 
-          facePhotoUrl: '', 
-          createdAt: '' 
-        };
-    dataService.approveMember(adminUser, memberId);
-    loadData();
+  const handleApprove = async (memberId: string) => {
+    await runAction(`approve:${memberId}`, () => adminApi.approveMember(memberId));
   };
 
-  const handleReject = (memberId: string) => {
+  const handleReject = async (memberId: string) => {
     if (!confirm('คุณแน่ใจหรือไม่ว่าต้องการ "ไม่อนุมัติ" สมาชิกท่านนี้? (ข้อมูลจะถูกย้ายไปที่แท็บ "ไม่อนุมัติ / คัดกรองออก")')) {
       return;
     }
-    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
-      || dataService.getAllMembers().find((m) => m.role === 'admin')
-      || currentUser
-      || { 
-          id: 'admin-001', 
-          fullName: 'แอดมินเครือข่าย', 
-          role: 'admin' as const, 
-          status: 'approved' as const, 
-          fontSizePref: 'normal' as const, 
-          phone: '', 
-          lineId: '', 
-          isPublicPhone: false, 
-          isPublicLine: false, 
-          isPublicSocials: false, 
-          socials: {}, 
-          delegationStatus: 'none' as const, 
-          farmId: 'farm-001', 
-          facePhotoUrl: '', 
-          createdAt: '' 
-        };
-    dataService.rejectMember(adminUser, memberId);
-    loadData();
+    await runAction(`reject:${memberId}`, () => adminApi.rejectMember(memberId));
   };
 
-  const handlePermanentDelete = (memberId: string, memberName: string) => {
-    if (!confirm(`⚠️ ยืนยันการ "ลบข้อมูลถาวร" ของ "${memberName}" หรือไม่?\n\nข้อมูลสมาชิก แปลง และสินค้าทั้งหมดจะถูกลบออกจากระบบและ Cloud Firestore อย่างถาวร ไม่สามารถกู้คืนได้!`)) {
+  const handlePermanentDelete = async (memberId: string, memberName: string) => {
+    if (isPasscodeSession) {
+      setActionError(LINE_ONLY_HINT);
       return;
     }
-    const adminUser = (currentUser?.role === 'admin' ? currentUser : null)
-      || dataService.getAllMembers().find((m) => m.role === 'admin')
-      || currentUser
-      || { 
-          id: 'admin-001', 
-          fullName: 'แอดมินเครือข่าย', 
-          role: 'admin' as const, 
-          status: 'approved' as const, 
-          fontSizePref: 'normal' as const, 
-          phone: '', 
-          lineId: '', 
-          isPublicPhone: false, 
-          isPublicLine: false, 
-          isPublicSocials: false, 
-          socials: {}, 
-          delegationStatus: 'none' as const, 
-          farmId: 'farm-001', 
-          facePhotoUrl: '', 
-          createdAt: '' 
-        };
-    dataService.deleteMemberPermanently(adminUser, memberId);
-    loadData();
+    if (!confirm(`⚠️ ยืนยันการ "ลบข้อมูลถาวร" ของ "${memberName}" หรือไม่?\n\nข้อมูลสมาชิก แปลง ผลผลิต และข้อมูลส่วนตัวทั้งหมดจะถูกลบออกจาก Cloud Firestore อย่างถาวร ไม่สามารถกู้คืนได้!`)) {
+      return;
+    }
+    await runAction(`delete:${memberId}`, () => adminApi.deleteMember(memberId));
   };
 
-  const handleAssistSubmit = (e: React.FormEvent) => {
+  const handleAssistSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !selectedAssistMember) return;
+    if (!selectedAssistMember) return;
 
     const cat = categories.find((c) => c.id === assistCategory) || categories[0];
+    if (!cat) return;
 
-    dataService.adminAssistAddProduct(currentUser, selectedAssistMember.id, {
-      title: assistTitle,
-      skuTagId: cat.id,
-      skuTagName: cat.name,
-      category: cat.category,
-      categoryName: 
-        cat.category === 'smartfarm' ? 'สมาร์ทฟาร์ม (Smart Farm)' :
-        cat.category === 'tool' ? 'อุปกรณ์ เครื่องมือ' :
-        cat.category === 'byproduct' ? 'ปัจจัยการผลิต/By-product' :
-        cat.category === 'seed' ? 'เมล็ดพันธุ์/กิ่งพันธุ์' :
-        cat.category === 'processed' ? 'แปรรูป' : 'ผลผลิตสด',
-      status: 'sale',
-      price: Number(assistPrice) || 0,
-      unit: 'กก./ชุด',
-      description: `แอดมิน ${currentUser.fullName} ลงข้อมูลให้ตามคำขอของสมาชิก`,
-      images: ['https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&h=600&fit=crop'],
-    });
+    const ok = await runAction('assist', () =>
+      adminApi.assistAddProduct({
+        memberId: selectedAssistMember.id,
+        skuTagId: cat.id,
+        title: assistTitle,
+        price: Number(assistPrice) || 0,
+        unit: 'กก./ชุด',
+        description: `แอดมิน ${actorName} ลงข้อมูลให้ตามคำขอของสมาชิก`,
+        images: ['https://images.unsplash.com/photo-1542385151-efd9000785a0?w=800&h=600&fit=crop'],
+      })
+    );
+    if (!ok) return;
 
     setAssistSuccess(true);
     setTimeout(() => {
       setAssistSuccess(false);
       setSelectedAssistMember(null);
       setAssistTitle('');
-      loadData();
     }, 1500);
   };
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  const showCatFeedback = (type: 'success' | 'error', text: string, ms = 4500) => {
+    setCatFeedback({ type, text });
+    setTimeout(() => setCatFeedback(null), ms);
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatName.trim()) return;
 
-    dataService.addCategoryTag({
-      name: newCatName.trim(),
-      icon: newCatIcon || '🌿',
-      category: newCatType,
-      description: newCatDesc.trim() || 'หมวดหมู่ผลผลิตที่กำหนดโดยแอดมินเครือข่าย',
-      isActive: true,
-    });
+    const ok = await runAction(
+      'cat:add',
+      () =>
+        adminApi.addCategory({
+          name: newCatName.trim(),
+          icon: newCatIcon || '🌿',
+          category: newCatType,
+          description: newCatDesc.trim() || 'หมวดหมู่ผลผลิตที่กำหนดโดยแอดมินเครือข่าย',
+        }),
+      (msg) => showCatFeedback('error', msg)
+    );
+    if (!ok) return;
 
     setNewCatName('');
     setNewCatDesc('');
     setShowAddCat(false);
-    loadData();
   };
 
-  const handleToggleCat = (catId: string) => {
+  const handleToggleCat = async (catId: string) => {
     const cat = categories.find((c) => c.id === catId);
     if (!cat) return;
     const pInfo = dataService.getProductCountBySku(catId);
-    dataService.toggleCategoryStatus(catId);
-    loadData();
 
-    if (cat.isActive) {
-      setCatFeedback({
-        type: 'success',
-        text: `ปิดรับสินค้าใหม่สำหรับ "${cat.name}" แล้ว${pInfo.count > 0 ? ` (สินค้าเดิม ${pInfo.count} รายการยังคงแสดงในตลาดตามปกติ)` : ''}`,
-      });
-    } else {
-      setCatFeedback({
-        type: 'success',
-        text: `เปิดรับการลงสินค้าสำหรับ "${cat.name}" เรียบร้อยแล้ว`,
-      });
-    }
-    setTimeout(() => setCatFeedback(null), 4500);
+    const ok = await runAction(
+      `cat:toggle:${catId}`,
+      () => adminApi.updateCategory(catId, { isActive: !cat.isActive }),
+      (msg) => showCatFeedback('error', msg)
+    );
+    if (!ok) return;
+
+    showCatFeedback(
+      'success',
+      cat.isActive
+        ? `ปิดรับสินค้าใหม่สำหรับ "${cat.name}" แล้ว${pInfo.count > 0 ? ` (สินค้าเดิม ${pInfo.count} รายการยังคงแสดงในตลาดตามปกติ)` : ''}`
+        : `เปิดรับการลงสินค้าสำหรับ "${cat.name}" เรียบร้อยแล้ว`
+    );
   };
 
   const handleOpenEditCat = (cat: CategoryTag) => {
@@ -345,31 +323,36 @@ export default function AdminPage() {
     setEditCatActive(cat.isActive);
   };
 
-  const handleSaveEditCat = (e: React.FormEvent) => {
+  const handleSaveEditCat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCat || !editCatName.trim()) return;
 
-    const pInfo = dataService.getProductCountBySku(editingCat.id);
-    const updated = dataService.updateCategoryTag(editingCat.id, {
-      name: editCatName.trim(),
-      icon: editCatIcon.trim() || '🌾',
-      category: editCatType,
-      description: editCatDesc.trim() || 'หมวดหมู่ผลผลิตที่กำหนดโดยแอดมินเครือข่าย',
-      isActive: editCatActive,
-    });
+    const res = await runAction(
+      `cat:edit:${editingCat.id}`,
+      () =>
+        adminApi.updateCategory(editingCat.id, {
+          name: editCatName.trim(),
+          icon: editCatIcon.trim() || '🌾',
+          category: editCatType,
+          description: editCatDesc.trim() || 'หมวดหมู่ผลผลิตที่กำหนดโดยแอดมินเครือข่าย',
+          isActive: editCatActive,
+        }),
+      (msg) => showCatFeedback('error', msg)
+    );
+    if (!res) return;
 
-    if (updated) {
-      setCatFeedback({
-        type: 'success',
-        text: `อัปเดตชนิดผลผลิต "${updated.name}" สำเร็จแล้ว${pInfo.count > 0 ? ` (ซิงค์ชื่อและหมวดไปยังผลผลิต ${pInfo.count} รายการเรียบร้อยแล้ว)` : ''}`,
-      });
-      setTimeout(() => setCatFeedback(null), 4500);
-      setEditingCat(null);
-      loadData();
-    }
+    showCatFeedback(
+      'success',
+      `อัปเดตชนิดผลผลิต "${res.category.name}" สำเร็จแล้ว${res.updatedProductCount > 0 ? ` (ซิงค์ชื่อและหมวดไปยังผลผลิต ${res.updatedProductCount} รายการเรียบร้อยแล้ว)` : ''}`
+    );
+    setEditingCat(null);
   };
 
   const handleOpenDeleteCat = (cat: CategoryTag) => {
+    if (isPasscodeSession) {
+      showCatFeedback('error', LINE_ONLY_HINT);
+      return;
+    }
     setDeletingCat(cat);
     // Find first other available category as default target
     const others = categories.filter((c) => c.id !== cat.id);
@@ -382,82 +365,81 @@ export default function AdminPage() {
     }
   };
 
-  const handleConfirmDeleteCat = () => {
+  const handleConfirmDeleteCat = async () => {
     if (!deletingCat) return;
     const pInfo = dataService.getProductCountBySku(deletingCat.id);
 
     if (pInfo.count > 0 && !targetReassignCatId) {
-      setCatFeedback({
-        type: 'error',
-        text: 'กรุณาเลือกหมวดหมู่ปลายทางสำหรับโยกย้ายผลผลิตก่อนทำการลบ',
-      });
+      showCatFeedback('error', 'กรุณาเลือกหมวดหมู่ปลายทางสำหรับโยกย้ายผลผลิตก่อนทำการลบ');
       return;
     }
 
-    const res = dataService.deleteCategoryTagWithReassign(
-      deletingCat.id,
-      pInfo.count > 0 ? targetReassignCatId : undefined
+    const targetName = categories.find((c) => c.id === targetReassignCatId)?.name || '';
+    const res = await runAction(
+      `cat:delete:${deletingCat.id}`,
+      () => adminApi.deleteCategory(deletingCat.id, pInfo.count > 0 ? targetReassignCatId : undefined),
+      (msg) => showCatFeedback('error', msg)
     );
+    if (!res) return;
 
-    if (res.success) {
-      const targetName = categories.find((c) => c.id === targetReassignCatId)?.name || '';
-      setCatFeedback({
-        type: 'success',
-        text: res.reassignedCount > 0
-          ? `ลบหมวดหมู่ "${res.deletedName}" และโยกย้ายผลผลิต ${res.reassignedCount} รายการไปยัง "${targetName}" สำเร็จแล้ว!`
-          : `ลบหมวดหมู่ "${res.deletedName}" สำเร็จแล้ว (ไม่มีผลผลิตตกค้าง)`,
-      });
-      setTimeout(() => setCatFeedback(null), 5000);
-      setDeletingCat(null);
-      loadData();
-    }
+    showCatFeedback(
+      'success',
+      res.reassignedCount > 0
+        ? `ลบหมวดหมู่ "${res.deletedName}" และโยกย้ายผลผลิต ${res.reassignedCount} รายการไปยัง "${targetName}" สำเร็จแล้ว!`
+        : `ลบหมวดหมู่ "${res.deletedName}" สำเร็จแล้ว (ไม่มีผลผลิตตกค้าง)`,
+      5000
+    );
+    setDeletingCat(null);
   };
 
   // ==================== FARM PRACTICES HANDLERS ====================
-  const handleAddPractice = (e: React.FormEvent) => {
+  const showPracticeFeedback = (type: 'success' | 'error', text: string, ms = 4500) => {
+    setPracticeFeedback({ type, text });
+    setTimeout(() => setPracticeFeedback(null), ms);
+  };
+
+  const handleAddPractice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPracticeName.trim()) return;
 
-    const added = dataService.addPracticeTag({
-      name: newPracticeName.trim(),
-      icon: newPracticeIcon.trim() || '🌱',
-      category: newPracticeCategory,
-      categoryName: dataService.getPracticeCategoryName(newPracticeCategory),
-      description: newPracticeDesc.trim() || 'วิถีและศาสตร์กสิกรรมธรรมชาติ',
-      isActive: true,
-    });
+    const res = await runAction(
+      'practice:add',
+      () =>
+        adminApi.addPractice({
+          name: newPracticeName.trim(),
+          icon: newPracticeIcon.trim() || '🌱',
+          category: newPracticeCategory,
+          description: newPracticeDesc.trim() || 'วิถีและศาสตร์กสิกรรมธรรมชาติ',
+        }),
+      (msg) => showPracticeFeedback('error', msg)
+    );
+    if (!res) return;
 
     setNewPracticeName('');
     setNewPracticeIcon('🌱');
     setNewPracticeDesc('');
     setShowAddPractice(false);
-    setPracticeFeedback({
-      type: 'success',
-      text: `เพิ่มวิถี/ศาสตร์ "${added.name}" เรียบร้อยแล้ว`,
-    });
-    setTimeout(() => setPracticeFeedback(null), 4500);
-    loadData();
+    showPracticeFeedback('success', `เพิ่มวิถี/ศาสตร์ "${res.practice.name}" เรียบร้อยแล้ว`);
   };
 
-  const handleTogglePractice = (practiceId: string) => {
+  const handleTogglePractice = async (practiceId: string) => {
     const practice = practices.find((p) => p.id === practiceId);
     if (!practice) return;
     const farmCount = dataService.getFarmCountByPractice(practice.name);
-    dataService.togglePracticeStatus(practiceId);
-    loadData();
 
-    if (practice.isActive) {
-      setPracticeFeedback({
-        type: 'success',
-        text: `ปิดการเลือกสำหรับ "${practice.name}" แล้ว${farmCount > 0 ? ` (แปลงเดิม ${farmCount} แปลงยังคงแสดงป้ายนี้ตามปกติ)` : ''}`,
-      });
-    } else {
-      setPracticeFeedback({
-        type: 'success',
-        text: `เปิดให้เลือกวิถี/ศาสตร์ "${practice.name}" เรียบร้อยแล้ว`,
-      });
-    }
-    setTimeout(() => setPracticeFeedback(null), 4500);
+    const ok = await runAction(
+      `practice:toggle:${practiceId}`,
+      () => adminApi.updatePractice(practiceId, { isActive: !practice.isActive }),
+      (msg) => showPracticeFeedback('error', msg)
+    );
+    if (!ok) return;
+
+    showPracticeFeedback(
+      'success',
+      practice.isActive
+        ? `ปิดการเลือกสำหรับ "${practice.name}" แล้ว${farmCount > 0 ? ` (แปลงเดิม ${farmCount} แปลงยังคงแสดงป้ายนี้ตามปกติ)` : ''}`
+        : `เปิดให้เลือกวิถี/ศาสตร์ "${practice.name}" เรียบร้อยแล้ว`
+    );
   };
 
   const handleOpenEditPractice = (practice: FarmPracticeTag) => {
@@ -469,31 +451,36 @@ export default function AdminPage() {
     setEditPracticeActive(practice.isActive);
   };
 
-  const handleSaveEditPractice = (e: React.FormEvent) => {
+  const handleSaveEditPractice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPractice || !editPracticeName.trim()) return;
 
-    const res = dataService.updatePracticeTag(editingPractice.id, {
-      name: editPracticeName.trim(),
-      icon: editPracticeIcon.trim() || '🌱',
-      category: editPracticeCategory,
-      categoryName: dataService.getPracticeCategoryName(editPracticeCategory),
-      description: editPracticeDesc.trim() || 'วิถีและศาสตร์กสิกรรมธรรมชาติ',
-      isActive: editPracticeActive,
-    });
+    const res = await runAction(
+      `practice:edit:${editingPractice.id}`,
+      () =>
+        adminApi.updatePractice(editingPractice.id, {
+          name: editPracticeName.trim(),
+          icon: editPracticeIcon.trim() || '🌱',
+          category: editPracticeCategory,
+          description: editPracticeDesc.trim() || 'วิถีและศาสตร์กสิกรรมธรรมชาติ',
+          isActive: editPracticeActive,
+        }),
+      (msg) => showPracticeFeedback('error', msg)
+    );
+    if (!res) return;
 
-    if (res.success) {
-      setPracticeFeedback({
-        type: 'success',
-        text: `อัปเดตวิถี/ศาสตร์ "${res.practice?.name}" เรียบร้อยแล้ว${res.updatedFarmCount > 0 ? ` (ซิงค์ชื่อไปยังแปลงทั้งหมด ${res.updatedFarmCount} แปลง)` : ''}`,
-      });
-      setTimeout(() => setPracticeFeedback(null), 4500);
-      setEditingPractice(null);
-      loadData();
-    }
+    showPracticeFeedback(
+      'success',
+      `อัปเดตวิถี/ศาสตร์ "${res.practice.name}" เรียบร้อยแล้ว${res.updatedFarmCount > 0 ? ` (ซิงค์ชื่อไปยังแปลงทั้งหมด ${res.updatedFarmCount} แปลง)` : ''}`
+    );
+    setEditingPractice(null);
   };
 
   const handleOpenDeletePractice = (practice: FarmPracticeTag) => {
+    if (isPasscodeSession) {
+      showPracticeFeedback('error', LINE_ONLY_HINT);
+      return;
+    }
     setDeletingPractice(practice);
     const others = practices.filter((p) => p.id !== practice.id);
     if (others.length > 0) {
@@ -504,60 +491,29 @@ export default function AdminPage() {
     }
   };
 
-  const handleConfirmDeletePractice = () => {
+  const handleConfirmDeletePractice = async () => {
     if (!deletingPractice) return;
-    const res = dataService.deletePracticeTagWithReassign(
-      deletingPractice.id,
-      targetReassignPracticeId || undefined
+    const targetName = practices.find((p) => p.id === targetReassignPracticeId)?.name || '';
+
+    const res = await runAction(
+      `practice:delete:${deletingPractice.id}`,
+      () => adminApi.deletePractice(deletingPractice.id, targetReassignPracticeId || undefined),
+      (msg) => showPracticeFeedback('error', msg)
     );
+    if (!res) return;
 
-    if (res.success) {
-      const targetName = practices.find((p) => p.id === targetReassignPracticeId)?.name || '';
-      setPracticeFeedback({
-        type: 'success',
-        text: `ลบวิถี/ศาสตร์ "${res.deletedName}" สำเร็จแล้ว${
-          res.reassignedCount > 0
-            ? targetName
-              ? ` (โยกย้ายข้อมูลใน ${res.reassignedCount} แปลงไปยัง "${targetName}" เรียบร้อย)`
-              : ` (นำออกจาก ${res.reassignedCount} แปลงเรียบร้อย)`
-            : ''
-        }`,
-      });
-      setTimeout(() => setPracticeFeedback(null), 4500);
-      setDeletingPractice(null);
-      setTargetReassignPracticeId('');
-      loadData();
-    }
-  };
-
-  const handleAssignAdmin = (memberId: string, makeAdmin: boolean) => {
-    const target = allMembers.find((m) => m.id === memberId);
-    if (!target) return;
-    if (target.id === 'admin-001' && !makeAdmin) {
-      setRoleFeedback({ type: 'error', text: 'ไม่สามารถถอนสิทธิ์ผู้ดูแลระบบหลัก (admin-001) ได้' });
-      return;
-    }
-
-    // Safeguard: Protect real users from accidental modification by demo testers
-    const isRealUser = !['mem-001', 'mem-002', 'mem-003', 'mem-004', 'mem-005', 'admin-001'].includes(target.id);
-    if (isRealUser) {
-      const confirmed = window.confirm(
-        `⚠️ คำเตือนความปลอดภัย:\nคุณ "${target.fullName}" เป็นสมาชิกจริงในระบบ (ไม่ใช่บัญชีตัวอย่าง)\n\nการเปลี่ยนสิทธิ์จะมีผลต่อผู้ใช้จริง คุณยืนยันว่าต้องการดำเนินการต่อใช่หรือไม่?`
-      );
-      if (!confirmed) return;
-    }
-
-    const success = dataService.assignAdminRole(memberId, makeAdmin);
-    if (success) {
-      setRoleFeedback({
-        type: 'success',
-        text: makeAdmin
-          ? `มอบสิทธิ์แอดมินให้คุณ "${target.fullName}" เรียบร้อยแล้ว สมาชิกจะมี 2 บทบาทควบคู่กัน (ดูแลแปลงตนเอง + ดูแลระบบแอดมิน)`
-          : `ถอนสิทธิ์แอดมินของคุณ "${target.fullName}" เรียบร้อยแล้ว (กลับเป็นสมาชิกแปลงทั่วไป)`
-      });
-      loadData();
-      setTimeout(() => setRoleFeedback(null), 5000);
-    }
+    showPracticeFeedback(
+      'success',
+      `ลบวิถี/ศาสตร์ "${res.deletedName}" สำเร็จแล้ว${
+        res.reassignedCount > 0
+          ? targetName
+            ? ` (โยกย้ายข้อมูลใน ${res.reassignedCount} แปลงไปยัง "${targetName}" เรียบร้อย)`
+            : ` (นำออกจาก ${res.reassignedCount} แปลงเรียบร้อย)`
+          : ''
+      }`
+    );
+    setDeletingPractice(null);
+    setTargetReassignPracticeId('');
   };
 
   const handleOpenAddNews = () => {
@@ -571,9 +527,10 @@ export default function AdminPage() {
     setNewsContent('');
     setNewsCoverImage('');
     setNewsStatus('published');
-    setNewsAuthor(currentUser?.fullName || 'แอดมินเครือข่าย');
+    setNewsAuthor(actorName);
     setImageCompressInfo(null);
     setImageUploadMode('upload');
+    setNewsModalError(null);
     setShowNewsModal(true);
   };
 
@@ -588,9 +545,10 @@ export default function AdminPage() {
     setNewsContent(item.content);
     setNewsCoverImage(item.coverImage);
     setNewsStatus(item.status || 'published');
-    setNewsAuthor(item.author || currentUser?.fullName || 'แอดมินเครือข่าย');
+    setNewsAuthor(item.author || actorName);
     setImageCompressInfo(null);
     setImageUploadMode(item.coverImage?.startsWith('data:') ? 'upload' : 'url');
+    setNewsModalError(null);
     setShowNewsModal(true);
   };
 
@@ -615,7 +573,12 @@ export default function AdminPage() {
     }
   };
 
-  const handleSaveNews = (e: React.FormEvent) => {
+  const showNewsFeedback = (type: 'success' | 'error', text: string, ms = 4000) => {
+    setNewsFeedback({ type, text });
+    setTimeout(() => setNewsFeedback(null), ms);
+  };
+
+  const handleSaveNews = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newsTitle.trim() || !newsContent.trim()) return;
 
@@ -632,60 +595,67 @@ export default function AdminPage() {
       }
     }
 
-    if (editingNewsId) {
-      dataService.updateNews(editingNewsId, {
-        title: newsTitle.trim(),
-        category: newsCategory,
-        date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-        time: newsTime.trim(),
-        location: newsLocation.trim(),
-        district: newsDistrict,
-        content: newsContent.trim(),
-        coverImage: finalImage,
-        status: newsStatus,
-        author: newsAuthor.trim() || currentUser?.fullName || 'แอดมินเครือข่าย',
-      });
-      setNewsFeedback({ type: 'success', text: `บันทึกการแก้ไขประกาศ "${newsTitle.trim()}" เรียบร้อยแล้ว` });
-    } else {
-      dataService.addNews({
-        title: newsTitle.trim(),
-        category: newsCategory,
-        date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
-        time: newsTime.trim(),
-        location: newsLocation.trim(),
-        district: newsDistrict,
-        content: newsContent.trim(),
-        coverImage: finalImage,
-        status: newsStatus,
-        author: newsAuthor.trim() || currentUser?.fullName || 'แอดมินเครือข่าย',
-      });
-      setNewsFeedback({ type: 'success', text: `ลงประกาศกิจกรรม "${newsTitle.trim()}" สำเร็จแล้ว` });
-    }
+    const payload = {
+      title: newsTitle.trim(),
+      category: newsCategory,
+      date: newsDate.trim() || new Date().toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' }),
+      time: newsTime.trim(),
+      location: newsLocation.trim() || '-',
+      district: newsDistrict,
+      content: newsContent.trim(),
+      coverImage: finalImage,
+      status: newsStatus,
+      author: newsAuthor.trim() || actorName,
+    };
 
+    // ข้อผิดพลาดแสดงใน modal (ไม่ปิด modal เพื่อไม่ให้ข้อมูลที่พิมพ์หาย)
+    const res = await runAction(
+      editingNewsId ? `news:edit:${editingNewsId}` : 'news:add',
+      () => (editingNewsId ? adminApi.updateNews(editingNewsId, payload) : adminApi.addNews(payload)),
+      (msg) => setNewsModalError(msg)
+    );
+    if (!res) return;
+
+    setNewsModalError(null);
     setShowNewsModal(false);
-    loadData();
-    setTimeout(() => setNewsFeedback(null), 4000);
+    showNewsFeedback(
+      'success',
+      editingNewsId
+        ? `บันทึกการแก้ไขประกาศ "${payload.title}" เรียบร้อยแล้ว`
+        : `ลงประกาศกิจกรรม "${payload.title}" สำเร็จแล้ว`
+    );
   };
 
-  const handleToggleNewsStatus = (item: NewsEvent) => {
-    const updated = dataService.toggleNewsStatus(item.id);
-    if (updated) {
-      loadData();
-      const statusText = updated.status === 'hidden'
+  const handleToggleNewsStatus = async (item: NewsEvent) => {
+    const nextStatus: NewsStatus = item.status === 'hidden' ? 'published' : 'hidden';
+    const ok = await runAction(
+      `news:toggle:${item.id}`,
+      () => adminApi.updateNews(item.id, { status: nextStatus }),
+      (msg) => showNewsFeedback('error', msg)
+    );
+    if (!ok) return;
+    showNewsFeedback(
+      'success',
+      nextStatus === 'hidden'
         ? `ซ่อนประกาศ "${item.title}" เรียบร้อยแล้ว (ไม่แสดงบนหน้าสาธารณะ)`
-        : `เปิดแสดงประกาศ "${item.title}" สู่หน้าสาธารณะเรียบร้อยแล้ว`;
-      setNewsFeedback({ type: 'success', text: statusText });
-      setTimeout(() => setNewsFeedback(null), 3500);
-    }
+        : `เปิดแสดงประกาศ "${item.title}" สู่หน้าสาธารณะเรียบร้อยแล้ว`,
+      3500
+    );
   };
 
-  const handleDeleteNews = (item: NewsEvent) => {
-    if (window.confirm(`คุณต้องการลบประกาศ "${item.title}" ออกจากระบบใช่หรือไม่?`)) {
-      dataService.deleteNews(item.id);
-      loadData();
-      setNewsFeedback({ type: 'success', text: `ลบประกาศ "${item.title}" เรียบร้อยแล้ว` });
-      setTimeout(() => setNewsFeedback(null), 3500);
+  const handleDeleteNews = async (item: NewsEvent) => {
+    if (isPasscodeSession) {
+      showNewsFeedback('error', `${LINE_ONLY_HINT} (ใช้ปุ่ม "ซ่อน" แทนได้)`);
+      return;
     }
+    if (!window.confirm(`คุณต้องการลบประกาศ "${item.title}" ออกจากระบบใช่หรือไม่?`)) return;
+    const ok = await runAction(
+      `news:delete:${item.id}`,
+      () => adminApi.deleteNews(item.id),
+      (msg) => showNewsFeedback('error', msg)
+    );
+    if (!ok) return;
+    showNewsFeedback('success', `ลบประกาศ "${item.title}" เรียบร้อยแล้ว`, 3500);
   };
 
   const assistQueue = allMembers.filter((m) => m.delegationStatus === 'requested');
@@ -720,7 +690,12 @@ export default function AdminPage() {
             แผงบริหารจัดการ & คัดกรองสมาชิก
           </h1>
           <p className="text-xs sm:text-sm text-stone-400 mt-1">
-            ผู้ดูแลระบบ: <b className="text-white">{currentUser?.fullName || 'แอดมินเครือข่ายนครสวรรค์'}</b>
+            ผู้ดูแลระบบ: <b className="text-white">{actorName}</b>
+            {session.method && (
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${isPasscodeSession ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}`}>
+                {isPasscodeSession ? 'รหัสผ่านสำรอง' : 'LINE'}
+              </span>
+            )}
           </p>
         </div>
 
@@ -736,10 +711,6 @@ export default function AdminPage() {
               <div className="text-[10px] text-stone-400">ไม่อนุมัติ</div>
             </div>
           )}
-          <div className="px-3.5 py-2 rounded-2xl bg-white/10 text-center">
-            <div className="text-lg font-black text-emerald-300">{allMembers.filter((m) => hasAdminRole(m)).length}</div>
-            <div className="text-[10px] text-stone-400">แอดมิน</div>
-          </div>
           <div className="px-3.5 py-2 rounded-2xl bg-white/10 text-center">
             <div className="text-lg font-black text-amber-400">{assistQueue.length}</div>
             <div className="text-[10px] text-stone-400">คิวช่วยลงข้อมูล</div>
@@ -758,16 +729,44 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Safeguard Notice for Admins */}
-      <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-amber-950">
-        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="space-y-0.5">
-          <p className="font-bold">⚠️ ข้อควรระวังความปลอดภัยในการจัดการระบบ:</p>
-          <p className="text-amber-800 leading-relaxed">
-            สำหรับการทดสอบระบบ โปรดทดสอบกับบัญชีตัวอย่าง (Demo Profiles) เท่านั้น <b>ไม่ควรแก้ไขหรือลบข้อมูลสมาชิกจริง</b> เพื่อไม่ให้กระทบต่อการใช้งานของเกษตรกรในเครือข่าย
-          </p>
+      {/* สถานะการเข้าสู่ระบบ: รหัสผ่านสำรองทำได้เฉพาะงานประจำวัน */}
+      {isPasscodeSession && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-amber-950">
+          <KeyRound className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-bold">เข้าสู่ระบบด้วยรหัสผ่านสำรอง ในชื่อ "{actorName}"</p>
+            <p className="text-amber-800 leading-relaxed">
+              อนุมัติ/ไม่อนุมัติ ช่วยลงข้อมูล จัดการข่าว หมวดหมู่ และวิถีได้ตามปกติ แต่ <b>การลบทุกประเภทต้องเข้าสู่ระบบด้วย LINE</b>
+              {session.expiresAt ? (
+                <> · หมดเวลา {new Date(session.expiresAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.</>
+              ) : null}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
+
+      {syncError && (
+        <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-red-900">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-bold">โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ — ข้อมูลที่เห็นอาจไม่ใช่ข้อมูลล่าสุด</p>
+            <p className="text-red-800">{syncError}</p>
+          </div>
+          <button onClick={handleRefreshFirestore} className="px-3 py-1.5 rounded-xl bg-red-600 text-white font-bold shrink-0">
+            ลองใหม่
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div role="alert" className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-xs sm:text-sm text-red-900">
+          <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+          <p className="flex-1"><b>บันทึกไม่สำเร็จ:</b> {actionError}</p>
+          <button onClick={() => setActionError(null)} aria-label="ปิด" className="shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs Navigation */}
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-2">
@@ -793,18 +792,6 @@ export default function AdminPage() {
         >
           <XCircle className={`w-4 h-4 ${activeTab === 'rejected' ? 'text-white' : 'text-rose-500'}`} />
           <span>ไม่อนุมัติ / คัดออก ({rejectedMembers.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('roles')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-bold transition-all ${
-            activeTab === 'roles'
-              ? 'bg-brand-600 text-white shadow-sm'
-              : 'bg-white text-stone-600 hover:bg-stone-100 border border-stone-200'
-          }`}
-        >
-          <UserCog className="w-4 h-4" />
-          <span>มอบสิทธิ์แอดมิน ({allMembers.filter((m) => hasAdminRole(m)).length})</span>
         </button>
 
         <button
@@ -950,7 +937,8 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => handleReject(member.id)}
-                          className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                          disabled={busyKey !== null}
+                          className="disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
                           title="ไม่อนุมัติและย้ายไปแท็บไม่อนุมัติ"
                         >
                           <XCircle className="w-4 h-4" />
@@ -959,10 +947,11 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => handleApprove(member.id)}
-                          className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-brand-600/20 transition-all cursor-pointer"
+                          disabled={busyKey !== null}
+                          className="disabled:opacity-50 disabled:cursor-wait px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-md shadow-brand-600/20 transition-all cursor-pointer"
                         >
                           <Check className="w-4 h-4" />
-                          <span>อนุมัติสมาชิก</span>
+                          <span>{busyKey === `approve:${member.id}` ? 'กำลังบันทึก…' : 'อนุมัติสมาชิก'}</span>
                         </button>
                       </div>
                     </div>
@@ -1094,8 +1083,9 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => handlePermanentDelete(member.id, member.fullName)}
-                        className="px-3.5 py-2 bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border border-stone-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                        title="ลบข้อมูลออกจากระบบและ Cloud Firestore ถาวร"
+                        disabled={busyKey !== null || isPasscodeSession}
+                        className="disabled:opacity-40 disabled:cursor-not-allowed px-3.5 py-2 bg-stone-100 hover:bg-rose-50 text-stone-600 hover:text-rose-700 border border-stone-200 hover:border-rose-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                        title={isPasscodeSession ? LINE_ONLY_HINT : 'ลบข้อมูลออกจากระบบและ Cloud Firestore ถาวร'}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>ลบข้อมูลถาวร</span>
@@ -1103,7 +1093,8 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => handleApprove(member.id)}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
+                        disabled={busyKey !== null}
+                        className="disabled:opacity-50 disabled:cursor-wait px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-emerald-600/20 transition-all cursor-pointer"
                         title="เปลี่ยนสถานะเป็นอนุมัติการเป็นสมาชิก"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -1119,223 +1110,6 @@ export default function AdminPage() {
       )}
 
       {/* ================= TAB 2: ROLES MANAGEMENT (มอบสิทธิ์แอดมิน) ================= */}
-      {activeTab === 'roles' && (
-        <div className="space-y-4">
-          <div className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <h3 className="font-bold text-stone-900 text-base flex items-center gap-2">
-                  <UserCog className="w-5 h-5 text-brand-600" />
-                  <span>ระบบมอบหมายสิทธิ์แอดมิน (Assign Admin Role)</span>
-                </h3>
-                <p className="text-xs text-stone-500 mt-1">
-                  มอบสิทธิ์ให้กับสมาชิกที่ผ่านการอนุมัติแล้ว โดยสมาชิกจะมี 2 บทบาทควบคู่กัน: จัดการแปลงตนเอง (Member) และร่วมดูแลระบบเครือข่าย (Admin)
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-xs font-bold">
-                  🛡️ แอดมิน: {allMembers.filter((m) => hasAdminRole(m)).length} ท่าน
-                </span>
-                <span className="px-3 py-1 bg-stone-100 text-stone-700 rounded-full text-xs font-bold">
-                  🌾 สมาชิกอนุมัติแล้ว: {allMembers.filter((m) => m.status === 'approved').length} ท่าน
-                </span>
-              </div>
-            </div>
-
-            {roleFeedback && (
-              <div className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 transition-all ${
-                roleFeedback.type === 'success' 
-                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' 
-                  : 'bg-red-50 text-red-900 border border-red-200'
-              }`}>
-                {roleFeedback.type === 'success' ? <Check className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />}
-                <span>{roleFeedback.text}</span>
-              </div>
-            )}
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="ค้นหาชื่อสมาชิก, ชื่อแปลง, อำเภอ, เบอร์โทร..."
-                  value={rolesSearch}
-                  onChange={(e) => setRolesSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-stone-50 rounded-xl text-xs border border-stone-200 focus:bg-white transition-colors"
-                />
-              </div>
-
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setRolesFilter('all')}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    rolesFilter === 'all'
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  ทั้งหมด ({allMembers.filter((m) => m.status === 'approved').length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRolesFilter('admin')}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    rolesFilter === 'admin'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  🛡️ เฉพาะแอดมิน ({allMembers.filter((m) => m.status === 'approved' && hasAdminRole(m)).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRolesFilter('member')}
-                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    rolesFilter === 'member'
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
-                >
-                  🌾 สมาชิกทั่วไป ({allMembers.filter((m) => m.status === 'approved' && !hasAdminRole(m)).length})
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Members List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {allMembers
-              .filter((m) => m.status === 'approved')
-              .filter((m) => {
-                if (rolesFilter === 'admin') return hasAdminRole(m);
-                if (rolesFilter === 'member') return !hasAdminRole(m);
-                return true;
-              })
-              .filter((m) => {
-                if (!rolesSearch.trim()) return true;
-                const q = rolesSearch.toLowerCase();
-                const farm = dataService.getFarmById(m.farmId);
-                return (
-                  m.fullName.toLowerCase().includes(q) ||
-                  m.phone.includes(q) ||
-                  (farm && farm.farmName.toLowerCase().includes(q)) ||
-                  (farm && farm.district.toLowerCase().includes(q))
-                );
-              })
-              .map((member) => {
-                const farm = dataService.getFarmById(member.farmId) || dataService.getFarmByMemberId(member.id);
-                const displayPhone = member.phone || farm?.phone || 'ไม่ได้ระบุ';
-                const isAdmin = hasAdminRole(member);
-                const isPrimaryAdmin = member.id === 'admin-001';
-
-                return (
-                  <div
-                    key={member.id}
-                    className="bg-white p-5 rounded-3xl border border-stone-200 shadow-xs flex flex-col justify-between gap-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <img
-                          src={member.facePhotoUrl || (farm?.photos && farm.photos[0]) || DEFAULT_AVATAR}
-                          alt={member.fullName}
-                          className="w-14 h-14 rounded-2xl object-cover border-2 border-stone-100 shrink-0 shadow-xs"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            target.onerror = null;
-                            target.src = DEFAULT_AVATAR;
-                          }}
-                        />
-                        <div className="min-w-0">
-                          <h4 className="font-bold text-stone-900 text-sm truncate flex items-center gap-1.5">
-                            <span>{member.fullName}</span>
-                            {isPrimaryAdmin && (
-                              <span className="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded-full font-bold">
-                                แอดมินหลัก
-                              </span>
-                            )}
-                          </h4>
-                          <p className="text-xs text-stone-600 truncate font-medium">
-                            แปลง: {farm?.farmName || 'ยังไม่ระบุ'}
-                          </p>
-                          <p className="text-[11px] text-stone-500 mt-0.5">
-                            📍 อ.{farm?.district || 'นครสวรรค์'} | 📞 {displayPhone}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-end gap-1">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                          ✓ อนุมัติแล้ว
-                        </span>
-                        {!['mem-001', 'mem-002', 'mem-003', 'mem-004', 'mem-005', 'admin-001'].includes(member.id) ? (
-                          <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-200">
-                            👤 สมาชิกจริง
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-medium border border-stone-200">
-                            🧪 ตัวอย่าง (Demo)
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Roles Badges & Action */}
-                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between gap-2">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2.5 py-1 rounded-full bg-brand-50 text-brand-800 text-[11px] font-bold border border-brand-200">
-                          🌾 สมาชิกแปลง
-                        </span>
-                        {isAdmin ? (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-900 text-[11px] font-black border border-emerald-300 flex items-center gap-1">
-                            <ShieldCheck className="w-3 h-3 text-emerald-700" />
-                            <span>แอดมินเครือข่าย</span>
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full bg-stone-100 text-stone-500 text-[11px] font-medium">
-                            สมาชิกทั่วไป
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        {isAdmin ? (
-                          isPrimaryAdmin ? (
-                            <span className="text-[11px] text-stone-400 font-semibold px-2.5 py-1.5 bg-stone-100 rounded-xl inline-block">
-                              แอดมินตั้งต้น
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleAssignAdmin(member.id, false)}
-                              className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl text-xs font-bold transition-colors flex items-center gap-1"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" />
-                              <span>ถอนสิทธิ์แอดมิน</span>
-                            </button>
-                          )
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleAssignAdmin(member.id, true)}
-                            className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors flex items-center gap-1"
-                          >
-                            <UserPlus className="w-3.5 h-3.5" />
-                            <span>+ แต่งตั้งแอดมิน</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* ================= TAB 3: NEWS & ACTIVITIES (ลงประกาศกิจกรรม) ================= */}
       {activeTab === 'news' && (
         <div className="space-y-4">
           {/* Feedback Toast */}
@@ -1747,6 +1521,12 @@ export default function AdminPage() {
                   </div>
 
                   {/* Buttons */}
+                  {newsModalError && (
+                    <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      <span><b>บันทึกไม่สำเร็จ:</b> {newsModalError}</span>
+                    </div>
+                  )}
                   <div className="flex gap-2 pt-2 border-t border-stone-200">
                     <button
                       type="button"
@@ -1757,7 +1537,7 @@ export default function AdminPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={isCompressingImage}
+                      disabled={isCompressingImage || busyKey !== null}
                       className="flex-1 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
                     >
                       {editingNewsId ? (
@@ -1879,8 +1659,9 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => handleDeleteNews(item)}
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 bg-white flex items-center gap-1 transition-colors"
-                        title="ลบประกาศออกจากระบบ"
+                        disabled={isPasscodeSession}
+                        className="disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 bg-white flex items-center gap-1 transition-colors"
+                        title={isPasscodeSession ? `${LINE_ONLY_HINT} (ใช้ "ซ่อน" แทนได้)` : 'ลบประกาศออกจากระบบ'}
                       >
                         <Trash2 className="w-3.5 h-3.5 text-red-500" />
                         <span>ลบ</span>
@@ -2172,8 +1953,9 @@ export default function AdminPage() {
                           </button>
                           <button
                             onClick={() => handleOpenDeleteCat(cat)}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-stone-200 bg-white transition-colors"
-                            title="ลบชนิดผลผลิตนี้"
+                            disabled={isPasscodeSession}
+                            className="disabled:opacity-40 disabled:cursor-not-allowed p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 border border-stone-200 bg-white transition-colors"
+                            title={isPasscodeSession ? LINE_ONLY_HINT : 'ลบชนิดผลผลิตนี้'}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2655,8 +2437,9 @@ export default function AdminPage() {
 
                           <button
                             onClick={() => handleOpenDeletePractice(practice)}
-                            title="ลบวิถี/ศาสตร์"
-                            className="p-1.5 rounded-lg border border-stone-200 text-stone-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            disabled={isPasscodeSession}
+                            title={isPasscodeSession ? LINE_ONLY_HINT : 'ลบวิถี/ศาสตร์'}
+                            className="disabled:opacity-40 disabled:cursor-not-allowed p-1.5 rounded-lg border border-stone-200 text-stone-500 hover:text-rose-600 hover:bg-rose-50 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -3027,6 +2810,8 @@ export default function AdminPage() {
                   return { label: 'อนุมัติสมาชิก', bg: 'bg-emerald-100 text-emerald-800 border-emerald-200', icon: CheckCircle2 };
                 case 'reject_member':
                   return { label: 'ไม่อนุมัติสมาชิก', bg: 'bg-rose-100 text-rose-800 border-rose-200', icon: XCircle };
+                case 'delete_member':
+                  return { label: 'ลบสมาชิกถาวร', bg: 'bg-rose-200 text-rose-900 border-rose-300', icon: Trash2 };
                 case 'assign_admin':
                 case 'revoke_admin':
                   return { label: 'จัดการสิทธิ์แอดมิน', bg: 'bg-purple-100 text-purple-800 border-purple-200', icon: UserCog };
@@ -3037,6 +2822,10 @@ export default function AdminPage() {
                 case 'create_category':
                 case 'update_category':
                 case 'delete_category':
+                case 'create_sku':
+                case 'update_sku':
+                case 'toggle_sku':
+                case 'delete_sku':
                   return { label: 'จัดการหมวดหมู่ SKU', bg: 'bg-cyan-100 text-cyan-800 border-cyan-200', icon: Layers };
                 case 'create_news':
                 case 'update_news':

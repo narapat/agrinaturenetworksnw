@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { dataService } from '@/services/dataService';
 import { liffService } from '@/services/liffService';
-import { hasAdminRole } from '@/types';
 import { ShieldCheck, Lock, ArrowLeft, KeyRound, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +15,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [passcode, setPasscode] = useState<string>('');
   const [showPasscode, setShowPasscode] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  // ชื่อผู้ดำเนินการ (บังคับเมื่อเข้าด้วยรหัสผ่านสำรอง เพื่อบันทึกในประวัติการทำงาน)
+  const [actorName, setActorName] = useState<string>('');
+  const [sessionName, setSessionName] = useState<string>('');
+  const [sessionMethod, setSessionMethod] = useState<'line' | 'passcode' | ''>('');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nsw_admin_actor_name');
+      if (saved) setActorName(saved);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     checkAdminAuth();
@@ -62,11 +72,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         const data = await res.json();
         if (data.authenticated) {
           dataService.setAdminSession();
-          if (currentUser && currentUser.id !== 'guest') {
-            if (!hasAdminRole(currentUser)) {
-              dataService.assignAdminRole(currentUser.id, true);
-            }
-          } else {
+          setSessionName(data.actorName || '');
+          setSessionMethod(data.method || '');
+          // สิทธิ์แอดมินมาจาก Whitelist ฝั่ง server (ADMIN_LINE_USER_IDS) เท่านั้น
+          // ไม่เขียน role ลงเอกสารสมาชิกอีกต่อไป
+          if (!currentUser || currentUser.id === 'guest') {
             dataService.switchUser('admin-001');
           }
           setIsAdminAuthenticated(true);
@@ -97,7 +107,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           'Content-Type': 'application/json',
           ...(lineIdToken ? { Authorization: `Bearer ${lineIdToken}` } : {}),
         },
-        body: JSON.stringify({ passcode: passcode.trim() }),
+        body: JSON.stringify({ passcode: passcode.trim(), actorName: actorName.trim() }),
       });
 
       const data = await res.json();
@@ -107,11 +117,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           localStorage.removeItem('nsw_user_logged_out');
           sessionStorage.removeItem('nsw_user_logged_out');
         } catch {}
+        try {
+          localStorage.setItem('nsw_admin_actor_name', actorName.trim());
+        } catch {}
         dataService.setAdminSession();
         const freshUser = dataService.getCurrentUser();
-        if (freshUser && freshUser.id !== 'guest') {
-          dataService.assignAdminRole(freshUser.id, true);
-        } else {
+        if (!freshUser || freshUser.id === 'guest') {
           dataService.switchUser('admin-001');
         }
         setIsAdminAuthenticated(true);
@@ -163,12 +174,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           {/* Login Form */}
           <form onSubmit={handleLogin} className="space-y-4">
+            <p className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs leading-relaxed">
+              แอดมินที่ล็อกอิน LINE อยู่แล้วจะเข้าได้อัตโนมัติ — ช่องด้านล่างคือ <b>รหัสผ่านสำรอง</b> ใช้เมื่อ LINE มีปัญหา
+              (ใช้ได้ 3 ชั่วโมง และลบข้อมูลไม่ได้)
+            </p>
+
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1">
-                รหัสผ่านผู้ดูแลระบบ (Admin Passcode)
+              <label htmlFor="admin-actor-name" className="block text-xs font-bold text-stone-700 mb-1">
+                ชื่อผู้ดำเนินการ
+              </label>
+              <input
+                id="admin-actor-name"
+                type="text"
+                required
+                maxLength={60}
+                value={actorName}
+                onChange={(e) => setActorName(e.target.value)}
+                placeholder="เช่น ป้าศรี (ใช้บันทึกในประวัติการทำงาน)"
+                className="w-full px-4 py-3.5 rounded-2xl border border-stone-200 text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="admin-passcode" className="block text-xs font-bold text-stone-700 mb-1">
+                รหัสผ่านสำรองผู้ดูแลระบบ (Admin Passcode)
               </label>
               <div className="relative">
                 <input
+                  id="admin-passcode"
                   type={showPasscode ? 'text' : 'password'}
                   required
                   autoFocus
@@ -239,7 +272,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="font-semibold text-stone-300">
-              สิทธิ์ผู้ดูแลระบบ: <b className="text-white">{dataService.getCurrentUser()?.fullName || 'แอดมินเครือข่ายนครสวรรค์'}</b>
+              สิทธิ์ผู้ดูแลระบบ: <b className="text-white">{sessionName || dataService.getCurrentUser()?.fullName || 'แอดมินเครือข่ายนครสวรรค์'}</b>
+              {sessionMethod === 'passcode' && <span className="ml-1.5 text-amber-300">(รหัสผ่านสำรอง)</span>}
             </span>
           </div>
 
