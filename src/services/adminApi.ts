@@ -100,6 +100,13 @@ export const adminApi = {
     images?: string[];
   }) => adminFetch<{ product: Product }>('/api/admin/assist-product', { method: 'POST', body }),
 
+  // ผลผลิตของแปลง
+  updateProduct: (
+    id: string,
+    body: Partial<Pick<Product, 'title' | 'price' | 'unit' | 'description' | 'status' | 'skuTagId'>>
+  ) => adminFetch<{ product: Product }>(`/api/admin/products/${enc(id)}`, { method: 'PATCH', body }),
+  deleteProduct: (id: string) => adminFetch(`/api/admin/products/${enc(id)}`, { method: 'DELETE' }),
+
   // ชนิดผลผลิต (SKU)
   addCategory: (body: { name: string; category: ProductCategory; icon?: string; description?: string }) =>
     adminFetch<{ category: CategoryTag }>('/api/admin/categories', { method: 'POST', body }),

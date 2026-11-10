@@ -14,6 +14,7 @@ import { POST as practicePOST } from '@/app/api/admin/practices/route';
 import { PATCH as practicePATCH, DELETE as practiceDELETE } from '@/app/api/admin/practices/[practiceId]/route';
 import { POST as newsPOST } from '@/app/api/admin/news/route';
 import { PATCH as newsPATCH, DELETE as newsDELETE } from '@/app/api/admin/news/[newsId]/route';
+import { PATCH as productPATCH, DELETE as productDELETE } from '@/app/api/admin/products/[productId]/route';
 
 const ADMIN_UID = 'U_ADMIN_LINE_0001';
 
@@ -420,6 +421,59 @@ describe('Admin Server API (Phase 1)', () => {
       const res = await categoryDELETE(req('/x?targetId=sku-target', 'DELETE', 'line'), { params: { categoryId: 'sku-custom' } });
       expect(res.status).toBe(200);
       expect(db.read('categories/sku-custom')).toBeUndefined();
+    });
+  });
+
+  // -------------------- Products --------------------
+
+  describe('Products', () => {
+    const P = { params: { productId: 'prod-a1' } };
+
+    it('unauthenticated → 401, nothing written', async () => {
+      expect((await productPATCH(req('/x', 'PATCH', 'none', { status: 'hidden' }), P)).status).toBe(401);
+      expect((await productDELETE(req('/x', 'DELETE', 'none'), P)).status).toBe(401);
+      expect(db.read('products/prod-a1')!.status).toBeUndefined();
+    });
+
+    it('passcode admin can change status; audit names the farm owner', async () => {
+      const res = await productPATCH(req('/x', 'PATCH', 'passcode', { status: 'hidden' }), P);
+      expect(res.status).toBe(200);
+      expect(db.read('products/prod-a1')!.status).toBe('hidden');
+      const log = auditLogs(db)[0];
+      expect(log.action).toBe('admin_update_product');
+      expect(log.targetMemberName).toBe('ป้าบุญมี');
+      expect(log.metadata.before).toEqual({ status: null });
+    });
+
+    it('changing SKU re-derives skuTagName / category / categoryName on the server', async () => {
+      const res = await productPATCH(req('/x', 'PATCH', 'line', { skuTagId: 'sku-target', title: 'ถ่านดี', price: 80, unit: 'กก.' }), P);
+      expect(res.status).toBe(200);
+      const stored = db.read('products/prod-a1')!;
+      expect(stored).toMatchObject({ skuTagId: 'sku-target', skuTagName: 'ถ่านทั่วไป', category: 'byproduct', title: 'ถ่านดี', price: 80 });
+      expect(stored.categoryName).toBe('ปัจจัยการผลิต/By-product');
+    });
+
+    it('cannot move a product to another farm/owner or set contact fields', async () => {
+      const res = await productPATCH(req('/x', 'PATCH', 'line', { farmId: 'farm-x', ownerUid: 'U_X', phone: '0899999999' }), P);
+      expect(res.status).toBe(400); // ไม่มี field ที่อนุญาต
+      expect(db.read('products/prod-a1')).toMatchObject({ farmId: 'farm-a1', ownerUid: 'U_FARMER_A1' });
+    });
+
+    it('validates input', async () => {
+      expect((await productPATCH(req('/x', 'PATCH', 'line', { status: 'sold' }), P)).status).toBe(400);
+      expect((await productPATCH(req('/x', 'PATCH', 'line', { price: -5 }), P)).status).toBe(400);
+      expect((await productPATCH(req('/x', 'PATCH', 'line', { title: 'x' }), P)).status).toBe(400);
+      expect((await productPATCH(req('/x', 'PATCH', 'line', { skuTagId: 'sku-nope' }), P)).status).toBe(404);
+      expect((await productPATCH(req('/x', 'PATCH', 'line', { status: 'hidden' }), { params: { productId: 'prod-nope' } })).status).toBe(404);
+    });
+
+    it('delete is LINE-only and leaves other products untouched', async () => {
+      expect((await productDELETE(req('/x', 'DELETE', 'passcode'), P)).status).toBe(403);
+      expect(db.read('products/prod-a1')).toBeTruthy();
+      expect((await productDELETE(req('/x', 'DELETE', 'line'), P)).status).toBe(200);
+      expect(db.read('products/prod-a1')).toBeUndefined();
+      expect(db.read('products/prod-a2')).toBeTruthy();
+      expect(auditLogs(db)[0].action).toBe('admin_delete_product');
     });
   });
 

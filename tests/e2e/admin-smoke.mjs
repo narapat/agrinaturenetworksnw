@@ -132,6 +132,7 @@ async function runSmokeTests() {
       '/admin/members',
       '/admin/members/approved',
       '/admin/members/rejected',
+      '/admin/products',
       '/admin/news',
       '/admin/assist',
       '/admin/categories',
