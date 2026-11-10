@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Sprout,
   UserCheck,
+  Users,
   X,
   XCircle,
 } from 'lucide-react';
@@ -29,11 +30,13 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const {
     actorName, session, isPasscodeSession,
     pendingMembers, rejectedMembers, assistQueue, newsList, categories, practices,
-    syncError, actionError, setActionError, refreshFromServer,
+    syncError, actionError, setActionError, refreshFromServer, allMembers,
   } = useAdminData();
+  const approvedCount = allMembers.filter((m) => m.status === 'approved').length;
 
   const navItems = [
     { href: '/admin/members', label: `อนุมัติสมาชิกใหม่ (${pendingMembers.length})`, icon: UserCheck, exact: true },
+    { href: '/admin/members/approved', label: `สมาชิกที่อนุมัติแล้ว (${approvedCount})`, icon: Users },
     { href: '/admin/members/rejected', label: `ไม่อนุมัติ / คัดออก (${rejectedMembers.length})`, icon: XCircle, tone: 'rose' as const },
     { href: '/admin/news', label: `ประกาศกิจกรรม (${newsList.length})`, icon: Calendar },
     { href: '/admin/assist', label: `คิวช่วยลงข้อมูล (${assistQueue.length})`, icon: HelpCircle },

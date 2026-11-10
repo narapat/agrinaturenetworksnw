@@ -85,6 +85,11 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const member = await loadMember(db, memberId);
     const farms = await loadMemberFarms(db, member);
 
+    // กันแอดมินลบบัญชีสมาชิกของตัวเองโดยไม่ตั้งใจ
+    if (actor.lineUserId && [member.ownerUid, ...farms.map((f) => f.ownerUid)].includes(actor.lineUserId)) {
+      throw new ValidationError('ไม่สามารถลบบัญชีสมาชิกของตัวเองได้');
+    }
+
     const productSnaps = await Promise.all(
       farms.map((f) => db.collection('products').where('farmId', '==', f.id).get())
     );

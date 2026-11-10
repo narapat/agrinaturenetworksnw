@@ -130,6 +130,7 @@ async function runSmokeTests() {
     console.log('\n[Test 3b] Visiting each admin sub-page...');
     const adminSubPages = [
       '/admin/members',
+      '/admin/members/approved',
       '/admin/members/rejected',
       '/admin/news',
       '/admin/assist',
