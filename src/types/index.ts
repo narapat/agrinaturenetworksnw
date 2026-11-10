@@ -156,6 +156,8 @@ export interface AuditLog {
     | 'approve_member' 
     | 'reject_member' 
     | 'delete_member'
+    | 'admin_update_product'
+    | 'admin_delete_product'
     | 'create_sku'
     | 'toggle_sku'
     | 'assign_admin' 

@@ -129,6 +129,7 @@ ADMIN_LINE_USER_IDS=U11111111111111111111111111111111
 * `/member/add-product` : วิซาร์ดเพิ่มผลผลิต 1 นาที พร้อมระบบย่อรูปภาพ
 * `/admin` : ศูนย์แอดมิน (เปิดแล้วไปที่ `/admin/members`) แยกเป็นหน้าย่อยที่ลิงก์ตรงได้
   * `/admin/members` อนุมัติสมาชิกใหม่ · `/admin/members/approved` สมาชิกที่อนุมัติแล้ว (ค้นหา, ระงับ, ลบถาวร) · `/admin/members/rejected` ไม่อนุมัติ / คัดออก
+  * `/admin/products` ผลผลิตของทุกแปลง (ค้นหา, เปลี่ยนสถานะ, แก้ไข, ลบ)
   * `/admin/news` ประกาศกิจกรรม · `/admin/assist` คิวช่วยลงข้อมูล
   * `/admin/categories` หมวดหมู่ & SKU · `/admin/practices` วิถีและศาสตร์ · `/admin/logs` ประวัติการทำงาน
   * `/admin/rich-menu` เครื่องมือภาพริชเมนู LINE

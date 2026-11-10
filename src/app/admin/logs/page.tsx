@@ -205,6 +205,10 @@ export default function AdminLogsPage() {
                 return { label: 'กิจกรรมเครือข่าย', bg: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: Calendar };
               case 'assist_create_product':
                 return { label: 'แอดมินช่วยลงผลผลิต', bg: 'bg-orange-100 text-orange-800 border-orange-200', icon: HelpCircle };
+              case 'admin_update_product':
+                return { label: 'แอดมินแก้ไขผลผลิต', bg: 'bg-orange-50 text-orange-800 border-orange-200', icon: Edit3 };
+              case 'admin_delete_product':
+                return { label: 'แอดมินลบผลผลิต', bg: 'bg-rose-100 text-rose-800 border-rose-200', icon: Trash2 };
               default:
                 return { label: action, bg: 'bg-stone-100 text-stone-700 border-stone-200', icon: Clock };
             }

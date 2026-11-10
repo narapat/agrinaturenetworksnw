@@ -3,7 +3,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { dataService } from '@/services/dataService';
 import { adminApi, type AdminSessionInfo } from '@/services/adminApi';
-import type { AuditLog, CategoryTag, FarmPracticeTag, MemberProfile, NewsEvent } from '@/types';
+import type { AuditLog, CategoryTag, Farm, FarmPracticeTag, MemberProfile, NewsEvent, Product } from '@/types';
 
 /**
  * ข้อมูลและสถานะที่ใช้ร่วมกันทุกหน้าย่อยของ /admin
@@ -25,6 +25,9 @@ interface AdminDataValue {
   practices: FarmPracticeTag[];
   newsList: NewsEvent[];
   auditLogs: AuditLog[];
+  /** ผลผลิตและแปลงจาก server โดยตรง (ไม่ปนข้อมูลตัวอย่างที่ฝั่ง client อาจเติมเข้ามา) */
+  products: Product[];
+  farms: Farm[];
 
   // สถานะ session
   session: AdminSessionInfo;
@@ -52,6 +55,8 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   const [practices, setPractices] = useState<FarmPracticeTag[]>([]);
   const [newsList, setNewsList] = useState<NewsEvent[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [farms, setFarms] = useState<Farm[]>([]);
 
   const [session, setSession] = useState<AdminSessionInfo>({ authenticated: false });
   const [isSyncing, setIsSyncing] = useState(false);
@@ -76,6 +81,8 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const snap = await adminApi.snapshot();
       dataService.applyAdminSnapshot(snap);
+      setProducts(snap.products);
+      setFarms(snap.farms as Farm[]);
       setSyncError(null);
     } catch (err) {
       setSyncError(err instanceof Error ? err.message : 'โหลดข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ');
@@ -122,6 +129,8 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       practices,
       newsList,
       auditLogs,
+      products,
+      farms,
       session,
       isPasscodeSession,
       actorName: session.actorName || currentUser?.fullName || 'แอดมินเครือข่าย',
@@ -135,7 +144,7 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
       runAction,
     };
   }, [
-    currentUser, allMembers, categories, practices, newsList, auditLogs, session,
+    currentUser, allMembers, categories, practices, newsList, auditLogs, products, farms, session,
     isSyncing, lastSyncTime, syncError, actionError, busyKey, refreshFromServer, runAction,
   ]);
 

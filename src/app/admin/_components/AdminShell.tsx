@@ -9,6 +9,7 @@ import {
   HelpCircle,
   History,
   KeyRound,
+  Package,
   Layers,
   ShieldCheck,
   Sprout,
@@ -30,7 +31,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const {
     actorName, session, isPasscodeSession,
     pendingMembers, rejectedMembers, assistQueue, newsList, categories, practices,
-    syncError, actionError, setActionError, refreshFromServer, allMembers,
+    syncError, actionError, setActionError, refreshFromServer, allMembers, products,
   } = useAdminData();
   const approvedCount = allMembers.filter((m) => m.status === 'approved').length;
 
@@ -38,6 +39,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     { href: '/admin/members', label: `อนุมัติสมาชิกใหม่ (${pendingMembers.length})`, icon: UserCheck, exact: true },
     { href: '/admin/members/approved', label: `สมาชิกที่อนุมัติแล้ว (${approvedCount})`, icon: Users },
     { href: '/admin/members/rejected', label: `ไม่อนุมัติ / คัดออก (${rejectedMembers.length})`, icon: XCircle, tone: 'rose' as const },
+    { href: '/admin/products', label: `ผลผลิตของแปลง (${products.length})`, icon: Package },
     { href: '/admin/news', label: `ประกาศกิจกรรม (${newsList.length})`, icon: Calendar },
     { href: '/admin/assist', label: `คิวช่วยลงข้อมูล (${assistQueue.length})`, icon: HelpCircle },
     { href: '/admin/categories', label: `จัดการหมวดหมู่ & SKU (${categories.length})`, icon: Layers },
