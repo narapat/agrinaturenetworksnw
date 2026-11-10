@@ -4,6 +4,8 @@ import { formatPrivateKey, isFirebaseAdminConfigured } from '@/lib/firebaseAdmin
 import * as firebaseAdminAuth from '@/lib/firebaseAdminAuth';
 import { POST as authLinePOST } from '@/app/api/auth/line/route';
 import { POST as auditPOST } from '@/app/api/audit/route';
+import * as firebaseAdminModule from '@/lib/firebaseAdmin';
+import { createAdminSessionToken } from '@/lib/adminSession';
 
 describe('Firebase Auth Bridge & Server Security Tests', () => {
   const originalEnv = process.env;
@@ -219,11 +221,61 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
     });
   });
 
-  describe('3. POST /api/audit (Server-Only Audit Log)', () => {
-    it('should reject invalid payloads without action or details', async () => {
+  describe('3. POST /api/audit (Server-Only, Authenticated Audit Log)', () => {
+    const mockLineVerify = (sub: string) =>
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ sub, name: 'Test User' }),
+      } as Response);
+
+    const mockAuditDb = () => {
+      const setSpy = vi.fn().mockResolvedValue(undefined);
+      const docSpy = vi.fn().mockReturnValue({ set: setSpy });
+      const mockDb = { collection: vi.fn().mockReturnValue({ doc: docSpy }) };
+      vi.spyOn(firebaseAdminModule, 'getAdminDb').mockReturnValue(mockDb as any);
+      return setSpy;
+    };
+
+    const validBody = {
+      action: 'test_audit_event',
+      actorRole: 'admin', // client พยายามอ้างเป็นแอดมิน — server ต้องไม่เชื่อ
+      actorName: 'แอดมินเครือข่าย',
+      details: 'บันทึกการทดสอบระบบ Audit Log ผ่าน Server API',
+    };
+
+    it('[Forgery regression] must reject unauthenticated requests (401) and write nothing', async () => {
+      const setSpy = mockAuditDb();
       const req = new NextRequest('http://localhost:3000/api/audit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validBody),
+      });
+
+      const res = await auditPOST(req);
+      expect(res.status).toBe(401);
+      expect(setSpy).not.toHaveBeenCalled();
+    });
+
+    it('must reject an invalid LINE ID Token (401)', async () => {
+      const setSpy = mockAuditDb();
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, json: async () => ({}) } as Response);
+      const req = new NextRequest('http://localhost:3000/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer forged' },
+        body: JSON.stringify(validBody),
+      });
+
+      const res = await auditPOST(req);
+      expect(res.status).toBe(401);
+      expect(setSpy).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid payloads without action or details (authenticated)', async () => {
+      mockAuditDb();
+      mockLineVerify('U_REGULAR_FARMER_9999');
+      const req = new NextRequest('http://localhost:3000/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid' },
         body: JSON.stringify({ action: '' }),
       });
 
@@ -231,16 +283,13 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should accept valid audit payloads and return unique log ID', async () => {
+    it('a regular member claiming actorRole "admin" must be recorded as member with verified actorUid', async () => {
+      const setSpy = mockAuditDb();
+      mockLineVerify('U_REGULAR_FARMER_9999');
       const req = new NextRequest('http://localhost:3000/api/audit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'test_audit_event',
-          actorRole: 'admin',
-          actorName: 'แอดมินเครือข่าย',
-          details: 'บันทึกการทดสอบระบบ Audit Log ผ่าน Server API',
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid' },
+        body: JSON.stringify(validBody),
       });
 
       const res = await auditPOST(req);
@@ -248,6 +297,62 @@ describe('Firebase Auth Bridge & Server Security Tests', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.id).toMatch(/^log-\d+/);
+
+      const written = setSpy.mock.calls[0][0];
+      expect(written.actorRole).toBe('member');
+      expect(written.actorUid).toBe('U_REGULAR_FARMER_9999');
+      expect(written.authMethod).toBe('line_id_token');
+    });
+
+    it('a whitelisted admin LINE token should be recorded as admin', async () => {
+      const setSpy = mockAuditDb();
+      mockLineVerify('U_ADMIN_1111');
+      const req = new NextRequest('http://localhost:3000/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid' },
+        body: JSON.stringify(validBody),
+      });
+
+      const res = await auditPOST(req);
+      expect(res.status).toBe(200);
+      expect(setSpy.mock.calls[0][0].actorRole).toBe('admin');
+    });
+
+    it('a valid admin session cookie (passcode login) should be accepted as admin', async () => {
+      const setSpy = mockAuditDb();
+      const now = Date.now();
+      const token = createAdminSessionToken({
+        role: 'admin',
+        issuedAt: now,
+        expiresAt: now + 60_000,
+        method: 'passcode',
+      });
+      const req = new NextRequest('http://localhost:3000/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: `nsw_admin_auth_session=${token}` },
+        body: JSON.stringify(validBody),
+      });
+
+      const res = await auditPOST(req);
+      expect(res.status).toBe(200);
+      const written = setSpy.mock.calls[0][0];
+      expect(written.actorRole).toBe('admin');
+      expect(written.authMethod).toBe('admin_session');
+    });
+
+    it('[Zero Silent Fallback] must return 500 when Admin SDK is unavailable', async () => {
+      vi.spyOn(firebaseAdminModule, 'getAdminDb').mockReturnValue(null as any);
+      mockLineVerify('U_ADMIN_1111');
+      const req = new NextRequest('http://localhost:3000/api/audit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid' },
+        body: JSON.stringify(validBody),
+      });
+
+      const res = await auditPOST(req);
+      expect(res.status).toBe(500);
+      const data = await res.json();
+      expect(data.success).toBe(false);
     });
   });
 });

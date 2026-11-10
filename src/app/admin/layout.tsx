@@ -45,9 +45,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     try {
       const currentUser = dataService.getCurrentUser();
-      const lineUserId = currentUser?.lineUserId || '';
-      
-      const res = await fetch(`/api/admin/auth${lineUserId ? `?lineUserId=${encodeURIComponent(lineUserId)}` : ''}`);
+      // ส่ง LINE ID Token ให้ Server ยืนยันกับ LINE เอง (ห้ามส่ง lineUserId ดิบ เพราะไม่ใช่ความลับ)
+      const lineIdToken = liffService.getIdToken();
+
+      const res = await fetch('/api/admin/auth', {
+        headers: lineIdToken ? { Authorization: `Bearer ${lineIdToken}` } : undefined,
+      });
+      if (res.status === 401) {
+        // Server ยืนยันว่าไม่มีสิทธิ์: ล้าง flag ฝั่ง client ที่อาจค้างอยู่
+        try {
+          sessionStorage.removeItem('nsw_admin_session_token');
+          localStorage.removeItem('nsw_admin_session_token');
+        } catch {}
+      }
       if (res.ok) {
         const data = await res.json();
         if (data.authenticated) {
@@ -68,12 +78,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       console.warn('Admin auth verify notice:', e);
     }
 
-    // หาก server ไม่ผ่าน ให้ตรวจสอบ local session
-    if (dataService.isAdminSession()) {
-      setIsAdminAuthenticated(true);
-    } else {
-      setIsAdminAuthenticated(false);
-    }
+    // Server เป็นผู้ตัดสินสิทธิ์แอดมินเพียงแหล่งเดียว
+    // ไม่ fallback ไปเชื่อ flag ใน localStorage/sessionStorage (ผู้ใช้ตั้งค่าเองได้)
+    setIsAdminAuthenticated(false);
     setIsLoading(false);
   };
 
@@ -83,14 +90,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setIsSubmitting(true);
 
     try {
-      const currentUser = dataService.getCurrentUser();
+      const lineIdToken = liffService.getIdToken();
       const res = await fetch('/api/admin/auth', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          passcode: passcode.trim(),
-          lineUserId: currentUser?.lineUserId || undefined,
-        }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(lineIdToken ? { Authorization: `Bearer ${lineIdToken}` } : {}),
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
       });
 
       const data = await res.json();

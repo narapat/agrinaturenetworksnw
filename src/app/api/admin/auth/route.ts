@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import {
+  ADMIN_COOKIE_NAME,
+  ADMIN_SESSION_DURATION_MS,
+  adminCookieOptions,
+  createAdminSessionToken,
+  verifyAdminSessionToken,
+  type AdminSessionPayload,
+} from '@/lib/adminSession';
+import { getAdminLineUserIds, getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
 
-const COOKIE_NAME = 'nsw_admin_auth_session';
-const SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 วัน
-
-// Secret สำหรับ HMAC Signing บน Server เท่านั้น (Client จะมองไม่เห็น 100%)
-const getSecret = (): string => {
-  const secret = process.env.ADMIN_SESSION_SECRET;
-  if (!secret) {
-    throw new Error('Server configuration error: ADMIN_SESSION_SECRET is not configured');
-  }
-  return secret;
-};
+export const dynamic = 'force-dynamic';
 
 const getAdminPasscode = (): string => {
   const passcode = process.env.ADMIN_PASSCODE;
@@ -21,126 +20,83 @@ const getAdminPasscode = (): string => {
   return passcode;
 };
 
-const getAdminLineUserIds = (): string[] => {
-  const raw = process.env.ADMIN_LINE_USER_IDS || '';
-  return raw
-    .split(',')
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0);
-};
-
-interface SessionPayload {
-  role: 'admin';
-  expiresAt: number;
-  lineUserId?: string;
-  issuedAt: number;
-}
-
 /**
- * สร้าง Signed Session Token ด้วย HMAC-SHA256
+ * ตรวจสิทธิ์แอดมินผ่าน LINE ID Token (Authorization: Bearer <LINE_ID_TOKEN>)
+ * - ตัวตนมาจาก `sub` ที่ LINE Server ยืนยันแล้วเท่านั้น
+ * - ห้ามเชื่อ lineUserId ที่ส่งมาใน body หรือ query string (ไม่ใช่ความลับ อ่านได้จาก ownerUid สาธารณะ)
  */
-function createSignedToken(payload: SessionPayload): string {
-  const serialized = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto
-    .createHmac('sha256', getSecret())
-    .update(serialized)
-    .digest('base64url');
-  return `${serialized}.${signature}`;
-}
+async function verifyAdminLineToken(req: NextRequest): Promise<string | null> {
+  const idToken = getBearerToken(req.headers);
+  if (!idToken) return null;
 
-/**
- * ตรวจสอบความถูกต้องของ Signed Session Token
- */
-function verifySignedToken(token: string): { valid: boolean; payload?: SessionPayload } {
-  if (!token || !token.includes('.')) return { valid: false };
+  const adminLineIds = getAdminLineUserIds();
+  if (adminLineIds.length === 0) return null;
 
-  const [serialized, signature] = token.split('.');
-  if (!serialized || !signature) return { valid: false };
-
-  const expectedSignature = crypto
-    .createHmac('sha256', getSecret())
-    .update(serialized)
-    .digest('base64url');
-
-  // ใช้ timingSafeEqual เพื่อป้องกัน Timing Attack
-  const sigBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
-  if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
-    return { valid: false };
-  }
-
-  try {
-    const payload = JSON.parse(Buffer.from(serialized, 'base64url').toString('utf-8')) as SessionPayload;
-    if (!payload.expiresAt || Date.now() > payload.expiresAt) {
-      return { valid: false }; // หมดอายุ
+  const result = await verifyLineIdToken(idToken);
+  if (!result.ok) {
+    if (result.status === 500) {
+      console.error('[Admin Auth] LINE token verification unavailable:', result.reason);
     }
-    return { valid: true, payload };
-  } catch {
-    return { valid: false };
+    return null;
   }
+  return adminLineIds.includes(result.sub) ? result.sub : null;
+}
+
+function issueSession(
+  response: NextResponse,
+  method: AdminSessionPayload['method'],
+  lineUserId?: string
+): NextResponse {
+  const now = Date.now();
+  const token = createAdminSessionToken({
+    role: 'admin',
+    issuedAt: now,
+    expiresAt: now + ADMIN_SESSION_DURATION_MS,
+    lineUserId,
+    method,
+  });
+  response.cookies.set(adminCookieOptions(token, Math.floor(ADMIN_SESSION_DURATION_MS / 1000)));
+  return response;
 }
 
 /**
  * POST /api/admin/auth
- * ยืนยันรหัสผ่านแอดมิน หรือตรวจ LINE User ID Whitelist บนเซิร์ฟเวอร์
+ * ยืนยันสิทธิ์แอดมินด้วย (1) LINE ID Token ที่ยืนยันแล้วและอยู่ใน Whitelist หรือ (2) Passcode
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { passcode, lineUserId } = body;
+    const { passcode } = body as { passcode?: unknown };
 
-    let isAuthorized = false;
-
-    // 1. ตรวจสอบผ่าน LINE User ID Whitelist (ถ้ามี)
-    const adminLineIds = getAdminLineUserIds();
-    if (lineUserId && adminLineIds.length > 0 && adminLineIds.includes(lineUserId.trim())) {
-      isAuthorized = true;
-    }
-
-    // 2. ตรวจสอบผ่าน Passcode
+    // ตรวจ config ให้ครบก่อน (Fail loudly ถ้า env ไม่ครบ)
     const validPasscode = getAdminPasscode();
-    if (!isAuthorized && passcode && typeof passcode === 'string') {
-      const inputBuffer = Buffer.from(passcode.trim());
-      const validBuffer = Buffer.from(validPasscode.trim());
-      if (inputBuffer.length === validBuffer.length && crypto.timingSafeEqual(inputBuffer, validBuffer)) {
-        isAuthorized = true;
-      }
-    }
 
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { success: false, message: 'รหัสผ่านแอดมินไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าถึง' },
-        { status: 401 }
+    // 1. LINE ID Token (ยืนยันกับ LINE Server)
+    const verifiedLineUserId = await verifyAdminLineToken(req);
+    if (verifiedLineUserId) {
+      return issueSession(
+        NextResponse.json({ success: true, message: 'ยืนยันสิทธิ์แอดมินสำเร็จ', role: 'admin' }),
+        'line',
+        verifiedLineUserId
       );
     }
 
-    // สร้าง Session Token
-    const payload: SessionPayload = {
-      role: 'admin',
-      expiresAt: Date.now() + SESSION_DURATION_MS,
-      lineUserId: lineUserId || undefined,
-      issuedAt: Date.now(),
-    };
-    const signedToken = createSignedToken(payload);
+    // 2. Passcode
+    if (passcode && typeof passcode === 'string') {
+      const inputBuffer = Buffer.from(passcode.trim());
+      const validBuffer = Buffer.from(validPasscode.trim());
+      if (inputBuffer.length === validBuffer.length && crypto.timingSafeEqual(inputBuffer, validBuffer)) {
+        return issueSession(
+          NextResponse.json({ success: true, message: 'ยืนยันสิทธิ์แอดมินสำเร็จ', role: 'admin' }),
+          'passcode'
+        );
+      }
+    }
 
-    const response = NextResponse.json({
-      success: true,
-      message: 'ยืนยันสิทธิ์แอดมินสำเร็จ',
-      role: 'admin',
-    });
-
-    // กำหนด HTTP-Only Cookie ป้องกัน JavaScript ขโมยหรือดักจับ Token
-    response.cookies.set({
-      name: COOKIE_NAME,
-      value: signedToken,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/',
-      maxAge: Math.floor(SESSION_DURATION_MS / 1000),
-    });
-
-    return response;
+    return NextResponse.json(
+      { success: false, message: 'รหัสผ่านแอดมินไม่ถูกต้อง หรือไม่มีสิทธิ์เข้าถึง' },
+      { status: 401 }
+    );
   } catch (err: any) {
     console.error('Server Admin Auth Error:', err);
     return NextResponse.json(
@@ -152,53 +108,29 @@ export async function POST(req: NextRequest) {
 
 /**
  * GET /api/admin/auth
- * ตรวจสอบสถานะการยืนยันตัวตนแอดมินจาก HTTP-Only Cookie หรือ LINE Whitelist
+ * ตรวจสอบสถานะแอดมินจาก HTTP-Only Cookie
+ * หรือออก session ใหม่ถ้าส่ง LINE ID Token (Bearer) ที่ยืนยันแล้วและอยู่ใน Whitelist
  */
 export async function GET(req: NextRequest) {
   try {
-    // 1. ตรวจสอบจาก HTTP-Only Cookie
-    const cookieToken = req.cookies.get(COOKIE_NAME)?.value;
-    if (cookieToken) {
-      const { valid, payload } = verifySignedToken(cookieToken);
-      if (valid && payload) {
-        return NextResponse.json({
-          authenticated: true,
-          role: payload.role,
-          lineUserId: payload.lineUserId,
-        });
-      }
+    // 1. HTTP-Only Cookie
+    const session = verifyAdminSessionToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value);
+    if (session) {
+      return NextResponse.json({
+        authenticated: true,
+        role: session.role,
+        lineUserId: session.lineUserId,
+      });
     }
 
-    // 2. ตรวจสอบว่า query param มี lineUserId ตรงกับ Whitelist หรือไม่
-    const { searchParams } = new URL(req.url);
-    const lineUserId = searchParams.get('lineUserId');
-    const adminLineIds = getAdminLineUserIds();
-    if (lineUserId && adminLineIds.length > 0 && adminLineIds.includes(lineUserId.trim())) {
-      const payload: SessionPayload = {
-        role: 'admin',
-        expiresAt: Date.now() + SESSION_DURATION_MS,
-        lineUserId: lineUserId.trim(),
-        issuedAt: Date.now(),
-      };
-      const signedToken = createSignedToken(payload);
-
-      const response = NextResponse.json({
-        authenticated: true,
-        role: 'admin',
-        autoVerified: true,
-      });
-
-      response.cookies.set({
-        name: COOKIE_NAME,
-        value: signedToken,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        path: '/',
-        maxAge: Math.floor(SESSION_DURATION_MS / 1000),
-      });
-
-      return response;
+    // 2. LINE ID Token ที่ยืนยันกับ LINE Server แล้ว (ไม่รับ lineUserId จาก query string)
+    const verifiedLineUserId = await verifyAdminLineToken(req);
+    if (verifiedLineUserId) {
+      return issueSession(
+        NextResponse.json({ authenticated: true, role: 'admin', autoVerified: true }),
+        'line',
+        verifiedLineUserId
+      );
     }
 
     return NextResponse.json({ authenticated: false }, { status: 401 });
@@ -217,16 +149,6 @@ export async function DELETE() {
     success: true,
     message: 'ออกจากระบบแอดมินเรียบร้อยแล้ว',
   });
-
-  response.cookies.set({
-    name: COOKIE_NAME,
-    value: '',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    path: '/',
-    maxAge: 0,
-  });
-
+  response.cookies.set(adminCookieOptions('', 0));
   return response;
 }

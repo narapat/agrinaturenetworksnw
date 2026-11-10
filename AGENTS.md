@@ -34,6 +34,10 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
 5. **No Secrets in Client Bundles**
    - Never use `NEXT_PUBLIC_` for `ADMIN_PASSCODE` or `ADMIN_SESSION_SECRET`.
    - All admin passcode access must be verified on the server via `POST /api/admin/auth` using HMAC-SHA256 and HTTP-Only cookies.
+   - **Never trust a raw `lineUserId` sent by the client** (body, query string, header). LINE User IDs are not secrets — they are stored as `ownerUid` on publicly readable `farms`/`products` docs. Identity must come from the `sub` of a LINE ID Token verified server-side (`verifyLineIdToken()` in `@/lib/lineIdToken`, sent as `Authorization: Bearer <LINE_ID_TOKEN>`) or from the HMAC admin session cookie (`@/lib/adminSession`).
+   - The `/admin` gate is decided by the server only. Never fall back to client-side flags (`nsw_admin_session_token` in local/sessionStorage) to grant admin UI access.
+   - `POST /api/audit` requires authentication. `actorRole`, `actorUid`, and `authMethod` are derived on the server; client-supplied `actorRole` is ignored. If the Admin SDK is unavailable it must return 500, never a fake success.
+   - Client writes to public parent docs must send only an explicit allowlisted patch — never a full in-memory object (e.g. `updateFarm` only writes `FARM_PUBLIC_UPDATABLE_FIELDS`), because in-memory objects may be hydrated with private subcollection data.
 
 6. **Admin Auth vs Admin Firestore Isolation (No Auth in Pages/SSR)**
    - Never import `getAdminAuth` or `@/lib/firebaseAdminAuth` from Server Components, layouts, or pages.

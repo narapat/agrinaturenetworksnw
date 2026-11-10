@@ -1,7 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import crypto from 'crypto';
 import { POST, GET, DELETE } from '@/app/api/admin/auth/route';
 import { NextRequest } from 'next/server';
+
+/** จำลองให้ LINE OAuth2 verify ตอบว่า token เป็นของ `sub` นี้ */
+function mockLineVerify(sub: string) {
+  return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: true,
+    json: async () => ({ sub, name: 'Test User' }),
+  } as Response);
+}
 
 describe('Admin Authentication & HMAC-SHA256 Security Tests', () => {
   const originalEnv = process.env;
@@ -17,6 +25,7 @@ describe('Admin Authentication & HMAC-SHA256 Security Tests', () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    vi.restoreAllMocks();
   });
 
   it('1. POST /api/admin/auth with valid passcode should authenticate and issue secure cookie', async () => {
@@ -67,7 +76,25 @@ describe('Admin Authentication & HMAC-SHA256 Security Tests', () => {
     expect(res.status).toBe(401);
   });
 
-  it('4. POST /api/admin/auth with whitelisted LINE User ID should succeed without passcode', async () => {
+  it('4. POST /api/admin/auth with a LINE ID Token verified as a whitelisted admin should succeed without passcode', async () => {
+    const fetchSpy = mockLineVerify('U11111111111111111111111111111111');
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      method: 'POST',
+      body: JSON.stringify({}),
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer valid-line-id-token' },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledWith('https://api.line.me/oauth2/v2.1/verify', expect.anything());
+
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.role).toBe('admin');
+  });
+
+  it('4a. [Bypass regression] POST with a raw whitelisted lineUserId in the body (no verified token) must be rejected', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const req = new NextRequest('http://localhost:3000/api/admin/auth', {
       method: 'POST',
       body: JSON.stringify({ lineUserId: 'U11111111111111111111111111111111' }),
@@ -75,11 +102,55 @@ describe('Admin Authentication & HMAC-SHA256 Security Tests', () => {
     });
 
     const res = await POST(req);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 
-    const json = await res.json();
-    expect(json.success).toBe(true);
-    expect(json.role).toBe('admin');
+  it('4b. [Bypass regression] GET with a whitelisted ?lineUserId= query param must NOT issue an admin cookie', async () => {
+    const req = new NextRequest(
+      'http://localhost:3000/api/admin/auth?lineUserId=U11111111111111111111111111111111'
+    );
+
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('4c. A valid LINE ID Token for a NON-whitelisted user must be rejected', async () => {
+    mockLineVerify('U_REGULAR_FARMER_9999');
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      headers: { Authorization: 'Bearer valid-but-not-admin' },
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('4d. A LINE ID Token rejected by LINE (invalid/expired) must be rejected', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'invalid_request', error_description: 'IdToken expired.' }),
+    } as Response);
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      headers: { Authorization: 'Bearer forged-or-expired' },
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('4e. GET with a verified admin LINE ID Token should issue a session cookie', async () => {
+    mockLineVerify('U22222222222222222222222222222222');
+    const req = new NextRequest('http://localhost:3000/api/admin/auth', {
+      headers: { Authorization: 'Bearer valid-admin-token' },
+    });
+
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie')).toContain('nsw_admin_auth_session=');
   });
 
   it('5. GET /api/admin/auth with valid session cookie should return authenticated: true', async () => {
