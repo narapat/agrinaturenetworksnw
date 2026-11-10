@@ -827,18 +827,28 @@ class DataService {
     }
     if (typeof window !== 'undefined') {
       try {
-        await fetch('/api/audit', {
+        // Server ยืนยันตัวตนเอง: LINE ID Token (ถ้ามี) หรือ Admin session cookie (ส่งไปอัตโนมัติ)
+        // actorRole ไม่ส่งจาก client อีกต่อไป — server กำหนดจากตัวตนที่ยืนยันแล้ว
+        const { liffService } = await import('./liffService');
+        const lineIdToken = liffService.getIdToken();
+        const res = await fetch('/api/audit', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(lineIdToken ? { Authorization: `Bearer ${lineIdToken}` } : {}),
+          },
           body: JSON.stringify({
             action: log.action,
-            actorRole: 'admin',
-            actorName: log.performedByAdminName || 'Admin',
+            actorName: log.performedByAdminName || undefined,
             targetId: log.targetMemberId || log.targetFarmName || undefined,
             details: log.details,
             metadata: { logId: log.id, timestamp: log.timestamp },
           }),
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.error(`[Audit] Server rejected audit log (HTTP ${res.status}):`, errData?.message || errData);
+        }
       } catch (e) {
         console.warn('Could not record audit log via server API:', e);
       }
@@ -2015,10 +2025,35 @@ class DataService {
     return false;
   }
 
+  /**
+   * Field ที่ updateFarm อนุญาตให้เขียนลงเอกสาร `farms/{farmId}` (อ่านได้สาธารณะเมื่อ approved)
+   * ข้อมูลอ่อนไหว (phone, lineId, internalCoordinates) ต้องอยู่ใน `farms/{farmId}/private/contact` เท่านั้น
+   */
+  static readonly FARM_PUBLIC_UPDATABLE_FIELDS = [
+    'farmName',
+    'tagline',
+    'story',
+    'photos',
+    'district',
+    'subdistrict',
+    'practices',
+  ] as const;
+
   // แก้ไขข้อมูลแปลงกสิกรรม (ชื่อแปลง, คำขวัญ, เรื่องเล่า, อำเภอ, ตำบล, แนวทางปฏิบัติ)
   async updateFarm(farmId: string, updatedData: Partial<Farm>): Promise<Farm | null> {
     const farm = this.farms.find((f) => f.id === farmId);
     if (!farm) return null;
+
+    // Zero Data Leakage: รับเฉพาะ field ใน allowlist เท่านั้น ปฏิเสธทันทีถ้ามี field อื่น
+    // (เดิมฟังก์ชันนี้เขียน farm object ทั้งก้อนจาก memory ลงเอกสารสาธารณะ ซึ่งอาจมีเบอร์โทร/LINE ID/พิกัดจริงติดไปด้วย)
+    // ข้อมูลอ่อนไหว (phone, lineId, internalCoordinates) ต้องเขียนผ่าน farms/{id}/private/contact เท่านั้น
+    const allowed = DataService.FARM_PUBLIC_UPDATABLE_FIELDS as readonly string[];
+    const disallowedKeys = Object.keys(updatedData).filter((k) => !allowed.includes(k));
+    if (disallowedKeys.length > 0) {
+      throw new Error(
+        `updateFarm ไม่อนุญาตให้แก้ field: ${disallowedKeys.join(', ')} (อนุญาตเฉพาะ ${allowed.join(', ')})`
+      );
+    }
 
     // บีบอัดรูปภาพ Base64 ป้องกันชนเพดาน 1 MB ของ Cloud Firestore เสมอ
     if (updatedData.photos && Array.isArray(updatedData.photos)) {
@@ -2062,7 +2097,13 @@ class DataService {
     }
 
     this.save();
-    const firestoreOk = await this.firestoreUpdate('farms', farmId, farm);
+    // เขียนเฉพาะ field ที่เปลี่ยนจริงและอยู่ใน allowlist — ห้ามเขียน farm object ทั้งก้อน
+    // เพราะ farm ใน memory อาจถูกเติม phone/lineId/internalCoordinates จาก private subcollection
+    const publicPatch: Record<string, unknown> = {};
+    for (const key of DataService.FARM_PUBLIC_UPDATABLE_FIELDS) {
+      if (key in updatedData) publicPatch[key] = (updatedData as any)[key];
+    }
+    const firestoreOk = await this.firestoreUpdate('farms', farmId, publicPatch);
     if (!firestoreOk && db && typeof window !== 'undefined') {
       throw new Error('ไม่สามารถบันทึกข้อมูลแปลงลง Firestore ได้ กรุณาตรวจสอบขนาดรูปภาพหรือการเชื่อมต่อ');
     }
