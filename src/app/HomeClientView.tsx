@@ -11,8 +11,7 @@ import {
   Sparkles, 
   ArrowRight, 
   HeartHandshake, 
-  Layers
-} from 'lucide-react';
+  Layers, BarChart3 } from 'lucide-react';
 
 interface HomeClientViewProps {
   initialProducts: Product[];
@@ -91,6 +90,14 @@ export default function HomeClientView({
               <span>ค้นหาแปลงกสิกรรม</span>
             </Link>
           </div>
+
+          <Link
+            href="/stats"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-800 hover:underline"
+          >
+            <BarChart3 className="w-4 h-4" aria-hidden />
+            <span>ดูสถิติเครือข่าย: สมาชิก แปลง และของดี ใน 15 อำเภอ</span>
+          </Link>
         </div>
       </section>
 

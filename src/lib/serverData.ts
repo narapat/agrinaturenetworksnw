@@ -1,5 +1,6 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { listTaxonomy } from '@/lib/taxonomyDefaults';
+import { computePublicStats, type PublicStats } from '@/lib/publicStats';
 import { 
   Farm, 
   Product, 
@@ -374,4 +375,17 @@ export async function getNewsServer(): Promise<NewsEvent[]> {
   }
 
   return newsList;
+}
+
+/**
+ * สถิติสาธารณะของเครือข่าย (หน้า /stats) — คืนเฉพาะตัวเลขสรุป ไม่ส่งข้อมูลรายแปลง/รายคนไปยัง client
+ * ใช้แหล่งข้อมูลเดียวกับหน้าแปลงและตลาดสาธารณะ เพื่อให้ตัวเลขตรงกัน
+ */
+export async function getPublicStatsServer(): Promise<PublicStats> {
+  const [approvedIds, farms, products] = await Promise.all([
+    getApprovedMemberIds(),
+    getPublicFarmsServer(),
+    getPublicProductsServer(),
+  ]);
+  return computePublicStats({ approvedMembers: approvedIds.size, farms, products });
 }
