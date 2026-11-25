@@ -32,6 +32,8 @@ export default function Header() {
   const pathname = usePathname();
   const { fontSize, setFontSize } = useFontSize();
   const [currentUser, setCurrentUser] = useState<MemberProfile | null>(null);
+  // อ่านจาก localStorage ได้หลัง mount เท่านั้น (ไม่งั้น HTML จากเซิร์ฟเวอร์ไม่ตรงกับในเบราว์เซอร์ -> React #418)
+  const [isAdminSession, setIsAdminSession] = useState(false);
   const [demoMembers, setDemoMembers] = useState<MemberProfile[]>([]);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showFontMenu, setShowFontMenu] = useState(false);
@@ -69,6 +71,7 @@ export default function Header() {
     const refreshHeaderUser = () => {
       const user = dataService.getCurrentUser();
       setCurrentUser(user);
+      setIsAdminSession(dataService.isAdminSession());
       setDemoMembers(dataService.getDemoMembers());
     };
 
@@ -336,13 +339,13 @@ export default function Header() {
                   />
                 ) : (
                   <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center font-bold text-[10px] sm:text-xs shrink-0">
-                    {dataService.isAdminSession() ? '🛡️' : 'ผช'}
+                    {isAdminSession ? '🛡️' : 'ผช'}
                   </div>
                 )}
                 <span className="text-xs sm:text-sm font-medium text-stone-800 max-w-[90px] lg:max-w-[120px] truncate hidden md:inline-block">
                   {currentUser 
                     ? currentUser.fullName.split(' ')[0] 
-                    : (dataService.isAdminSession() ? 'แอดมิน' : 'ผู้เข้าชม')}
+                    : (isAdminSession ? 'แอดมิน' : 'ผู้เข้าชม')}
                 </span>
                 <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-stone-400 shrink-0 hidden sm:inline-block" />
               </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
@@ -35,8 +35,13 @@ interface DemoPersona {
 function DemoHubContent() {
   const router = useRouter();
   const { getTextClass, setFontSize } = useFontSize();
-  const currentUser = dataService.getCurrentUser();
-  const demoMembers = dataService.getDemoMembers();
+  // อ่านผู้ใช้จาก localStorage หลัง mount เท่านั้น (กัน HTML เซิร์ฟเวอร์ไม่ตรงกับเบราว์เซอร์)
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof dataService.getCurrentUser>>(null);
+  const [demoMembers, setDemoMembers] = useState<ReturnType<typeof dataService.getDemoMembers>>([]);
+  useEffect(() => {
+    setCurrentUser(dataService.getCurrentUser());
+    setDemoMembers(dataService.getDemoMembers());
+  }, []);
 
   const personas: Record<string, DemoPersona> = {
     guest: {
