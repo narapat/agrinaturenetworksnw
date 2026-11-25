@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, MapPin, Package, RefreshCw, Search, Trash2, UserX, Users } from 'lucide-react';
+import { Copy, ExternalLink, Link2, MapPin, Package, RefreshCw, Search, Trash2, UserX, Users, X } from 'lucide-react';
 import { adminApi } from '@/services/adminApi';
 import type { MemberProfile } from '@/types';
 import { DEFAULT_AVATAR } from '@/app/admin/_components/defaultAvatar';
@@ -21,6 +21,9 @@ export default function AdminApprovedMembersPage() {
   const [sort, setSort] = useState<SortKey>('newest');
   const [deleting, setDeleting] = useState<DeleteMemberTarget | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [linkFor, setLinkFor] = useState<{ member: MemberProfile; url: string; expiresAt: number } | null>(null);
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const showFeedback = (type: 'success' | 'error', text: string) => {
     setFeedback({ type, text });
@@ -67,6 +70,36 @@ export default function AdminApprovedMembersPage() {
     if (ok) showFeedback('success', `ระงับ "${member.fullName}" แล้ว (ดูได้ที่แท็บไม่อนุมัติ / คัดออก)`);
   };
 
+  const isUnlinked = (m: MemberProfile) => !m.ownerUid && !m.lineUserId;
+  const unlinkedCount = rows.filter((r) => isUnlinked(r.member)).length;
+
+  const createLink = async (member: MemberProfile) => {
+    if (isPasscodeSession) {
+      showFeedback('error', LINE_ONLY_HINT);
+      return;
+    }
+    setLinkBusyId(member.id);
+    try {
+      const { token, expiresAt } = await adminApi.createLinkCode(member.id);
+      setCopied(false);
+      setLinkFor({ member, url: `${window.location.origin}/member/link?t=${token}`, expiresAt });
+    } catch (e: any) {
+      showFeedback('error', e?.message || 'สร้างลิงก์ไม่สำเร็จ');
+    } finally {
+      setLinkBusyId(null);
+    }
+  };
+
+  const copyLink = async () => {
+    if (!linkFor) return;
+    try {
+      await navigator.clipboard.writeText(linkFor.url);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   const openDelete = (member: MemberProfile) => {
     if (isPasscodeSession) {
       showFeedback('error', LINE_ONLY_HINT);
@@ -99,6 +132,11 @@ export default function AdminApprovedMembersPage() {
           <p className="text-xs text-stone-500 mt-0.5">
             ระงับชั่วคราวได้ด้วย &quot;ไม่อนุมัติ&quot; · การลบถาวรต้องเข้าสู่ระบบด้วย LINE
           </p>
+          {unlinkedCount > 0 && (
+            <p className="text-xs text-amber-800 mt-1 font-bold">
+              ⚠️ ยังไม่ผูก LINE {unlinkedCount} คน — คนกลุ่มนี้เข้าสู่ระบบไม่ได้จนกว่าจะผูกบัญชี
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -179,7 +217,14 @@ export default function AdminApprovedMembersPage() {
                   }}
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-stone-900 truncate">{member.fullName}</p>
+                  <p className="font-bold text-stone-900 truncate flex items-center gap-2">
+                    <span className="truncate">{member.fullName}</span>
+                    {isUnlinked(member) && (
+                      <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+                        ยังไม่ผูก LINE
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-stone-600 truncate">
                     แปลง: {farm?.farmName || 'ยังไม่มีแปลง'}
                     {farmCount > 1 ? ` (+${farmCount - 1})` : ''}
@@ -210,6 +255,18 @@ export default function AdminApprovedMembersPage() {
                     ดูหน้าแปลง <ExternalLink className="w-3 h-3" />
                   </Link>
                 )}
+                {isUnlinked(member) && (
+                  <button
+                    type="button"
+                    onClick={() => createLink(member)}
+                    disabled={linkBusyId !== null || isPasscodeSession}
+                    title={isPasscodeSession ? LINE_ONLY_HINT : 'สร้างลิงก์ให้สมาชิกเข้าสู่ระบบด้วย LINE แล้วผูกกับบัญชีนี้'}
+                    className="px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100 text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Link2 className="w-3.5 h-3.5" />
+                    {linkBusyId === member.id ? 'กำลังสร้าง…' : 'สร้างลิงก์ผูกบัญชี'}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleSuspend(member)}
@@ -233,6 +290,47 @@ export default function AdminApprovedMembersPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {linkFor && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="link-dialog-title">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2 id="link-dialog-title" className="font-bold text-stone-900">
+                ลิงก์ผูกบัญชีของ {linkFor.member.fullName}
+              </h2>
+              <button type="button" onClick={() => setLinkFor(null)} aria-label="ปิด" className="p-1 rounded-lg hover:bg-stone-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <ol className="text-sm text-stone-700 space-y-1 list-decimal pl-5">
+              <li>ส่งลิงก์นี้ให้ <b>{linkFor.member.fullName}</b> ทาง LINE (ส่งให้เจ้าตัวเท่านั้น)</li>
+              <li>เขาเปิดลิงก์ เข้าสู่ระบบด้วย LINE ของตัวเอง แล้วกด &quot;ยืนยันผูกบัญชี&quot;</li>
+              <li>หลังผูกแล้ว ป้าย &quot;ยังไม่ผูก LINE&quot; จะหายไปเมื่อรีเฟรชข้อมูล</li>
+            </ol>
+            <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 text-xs font-mono break-all select-all">{linkFor.url}</div>
+            <p className="text-xs text-stone-500">
+              ใช้ได้ครั้งเดียว หมดอายุ {new Date(linkFor.expiresAt).toLocaleString('th-TH')} · สร้างใหม่แล้วลิงก์เก่าใช้ไม่ได้
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={copyLink}
+                className="flex-1 py-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-sm font-bold inline-flex items-center justify-center gap-1.5"
+              >
+                <Copy className="w-4 h-4" /> {copied ? 'คัดลอกแล้ว' : 'คัดลอกลิงก์'}
+              </button>
+              <a
+                href={`https://line.me/R/share?text=${encodeURIComponent(`ลิงก์ผูกบัญชี LINE กับข้อมูลสมาชิกเครือข่ายกสิกรรมธรรมชาติ (ใช้ได้ครั้งเดียว): ${linkFor.url}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-sm font-bold text-center"
+              >
+                ส่งทาง LINE
+              </a>
+            </div>
+          </div>
+        </div>
       )}
 
       {deleting && (

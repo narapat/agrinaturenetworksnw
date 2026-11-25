@@ -79,6 +79,7 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
    - `nsw_current_user_v1` in localStorage is only a display cache. On load, `dataService.reconcileSessionWithServer()` resets it to guest when the server has no session (or one for another LINE account). A 5xx or network failure changes nothing.
    - Match a LINE user to a member **only** by the verified LINE user id (`ownerUid` / `lineUserId`). Never by display name, `lineId` or full name: anyone can set their LINE name to match someone else.
    - Logout must call `dataService.markLoggedOut()` first; it invalidates any login still in flight so it cannot log the user back in.
+   - Old members with no `ownerUid`/`lineUserId` are linked only through a one-time admin link: `/admin/members/approved` → "สร้างลิงก์ผูกบัญชี" (LINE admins only, 48 h, single use, only the SHA-256 hash is stored in `memberLinkCodes`) → the member opens `/member/link?t=…`, logs in with their own LINE, and `POST /api/member/link` binds the verified `sub` in one transaction. `scripts/link-member-line.mjs` is the manual fallback.
 
 ---
 

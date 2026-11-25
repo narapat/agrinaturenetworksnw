@@ -88,6 +88,11 @@ export const adminApi = {
   rejectMember: (memberId: string, reason?: string) =>
     adminFetch(`/api/admin/members/${enc(memberId)}`, { method: 'POST', body: { action: 'reject', reason } }),
   deleteMember: (memberId: string) => adminFetch(`/api/admin/members/${enc(memberId)}`, { method: 'DELETE' }),
+  /** ลิงก์ผูกบัญชี LINE ครั้งเดียว (48 ชม.) ให้สมาชิกเก่าที่ยังไม่เคยผูก — ต้องเข้าด้วย LINE */
+  createLinkCode: (memberId: string) =>
+    adminFetch<{ token: string; expiresAt: number; memberId: string }>(`/api/admin/members/${enc(memberId)}/link-code`, {
+      method: 'POST',
+    }),
 
   // ช่วยลงข้อมูล
   assistAddProduct: (body: {
