@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveLineUser } from '@/lib/lineIdToken';
 import { pickPrimaryMember } from '@/lib/primaryMember';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
-
-const getLineChannelId = (): string => {
-  if (process.env.LINE_CHANNEL_ID) {
-    return process.env.LINE_CHANNEL_ID.trim();
-  }
-  const liffId = process.env.NEXT_PUBLIC_LIFF_ID || process.env.LIFF_ID || '2011512009-Zjd5Loph';
-  if (liffId.includes('-')) {
-    return liffId.split('-')[0].trim();
-  }
-  return '';
-};
 
 /**
  * POST /api/member/register
@@ -30,58 +20,12 @@ const getLineChannelId = (): string => {
 export async function POST(req: NextRequest) {
   let currentOwnerUid: string | undefined;
   try {
-    // 1. ตรวจสอบ Authorization Header (Bearer LINE ID Token)
-    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: ต้องระบุ Authorization header แบบ Bearer <LINE_ID_TOKEN>' },
-        { status: 401 }
-      );
+    // 1-2. ตัวตนจาก LINE ID Token ที่ LINE ยืนยันแล้ว หรือ session cookie ของสมาชิก (ห้ามเชื่อ body)
+    const identity = await resolveLineUser(req);
+    if (!identity.ok) {
+      return NextResponse.json({ success: false, error: identity.reason }, { status: identity.status });
     }
-
-    const idToken = authHeader.substring(7).trim();
-    if (!idToken) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized: ไม่พบ ID Token' },
-        { status: 401 }
-      );
-    }
-
-    const channelId = getLineChannelId();
-    if (!channelId) {
-      return NextResponse.json(
-        { success: false, error: 'Server configuration error: LINE Channel ID is not configured' },
-        { status: 500 }
-      );
-    }
-
-    // 2. ยืนยัน Token กับ LINE OAuth2 API
-    const verifyRes = await fetch('https://api.line.me/oauth2/v2.1/verify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        id_token: idToken,
-        client_id: channelId,
-      }).toString(),
-    });
-
-    if (!verifyRes.ok) {
-      return NextResponse.json(
-        { success: false, error: 'LINE ID Token ไม่ถูกต้องหรือหมดอายุ' },
-        { status: 401 }
-      );
-    }
-
-    const tokenPayload = await verifyRes.json();
-    const ownerUid = tokenPayload?.sub;
-    if (!ownerUid || typeof ownerUid !== 'string' || !ownerUid.trim()) {
-      return NextResponse.json(
-        { success: false, error: 'ไม่พบ sub (LINE User ID) ใน Token' },
-        { status: 401 }
-      );
-    }
+    const ownerUid = identity.sub;
     currentOwnerUid = ownerUid;
 
     // 3. ตรวจสอบ Body และ Validate & Sanitize Input
@@ -170,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     const cleanFacePhotoUrl = typeof facePhotoUrl === 'string' && facePhotoUrl.trim()
       ? facePhotoUrl.trim()
-      : (tokenPayload.picture || '');
+      : (identity.picture || '');
 
     // 5. Idempotency Check ด้วย requestId
     if (cleanRequestId) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
-import { getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
+import { resolveLineUser } from '@/lib/lineIdToken';
 import { LINK_CODES_COLLECTION, hashLinkToken, isUnlinkedMember, isWellFormedLinkToken } from '@/lib/memberLink';
 
 export const dynamic = 'force-dynamic';
@@ -24,11 +24,10 @@ const fail = (status: number, code: string, message: string) =>
  *        registrations/{sub} (กันสมัครซ้ำ), ทำเครื่องหมายลิงก์ว่าใช้แล้ว และ audit log
  */
 export async function POST(req: NextRequest) {
-  const idToken = getBearerToken(req.headers);
-  if (!idToken) return fail(401, 'UNAUTHENTICATED', 'กรุณาเข้าสู่ระบบด้วย LINE ก่อน');
-  const verified = await verifyLineIdToken(idToken);
+  // LINE ID Token หรือ session cookie ของสมาชิก (ออกให้หลัง LINE ยืนยันแล้ว)
+  const verified = await resolveLineUser(req);
   if (!verified.ok) {
-    return fail(verified.status, 'UNAUTHENTICATED', verified.status === 401 ? 'การเข้าสู่ระบบ LINE หมดอายุ กรุณาเข้าสู่ระบบใหม่' : 'ระบบยืนยันตัวตนขัดข้อง');
+    return fail(verified.status, 'UNAUTHENTICATED', verified.status === 401 ? 'กรุณาเข้าสู่ระบบด้วย LINE ก่อน' : 'ระบบยืนยันตัวตนขัดข้อง');
   }
   const sub = verified.sub;
 

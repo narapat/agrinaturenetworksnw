@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { Firestore } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebaseAdmin';
-import { getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
+import { resolveLineUser } from '@/lib/lineIdToken';
 import { ValidationError, optString, reqEnum, reqImage, reqNumber, reqString, safeId } from '@/lib/adminRoute';
 import { PRODUCT_STATUSES, productCategoryName } from '@/lib/taxonomy';
 import { loadTaxonomyItem } from '@/lib/taxonomyDefaults';
@@ -138,13 +138,10 @@ async function rescueOne(db: Firestore, ownerUid: string, raw: Record<string, an
  * ผลลัพธ์ต่อรายการ: created | exists | deleted | rejected (ทิ้งจากคิวได้) | error (เก็บไว้ลองใหม่)
  */
 export async function POST(req: NextRequest) {
-  const token = getBearerToken(req.headers);
-  if (!token) {
-    return NextResponse.json({ success: false, message: 'ต้องเข้าสู่ระบบด้วย LINE' }, { status: 401 });
-  }
-  const verified = await verifyLineIdToken(token);
+  const verified = await resolveLineUser(req);
   if (!verified.ok) {
-    return NextResponse.json({ success: false, message: verified.reason }, { status: verified.status });
+    const message = verified.status === 401 && !req.headers.get('authorization') ? 'ต้องเข้าสู่ระบบด้วย LINE' : verified.reason;
+    return NextResponse.json({ success: false, message }, { status: verified.status });
   }
 
   const db = getAdminDb();

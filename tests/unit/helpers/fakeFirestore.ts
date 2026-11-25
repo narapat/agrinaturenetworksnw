@@ -116,6 +116,14 @@ class FakeBatch {
     this.ops.push(() => this.store.docs.delete(ref.path));
     return this;
   }
+  /** เหมือน Firestore จริง: ล้มเหลวถ้ามีเอกสารอยู่แล้ว */
+  create(ref: FakeDocRef, data: Data) {
+    this.ops.push(() => {
+      if (this.store.docs.has(ref.path)) throw new Error(`ALREADY_EXISTS: ${ref.path}`);
+      this.store._set(ref.path, data);
+    });
+    return this;
+  }
   async commit() {
     if (this.store.failNextCommit) {
       this.store.failNextCommit = false;

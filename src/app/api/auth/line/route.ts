@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebaseAdminAuth';
-import { createMemberSessionToken, memberCookieOptions } from '@/lib/memberSession';
+import {
+  MEMBER_COOKIE_NAME,
+  createMemberSessionToken,
+  memberCookieOptions,
+  verifyMemberSessionToken,
+} from '@/lib/memberSession';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +38,30 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const { idToken } = body;
+
+    // ทางที่ 2: ไม่มี ID Token ที่ยังใช้ได้ (LINE เก็บ token เดิมที่หมดอายุไว้ในเบราว์เซอร์)
+    // แต่เบราว์เซอร์ยังมี session cookie ที่เซิร์ฟเวอร์ออกให้หลัง LINE ยืนยันแล้ว -> ออก Firebase token จาก session นั้น
+    // (ไม่ต่ออายุ cookie: session หมดอายุตามเวลาเดิม แล้วต้องล็อกอิน LINE ใหม่)
+    if ((!idToken || typeof idToken !== 'string') && body?.useSession === true) {
+      const session = verifyMemberSessionToken(req.cookies.get(MEMBER_COOKIE_NAME)?.value);
+      if (!session) {
+        return NextResponse.json(
+          { success: false, code: 'SESSION_EXPIRED', message: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบด้วย LINE อีกครั้ง' },
+          { status: 401 }
+        );
+      }
+      const adminAuth = getAdminAuth();
+      if (!adminAuth) {
+        return NextResponse.json(
+          { success: false, message: 'ระบบยืนยันตัวตนเซิร์ฟเวอร์ขัดข้อง กรุณาติดต่อผู้ดูแลระบบ' },
+          { status: 500 }
+        );
+      }
+      const isAdmin = getAdminLineUserIds().includes(session.sub);
+      const role = isAdmin ? 'admin' : 'member';
+      const customToken = await adminAuth.createCustomToken(session.sub, { role, admin: isAdmin, lineUserId: session.sub });
+      return NextResponse.json({ success: true, customToken, userId: session.sub, role, via: 'session' });
+    }
 
     if (!idToken || typeof idToken !== 'string') {
       return NextResponse.json(
