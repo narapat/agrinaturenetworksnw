@@ -1,18 +1,16 @@
 import type { Metadata } from 'next';
 import { getFarmByIdServer, getPublicFarmsServer } from '@/lib/serverData';
 
+// คำนวณ metadata (ชื่อ/รูปสำหรับแชร์) ใหม่เป็นระยะ ไม่ค้างตั้งแต่ตอน build
+export const revalidate = 180;
+
 export async function generateStaticParams() {
   try {
     const farms = await getPublicFarmsServer();
     return farms.map((f) => ({ farmId: f.id }));
   } catch {
-    return [
-      { farmId: 'farm-001' },
-      { farmId: 'farm-002' },
-      { farmId: 'farm-003' },
-      { farmId: 'farm-1788900219588' },
-      { farmId: 'farm-1788935859777' },
-    ];
+    // ไม่สร้างหน้าล่วงหน้าจากข้อมูลตัวอย่าง — หน้าจะถูกสร้างเมื่อมีผู้เปิดครั้งแรก
+    return [];
   }
 }
 

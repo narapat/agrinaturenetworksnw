@@ -1,16 +1,16 @@
 import type { Metadata } from 'next';
 import { getProductByIdServer, getPublicProductsServer } from '@/lib/serverData';
 
+// คำนวณ metadata (ชื่อ/รูปสำหรับแชร์) ใหม่เป็นระยะ ไม่ค้างตั้งแต่ตอน build
+export const revalidate = 180;
+
 export async function generateStaticParams() {
   try {
     const products = await getPublicProductsServer();
     return products.map((p) => ({ productId: p.id }));
   } catch {
-    return [
-      { productId: 'prod-001' },
-      { productId: 'prod-002' },
-      { productId: 'prod-003' },
-    ];
+    // ไม่สร้างหน้าล่วงหน้าจากข้อมูลตัวอย่าง — หน้าจะถูกสร้างเมื่อมีผู้เปิดครั้งแรก
+    return [];
   }
 }
 

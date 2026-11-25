@@ -15,15 +15,16 @@ import {
   UserRole,
   hasAdminRole,
 } from '@/types';
+import { INITIAL_CATEGORY_TAGS, INITIAL_PRACTICE_TAGS } from '@/data/mockData';
+import { ADMIN_PLACEHOLDER_MEMBER_ID, demoSeed, isDemoId, isDemoMode, withoutDemo } from '@/lib/demoMode';
 import {
-  INITIAL_MEMBERS,
-  INITIAL_FARMS,
-  INITIAL_PRODUCTS,
-  INITIAL_CATEGORY_TAGS,
-  INITIAL_PRACTICE_TAGS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_NEWS,
-} from '@/data/mockData';
+  CACHE_KEYS,
+  enqueuePendingProduct,
+  migrateLegacyCache,
+  readPendingUploads,
+  replaceWithRemote,
+  writePendingUploads,
+} from './localCache';
 import { db } from './firebase';
 import { 
   collection, 
@@ -38,16 +39,8 @@ import {
 } from 'firebase/firestore';
 
 // Local Storage Keys
-const STORAGE_KEYS = {
-  MEMBERS: 'nsw_members_v1',
-  FARMS: 'nsw_farms_v1',
-  PRODUCTS: 'nsw_products_v1',
-  CATEGORIES: 'nsw_categories_v1',
-  PRACTICES: 'nsw_practices_v1',
-  LOGS: 'nsw_audit_logs_v1',
-  NEWS: 'nsw_news_v1',
-  CURRENT_USER: 'nsw_current_user_v1',
-};
+// ดู localCache.ts — เปลี่ยนรูปแบบแคชให้เพิ่มเวอร์ชันที่นั่น (แคชรุ่นเก่าจะถูกล้างอัตโนมัติ)
+const STORAGE_KEYS = CACHE_KEYS;
 
 // รายชื่อบัญชีทดสอบระบบ (Demo Profiles) เท่านั้น - ห้ามแสดงสมาชิกจริงที่ลงทะเบียนใหม่
 export const DEMO_MEMBER_IDS = [
@@ -77,26 +70,36 @@ class DataService {
   }
 
   private init() {
+    // ข้อมูลตัวอย่างใช้เฉพาะ Demo Mode (Production: มีแค่บัญชีตัวแทนแอดมิน ไม่มีแปลง/ผลผลิต/ข่าวตัวอย่าง)
+    const seed = demoSeed();
     if (typeof window === 'undefined') {
-      this.members = [...INITIAL_MEMBERS];
-      this.farms = [...INITIAL_FARMS];
-      this.products = [...INITIAL_PRODUCTS];
+      this.members = [...seed.members];
+      this.farms = [...seed.farms];
+      this.products = [...seed.products];
       this.categories = [...INITIAL_CATEGORY_TAGS];
       this.practices = [...INITIAL_PRACTICE_TAGS];
-      this.auditLogs = [...INITIAL_AUDIT_LOGS];
-      this.news = [...INITIAL_NEWS];
+      this.auditLogs = [...seed.logs];
+      this.news = [...seed.news];
       return;
     }
 
     try {
+      // ล้างแคชรุ่นเก่า (v1) ครั้งเดียว — เก็บแปลง/ผลผลิตที่เป็นของผู้ใช้คนนี้เข้าคิวรอส่งก่อน
+      const migration = migrateLegacyCache(localStorage);
+      if (migration.migrated) {
+        console.info(
+          `[cache] ล้างแคชรุ่นเก่าแล้ว (เก็บเข้าคิวรอส่ง: แปลง ${migration.rescuedFarms}, ผลผลิต ${migration.rescuedProducts})`
+        );
+      }
+
       const storedMembers = localStorage.getItem(STORAGE_KEYS.MEMBERS);
-      this.members = storedMembers ? JSON.parse(storedMembers) : [...INITIAL_MEMBERS];
+      this.members = storedMembers ? JSON.parse(storedMembers) : [...seed.members];
 
       const storedFarms = localStorage.getItem(STORAGE_KEYS.FARMS);
-      this.farms = storedFarms ? JSON.parse(storedFarms) : [...INITIAL_FARMS];
+      this.farms = storedFarms ? JSON.parse(storedFarms) : [...seed.farms];
 
       const storedProducts = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
-      this.products = storedProducts ? JSON.parse(storedProducts) : [...INITIAL_PRODUCTS];
+      this.products = storedProducts ? JSON.parse(storedProducts) : [...seed.products];
 
       const storedCategories = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
       this.categories = storedCategories ? JSON.parse(storedCategories) : [...INITIAL_CATEGORY_TAGS];
@@ -105,10 +108,19 @@ class DataService {
       this.practices = storedPractices ? JSON.parse(storedPractices) : [...INITIAL_PRACTICE_TAGS];
 
       const storedLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
-      this.auditLogs = storedLogs ? JSON.parse(storedLogs) : [...INITIAL_AUDIT_LOGS];
+      this.auditLogs = storedLogs ? JSON.parse(storedLogs) : [...seed.logs];
 
       const storedNews = localStorage.getItem(STORAGE_KEYS.NEWS);
-      this.news = storedNews ? JSON.parse(storedNews) : [...INITIAL_NEWS];
+      this.news = storedNews ? JSON.parse(storedNews) : [...seed.news];
+
+      // กันข้อมูลตัวอย่างหลุดมาจากแคช (เมื่อปิด Demo Mode)
+      this.members = withoutDemo('members', this.members).concat(
+        seed.members.filter((sm) => !this.members.some((m) => m.id === sm.id))
+      );
+      this.farms = withoutDemo('farms', this.farms);
+      this.products = withoutDemo('products', this.products);
+      this.news = withoutDemo('news', this.news);
+      this.auditLogs = withoutDemo('logs', this.auditLogs);
 
       const storedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
       if (storedUser) {
@@ -140,7 +152,7 @@ class DataService {
       }
 
       // Ensure standard products exist
-      for (const initProd of INITIAL_PRODUCTS) {
+      for (const initProd of seed.products) {
         if (!this.products.some((p) => p.id === initProd.id)) {
           this.products.push(initProd);
         }
@@ -154,7 +166,7 @@ class DataService {
       }
 
       // Ensure farm-admin exists so admin has their own farm
-      for (const initFarm of INITIAL_FARMS) {
+      for (const initFarm of seed.farms) {
         const existing = this.farms.find((f) => f.id === initFarm.id);
         if (!existing) {
           this.farms.push(initFarm);
@@ -188,7 +200,7 @@ class DataService {
       }
 
       // Ensure all news have status field properly initialized and new sample events exist
-      for (const initN of INITIAL_NEWS) {
+      for (const initN of seed.news) {
         const existing = this.news.find((n) => n.id === initN.id);
         if (!existing) {
           this.news.push(initN);
@@ -205,12 +217,12 @@ class DataService {
       }, 300);
     } catch (e) {
       console.error('Error loading data from localStorage', e);
-      this.members = [...INITIAL_MEMBERS];
-      this.farms = [...INITIAL_FARMS];
-      this.products = [...INITIAL_PRODUCTS];
+      this.members = [...seed.members];
+      this.farms = [...seed.farms];
+      this.products = [...seed.products];
       this.categories = [...INITIAL_CATEGORY_TAGS];
-      this.auditLogs = [...INITIAL_AUDIT_LOGS];
-      this.news = [...INITIAL_NEWS];
+      this.auditLogs = [...seed.logs];
+      this.news = [...seed.news];
     }
   }
 
@@ -318,6 +330,9 @@ class DataService {
   private async syncWithFirestore() {
     if (typeof window === 'undefined' || !db || this.isFirestoreSynced) return;
 
+    // ชุดไหนดึงจากเซิร์ฟเวอร์สำเร็จบ้าง (ใช้ตัดสินว่าประมวลผลคิวรอส่งได้หรือยัง)
+    const synced = { members: false, farms: false, products: false, remoteProductIds: new Set<string>() };
+
     try {
       // 1. ซิงค์ Members (สำคัญที่สุดสำหรับระบบแอดมินและสมาชิก)
       try {
@@ -325,19 +340,21 @@ class DataService {
         const remoteMembers = !membersSnap.empty ? membersSnap.docs.map((d) => d.data() as MemberProfile) : [];
         const remoteMemMap = new Map(remoteMembers.map((m) => [m.id, m]));
 
-        this.members = this.members.map((localM) => {
-          const remoteM = remoteMemMap.get(localM.id);
-          if (!remoteM) return localM;
-          // ความปลอดภัย: Cloud Firestore เป็น Single Source of Truth สำหรับสถานะสมาชิก
-          // ไม่ดันสถานะ approved จาก local cache ขึ้น Firestore เองเด็ดขาด
-          return { ...localM, ...remoteM };
-        });
-
-        for (const rm of remoteMembers) {
-          if (!this.members.some((m) => m.id === rm.id)) {
-            this.members.push(rm);
-          }
-        }
+        // Server เป็นแหล่งความจริง: แทนที่ทั้งชุด (ไม่ผสาน) — สมาชิกที่ถูกลบบนเซิร์ฟเวอร์จะหายจากเครื่องด้วย
+        // คงไว้เฉพาะบัญชีตัวแทนแอดมิน (และบัญชีตัวอย่างเมื่อเปิด Demo Mode)
+        // บัญชีของผู้ใช้เอง: เก็บข้อมูลส่วนตัวในเครื่องไว้ (เอกสารบนเซิร์ฟเวอร์ไม่มีเบอร์โทร/LINE ID)
+        const localById = new Map(this.members.map((m) => [m.id, m]));
+        const keepMembers = this.members.filter(
+          (m) => m.id === ADMIN_PLACEHOLDER_MEMBER_ID || (isDemoMode() && isDemoId('members', m.id))
+        );
+        this.members = replaceWithRemote(
+          withoutDemo('members', remoteMembers).map((rm) => {
+            const local = rm.id === this.currentUserId ? localById.get(rm.id) : undefined;
+            return local ? { ...local, ...rm } : rm;
+          }),
+          keepMembers
+        );
+        synced.members = true;
 
         // สำหรับ Admin: ดึงข้อมูล Subcollection private/pii ของผู้สมัครสถานะ pending
         // เพื่อให้เห็นข้อมูลส่วนบุคคลในการพิจารณาอนุมัติ (เบอร์โทร, LINE ID, ประวัติการอบรม, รูปหน้าจริง)
@@ -360,50 +377,8 @@ class DataService {
           );
         }
 
-        // ===================================================================
-        // 🌟 AUTO-RESCUE: ตรวจจับสมาชิกที่สมัครไว้ในเครื่อง (LocalStorage) 
-        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เฉพาะสถานะ pending เท่านั้น)
-        // ซิงค์ผ่าน Server API เมื่อมี LINE ID Token
-        // ===================================================================
-        const unuploadedMembers = this.members.filter(
-          (m) => !DEMO_MEMBER_IDS.includes(m.id) && m.status === 'pending' && !remoteMemMap.has(m.id)
-        );
-
-        if (unuploadedMembers.length > 0 && typeof window !== 'undefined') {
-          try {
-            const { liffService } = await import('./liffService');
-            const token = liffService.getIdToken();
-            if (token) {
-              for (const localM of unuploadedMembers) {
-                const relatedFarm = this.farms.find((f) => f.id === localM.farmId || f.memberId === localM.id);
-                try {
-                  console.log(`[Auto-Rescue via Server] Syncing unuploaded local member ${localM.id} (${localM.fullName}) via POST /api/member/register...`);
-                  await this.registerNewMember({
-                    fullName: localM.fullName,
-                    facePhotoUrl: localM.facePhotoUrl || '',
-                    farmName: relatedFarm?.farmName || localM.farmName || 'แปลงกสิกรรมธรรมชาติ',
-                    tagline: relatedFarm?.tagline,
-                    story: relatedFarm?.story || '',
-                    district: relatedFarm?.district || 'เมืองนครสวรรค์',
-                    subdistrict: relatedFarm?.subdistrict || 'เมือง',
-                    phone: localM.phone || '',
-                    lineId: localM.lineId || '',
-                    lineUserId: localM.lineUserId,
-                    isPublicPhone: localM.isPublicPhone ?? false,
-                    isPublicLine: localM.isPublicLine ?? true,
-                    practices: relatedFarm?.practices || ['กสิกรรมธรรมชาติ'],
-                    coordinates: relatedFarm?.internalCoordinates,
-                    trainingCourse: localM.trainingCourse,
-                    trainingLocation: localM.trainingLocation,
-                    photos: relatedFarm?.photos,
-                  }, token);
-                } catch (rescueErr) {
-                  console.error(`[Auto-Rescue via Server] Failed to rescue member ${localM.id}:`, rescueErr);
-                }
-              }
-            }
-          } catch {}
-        }
+        // หมายเหตุ: ไม่ "สมัครให้ใหม่" อัตโนมัติจากข้อมูลในเครื่องอีกต่อไป
+        // (เดิมทำให้ผู้สมัครที่แอดมินลบไปแล้วถูกส่งกลับขึ้นระบบเอง) — การสมัครทำผ่าน /api/member/register เท่านั้น
       } catch (err) {
         console.warn('Firestore sync [members] notice:', err);
       }
@@ -449,73 +424,12 @@ class DataService {
           }
         }
 
-        if (remoteFarms.length > 0) {
-          const remoteFarmMap = new Map(remoteFarms.map((f) => [f.id, f]));
-          const initialFarmIds = new Set(INITIAL_FARMS.map((f) => f.id));
-
-          // ===================================================================
-          // 🌟 AUTO-RESCUE FARMS: ตรวจจับแปลงที่สร้างไว้ในเครื่อง (LocalStorage)
-          // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น สร้างขณะออฟไลน์ หรือเน็ตหลุด)
-          // ซิงค์ขึ้น Cloud Firestore อัตโนมัติทันที เพื่อไม่ให้ข้อมูลแปลงสูญหาย
-          // ===================================================================
-          const unuploadedFarms = this.farms.filter(
-            (f) => !initialFarmIds.has(f.id) && 
-                   !remoteFarmMap.has(f.id) && 
-                   this.members.some((m) => m.id === f.memberId || m.farmId === f.id)
-          );
-
-          if (unuploadedFarms.length > 0 && typeof window !== 'undefined') {
-            try {
-              const { liffService } = await import('./liffService');
-              const token = liffService.getIdToken();
-              if (token) {
-                for (const localF of unuploadedFarms) {
-                  if (!localF.memberId) continue;
-                  try {
-                    console.log(`[Auto-Rescue via Server] Syncing unuploaded local farm ${localF.id} (${localF.farmName}) via POST /api/farm/create...`);
-                    await this.createFarm(localF.memberId, {
-                      farmName: localF.farmName,
-                      tagline: localF.tagline,
-                      story: localF.story,
-                      district: localF.district,
-                      subdistrict: localF.subdistrict,
-                      photos: localF.photos,
-                      practices: localF.practices,
-                      coordinates: localF.internalCoordinates,
-                      phone: localF.phone,
-                      lineId: localF.lineId,
-                      isPublicPhone: localF.isPublicPhone,
-                      isPublicLine: localF.isPublicLine,
-                    }, token);
-                  } catch (fErr) {
-                    console.error(`[Auto-Rescue via Server] Failed to rescue farm ${localF.id}:`, fErr);
-                  }
-                }
-              }
-            } catch {}
-          }
-
-          // จุดสำคัญ: ผสานข้อมูลจริงจาก Cloud Firestore กับข้อมูลในเครื่อง
-          this.farms = this.farms.map((localF) => {
-            const remoteF = remoteFarmMap.get(localF.id);
-            if (!remoteF) return localF;
-
-            // ตรวจสอบกรณีรูปถ่ายแปลง: ถ้าในเครื่องมีรูปจริงแต่ remote ยังไม่มีรูป ให้ซิงค์รูปขึ้น cloud และคงรูปไว้
-            const hasLocalPhotos = localF.photos && localF.photos.length > 0 && !localF.photos[0].includes('unsplash');
-            const hasRemotePhotos = remoteF.photos && remoteF.photos.length > 0 && !remoteF.photos[0].includes('unsplash');
-            if (hasLocalPhotos && !hasRemotePhotos) {
-              this.firestoreUpdate('farms', localF.id, { photos: localF.photos });
-              return { ...this.normalizeFarm(remoteF), photos: localF.photos };
-            }
-
-            return this.normalizeFarm(remoteF);
-          });
-
-          for (const rf of remoteFarms) {
-            if (!this.farms.some((f) => f.id === rf.id)) {
-              this.farms.push(rf);
-            }
-          }
+        {
+          // Server เป็นแหล่งความจริง: แทนที่ทั้งชุด (แม้เซิร์ฟเวอร์จะว่าง) — แปลงที่ถูกลบจะหายจากเครื่องด้วย
+          // ไม่มี Auto-Rescue แบบเทียบ "มีในเครื่องแต่ไม่มีบนเซิร์ฟเวอร์" อีกต่อไป (ดูคิวรอส่งใน processPendingUploads)
+          const keepFarms = isDemoMode() ? this.farms.filter((f) => isDemoId('farms', f.id)) : [];
+          this.farms = replaceWithRemote(withoutDemo('farms', remoteFarms), keepFarms).map((f) => this.normalizeFarm(f));
+          synced.farms = true;
 
           // สำหรับ Admin: ดึงข้อมูลติดต่อและพิกัดภายในจาก subcollection private/contact ของแปลง
           if (this.isAdminSession()) {
@@ -555,74 +469,17 @@ class DataService {
         const productsSnap = await getDocs(collection(db, 'products'));
         const remoteProds = !productsSnap.empty ? productsSnap.docs.map((d) => d.data() as Product) : [];
         const remoteProdMap = new Map(remoteProds.map((p) => [p.id, p]));
-        const initialProdIds = new Set(INITIAL_PRODUCTS.map((p) => p.id));
-
-        // ===================================================================
-        // 🌟 AUTO-RESCUE PRODUCTS: ตรวจจับผลผลิตที่สร้างไว้ในเครื่อง (LocalStorage) 
-        // แต่ยังไม่เคยส่งขึ้น Cloud Firestore (เช่น เพิ่มขณะเน็ตหลุด) ดันขึ้นอัตโนมัติ
-        // ===================================================================
-        const unuploadedProducts = this.products.filter(
-          (p) => !initialProdIds.has(p.id) && 
-                 !remoteProdMap.has(p.id) && 
-                 this.farms.some((f) => f.id === p.farmId)
-        );
-
-        for (const localP of unuploadedProducts) {
-          try {
-            console.log(`[Auto-Rescue] Syncing unuploaded local product ${localP.id} (${localP.title}) to Cloud Firestore...`);
-            let safeImages = localP.images || [];
-            if (safeImages.length > 0 && typeof window !== 'undefined') {
-              const processedImages: string[] = [];
-              for (const img of safeImages) {
-                if (img && img.startsWith('data:image/') && img.length > 70000) {
-                  try {
-                    const comp = await this.compressDataUrlSafe(img, 800, 0.75);
-                    processedImages.push(comp);
-                  } catch {
-                    processedImages.push(img);
-                  }
-                } else {
-                  processedImages.push(img);
-                }
-              }
-              safeImages = processedImages;
-            }
-
-            const farm = this.farms.find((f) => f.id === localP.farmId);
-            const ownerUid = localP.ownerUid || farm?.ownerUid || '';
-            const productToUpload: Product = {
-              ...localP,
-              ownerUid: ownerUid,
-              images: safeImages,
-            };
-
-            await this.firestoreSet('products', productToUpload.id, productToUpload);
-            remoteProdMap.set(productToUpload.id, productToUpload);
-            console.log(`[Auto-Rescue] Successfully uploaded local product ${productToUpload.id} to Firestore!`);
-          } catch (pErr) {
-            console.error(`[Auto-Rescue] Error uploading local product ${localP.id} to Firestore:`, pErr);
-          }
-        }
-
-        if (remoteProds.length > 0) {
-          // ข้อมูลสินค้าจริงจาก Cloud Firestore ผสานกับข้อมูลในเครื่อง
-          this.products = this.products.map((localP) => {
-            const remoteP = remoteProdMap.get(localP.id);
-            return remoteP ? remoteP : localP;
-          });
-          for (const rp of remoteProds) {
-            if (!this.products.some((p) => p.id === rp.id)) {
-              this.products.push(rp);
-            }
-          }
-        } else {
-          for (const initProd of INITIAL_PRODUCTS) {
-            if (!this.products.some((p) => p.id === initProd.id)) {
-              this.products.push(initProd);
-            }
-            this.firestoreSet('products', initProd.id, initProd);
-          }
-        }
+        void remoteProdMap;
+        // Server เป็นแหล่งความจริง: แทนที่ทั้งชุด — ผลผลิตที่ถูกลบจะหายจากเครื่องด้วย
+        // คงไว้: ผลผลิตในคิวรอส่งของผู้ใช้เอง (ให้เจ้าของยังเห็นระหว่างรอ) และผลผลิตตัวอย่างเมื่อเปิด Demo Mode
+        // ไม่เขียนข้อมูลตัวอย่างลง Firestore จากเบราว์เซอร์อีกต่อไป
+        const keepProducts = [
+          ...(isDemoMode() ? this.products.filter((p) => isDemoId('products', p.id)) : []),
+          ...readPendingUploads(localStorage).products,
+        ];
+        this.products = replaceWithRemote(withoutDemo('products', remoteProds), keepProducts);
+        synced.products = true;
+        synced.remoteProductIds = new Set(remoteProds.map((p) => p.id));
       } catch (err) {
         console.warn('Firestore sync [products] notice:', err);
       }
@@ -728,14 +585,8 @@ class DataService {
       // 5. ซิงค์ Audit Logs (ประวัติความโปร่งใส)
       try {
         const logsSnap = await getDocs(collection(db, 'auditLogs'));
-        if (!logsSnap.empty) {
-          const remoteLogs = logsSnap.docs.map((d) => d.data() as AuditLog);
-          for (const rl of remoteLogs) {
-            if (!this.auditLogs.some((l) => l.id === rl.id)) {
-              this.auditLogs.push(rl);
-            }
-          }
-        }
+        // อ่านได้เฉพาะแอดมิน — ถ้าสำเร็จให้แทนที่ทั้งชุด
+        this.auditLogs = withoutDemo('logs', logsSnap.docs.map((d) => d.data() as AuditLog));
       } catch (err) {
         console.warn('Firestore sync [auditLogs] notice:', err);
       }
@@ -743,14 +594,19 @@ class DataService {
       // 6. ซิงค์ News (ข่าวสาร & เอามื้อสามัคคี)
       try {
         const newsSnap = await getDocs(collection(db, 'news'));
-        if (!newsSnap.empty) {
-          const remoteNews = newsSnap.docs.map((d) => d.data() as NewsEvent);
-          if (remoteNews.length > 0) {
-            this.news = remoteNews;
-          }
-        }
+        // แทนที่ทั้งชุดเสมอ (แม้ว่าง) — ข่าวที่ถูกลบจะหายจากเครื่องด้วย
+        const remoteNews = newsSnap.docs.map((d) => d.data() as NewsEvent);
+        const keepNews = isDemoMode() ? this.news.filter((n) => isDemoId('news', n.id)) : [];
+        this.news = replaceWithRemote(withoutDemo('news', remoteNews), keepNews);
       } catch (err) {
         console.warn('Firestore sync [news] notice:', err);
+      }
+
+      // 7. ส่งรายการในคิวรอส่ง (ถ้ามี) — ตรวจกับเซิร์ฟเวอร์ก่อนทุกรายการ
+      try {
+        await this.processPendingUploads(synced);
+      } catch (err) {
+        console.warn('Pending uploads notice:', err);
       }
 
       this.lastSyncTimestamp = Date.now();
@@ -762,6 +618,125 @@ class DataService {
     } catch (err) {
       console.warn('Firestore sync running in offline-first mode:', err);
     }
+  }
+
+  /**
+   * ส่งรายการในคิวรอส่งขึ้นเซิร์ฟเวอร์ (คิวมาจาก: ผลผลิตที่บันทึกตอนเน็ตหลุด และการล้างแคชรุ่นเก่าครั้งเดียว)
+   *
+   * ทำเฉพาะเมื่อดึงข้อมูลชุดที่เกี่ยวข้องจากเซิร์ฟเวอร์สำเร็จแล้ว และผู้ใช้เข้าสู่ระบบ LINE อยู่
+   * - แปลง: ส่งเฉพาะเมื่อบัญชีนี้ยังอยู่บนเซิร์ฟเวอร์และยังไม่มีแปลง (บัญชีถูกลบ = ทิ้ง, มีแปลงแล้ว = ใช้แปลงเดิม)
+   * - ผลผลิต: ส่งผ่าน POST /api/sync/rescue ซึ่งตรวจความเป็นเจ้าของ และไม่สร้างของที่เคยถูกลบไปแล้ว
+   * รายการที่ได้คำตอบชัดเจนจะออกจากคิว ส่วนที่ล้มเหลวชั่วคราวจะเก็บไว้ลองใหม่รอบหน้า
+   */
+  private async processPendingUploads(synced: {
+    members: boolean;
+    farms: boolean;
+    products: boolean;
+    remoteProductIds: Set<string>;
+  }): Promise<void> {
+    if (typeof window === 'undefined') return;
+    const pending = readPendingUploads(localStorage);
+    if (pending.farms.length === 0 && pending.products.length === 0) return;
+    if (!synced.members || !synced.farms || !synced.products) return;
+
+    const me = this.getCurrentUser();
+    const myUid = me?.ownerUid || me?.lineUserId;
+    if (!me || !myUid || isDemoId('members', me.id)) return;
+
+    const { liffService } = await import('./liffService');
+    const token = liffService.getIdToken();
+    if (!token) return;
+
+    const meOnServer = this.members.some((m) => m.id === me.id && !isDemoId('members', m.id));
+    const farmIdMap = new Map<string, string>();
+    const remainingFarms: Farm[] = [];
+
+    // 1. แปลง
+    for (const f of pending.farms) {
+      if (this.farms.some((x) => x.id === f.id)) {
+        farmIdMap.set(f.id, f.id);
+        continue;
+      }
+      if (!meOnServer) continue; // บัญชีถูกลบไปแล้ว — ทิ้ง
+      const existing = this.farms.find((x) => x.ownerUid === myUid || x.memberId === me.id);
+      if (existing) {
+        farmIdMap.set(f.id, existing.id);
+        continue;
+      }
+      try {
+        const created = await this.createFarm(
+          me.id,
+          {
+            farmName: f.farmName,
+            tagline: f.tagline,
+            story: f.story,
+            district: f.district,
+            subdistrict: f.subdistrict,
+            photos: f.photos,
+            practices: f.practices,
+            coordinates: f.internalCoordinates,
+            phone: f.phone,
+            lineId: f.lineId,
+            isPublicPhone: f.isPublicPhone,
+            isPublicLine: f.isPublicLine,
+          },
+          token
+        );
+        farmIdMap.set(f.id, created.id);
+      } catch (err) {
+        console.warn(`[pending] ส่งแปลง ${f.id} ไม่สำเร็จ จะลองใหม่ภายหลัง:`, err);
+        remainingFarms.push(f);
+      }
+    }
+
+    // 2. ผลผลิต
+    const remainingProducts: Product[] = [];
+    const toSend: Product[] = [];
+    for (const p of pending.products) {
+      const farmId = farmIdMap.get(p.farmId) || p.farmId;
+      if (synced.remoteProductIds.has(p.id)) continue; // มีบนเซิร์ฟเวอร์แล้ว — ออกจากคิว
+      if (remainingFarms.some((f) => f.id === p.farmId)) {
+        remainingProducts.push(p); // รอแปลงส่งสำเร็จก่อน
+        continue;
+      }
+      if (!this.farms.some((f) => f.id === farmId)) continue; // แปลงไม่อยู่แล้ว — ทิ้ง
+      toSend.push({ ...p, farmId, ownerUid: myUid });
+    }
+
+    if (toSend.length > 0) {
+      try {
+        const res = await fetch('/api/sync/rescue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ products: toSend.slice(0, 50) }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !Array.isArray(data?.results)) {
+          remainingProducts.push(...toSend); // ล้มเหลวทั้งคำขอ — เก็บไว้ทั้งหมด
+        } else {
+          const byId = new Map<string, { status: string; product?: Product }>(
+            data.results.map((r: { id: string; status: string; product?: Product }) => [r.id, r])
+          );
+          for (const p of toSend) {
+            const r = byId.get(p.id);
+            if (!r || r.status === 'error') remainingProducts.push(p);
+          }
+          // ผลผลิตที่สร้างสำเร็จ: ใช้ข้อมูลจากเซิร์ฟเวอร์, ที่ถูกปฏิเสธ/ถูกลบแล้ว: เอาออกจากเครื่อง
+          const finalIds = new Set(toSend.filter((p) => byId.get(p.id) && byId.get(p.id)!.status !== 'error').map((p) => p.id));
+          this.products = this.products.filter((x) => !finalIds.has(x.id));
+          for (const p of toSend) {
+            const r = byId.get(p.id);
+            if (r?.status === 'created' && r.product) this.products.unshift(r.product);
+          }
+          remainingProducts.push(...toSend.slice(50));
+        }
+      } catch (err) {
+        console.warn('[pending] ส่งผลผลิตไม่สำเร็จ จะลองใหม่ภายหลัง:', err);
+        remainingProducts.push(...toSend);
+      }
+    }
+
+    writePendingUploads(localStorage, { farms: remainingFarms, products: remainingProducts });
   }
 
   // ป้องกัน undefined values ซึ่งทำให้ Firestore error
@@ -854,7 +829,11 @@ class DataService {
             actorName: log.performedByAdminName || undefined,
             targetId: log.targetMemberId || log.targetFarmName || undefined,
             details: log.details,
-            metadata: { logId: log.id, timestamp: log.timestamp },
+            metadata: {
+              ...((log as AuditLog & { metadata?: Record<string, unknown> }).metadata || {}),
+              logId: log.id,
+              timestamp: log.timestamp,
+            },
           }),
         });
         if (!res.ok) {
@@ -1224,6 +1203,11 @@ class DataService {
     // ป้องกันความปลอดภัย: อนุญาตให้สลับเฉพาะบัญชีทดสอบหรือ guest เท่านั้น ห้ามสลับไปยังบัญชีสมาชิกจริง
     if (userId !== 'guest' && !DEMO_MEMBER_IDS.includes(userId)) {
       console.warn('Security: Cannot switch to non-demo member account via demo switcher');
+      return;
+    }
+    // ปิด Demo Mode: สลับได้เฉพาะ guest และบัญชีตัวแทนแอดมิน (ใช้โดยหน้าแอดมินเมื่อเข้าด้วยรหัสผ่านสำรอง)
+    if (userId !== 'guest' && userId !== ADMIN_PLACEHOLDER_MEMBER_ID && !isDemoMode()) {
+      console.warn('Demo Mode is disabled');
       return;
     }
     if (userId !== 'guest') {
@@ -1890,7 +1874,11 @@ class DataService {
     };
     this.products.unshift(newProduct);
     this.save();
-    await this.firestoreSet('products', newProduct.id, newProduct);
+    const uploaded = await this.firestoreSet('products', newProduct.id, newProduct);
+    if (!uploaded && typeof window !== 'undefined') {
+      // ส่งไม่สำเร็จ (เช่น เน็ตหลุด): เก็บเข้าคิวรอส่ง จะส่งให้อัตโนมัติเมื่อเชื่อมต่อได้
+      enqueuePendingProduct(localStorage, newProduct);
+    }
 
     await this.logActivity(
       'create_product',
@@ -2013,6 +2001,10 @@ class DataService {
     const initialLen = this.products.length;
     this.products = this.products.filter((p) => p.id !== productId);
     if (this.products.length !== initialLen) {
+      if (typeof window !== 'undefined') {
+        const pending = readPendingUploads(localStorage);
+        writePendingUploads(localStorage, { ...pending, products: pending.products.filter((p) => p.id !== productId) });
+      }
       this.save();
       await this.firestoreDelete('products', productId);
 
@@ -2022,6 +2014,7 @@ class DataService {
         'delete_product',
         `ลบผลผลิต: "${prodToDelete?.title || productId}"`,
         {
+          metadata: { productId },
           targetMemberId: currentU?.id,
           targetMemberName: currentU?.fullName,
           targetFarmName: farm?.farmName || prodToDelete?.farmName,
@@ -2478,6 +2471,8 @@ class DataService {
       targetFarmName?: string;
       actorId?: string;
       actorName?: string;
+      /** ข้อมูลประกอบที่ server ใช้ตรวจสอบภายหลัง เช่น { productId } ของผลผลิตที่ลบ */
+      metadata?: Record<string, unknown>;
     }
   ): Promise<void> {
     const currentUser = this.getCurrentUser();
@@ -2495,6 +2490,7 @@ class DataService {
       details,
       timestamp: new Date().toLocaleString('th-TH'),
     };
+    if (extra?.metadata) (newLog as AuditLog & { metadata?: Record<string, unknown> }).metadata = extra.metadata;
     await this.recordAuditLog(newLog);
   }
 

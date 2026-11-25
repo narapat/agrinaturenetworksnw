@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService, DEMO_MEMBER_IDS } from '@/services/dataService';
 import { MemberProfile, hasAdminRole } from '@/types';
+import { isDemoMode } from '@/lib/demoMode';
 import { 
   ArrowLeft, 
   Sparkles, 
@@ -31,7 +32,7 @@ interface DemoPersona {
   caution?: string;
 }
 
-export default function DemoHubPage() {
+function DemoHubContent() {
   const router = useRouter();
   const { getTextClass, setFontSize } = useFontSize();
   const currentUser = dataService.getCurrentUser();
@@ -353,4 +354,25 @@ export default function DemoHubPage() {
 
     </div>
   );
+}
+
+/**
+ * บัญชีทดสอบระบบใช้ได้เฉพาะเมื่อเปิด NEXT_PUBLIC_DEMO_MODE=true
+ * (Production ไม่มีข้อมูลตัวอย่าง จึงไม่มีบัญชีให้สลับ)
+ */
+export default function DemoHubPage() {
+  if (!isDemoMode()) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center space-y-3">
+        <h1 className="text-2xl font-black text-stone-900">โหมดทดสอบระบบปิดอยู่</h1>
+        <p className="text-sm text-stone-600">
+          เว็บไซต์นี้แสดงข้อมูลจริงของเครือข่ายเท่านั้น จึงไม่มีบัญชีทดสอบให้เลือก
+        </p>
+        <Link href="/" className="inline-block mt-2 px-5 py-2.5 rounded-xl bg-brand-600 text-white font-bold text-sm">
+          กลับหน้าแรก
+        </Link>
+      </div>
+    );
+  }
+  return <DemoHubContent />;
 }
