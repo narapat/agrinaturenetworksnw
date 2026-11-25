@@ -64,9 +64,84 @@ class DataService {
   private currentUserId: string = 'guest'; // ค่าเริ่มต้น: ผู้เข้าชมทั่วไป (หากเข้าผ่าน LINE ยังไม่เป็นสมาชิก)
   private isFirestoreSynced: boolean = false;
   private syncPromise: Promise<void> | null = null;
+  /** เพิ่มทุกครั้งที่ออกจากระบบ: งานล็อกอินที่ยังค้างอยู่ (เริ่มก่อน logout) จะไม่ถูกนำมาใช้ */
+  private authEpoch: number = 0;
 
   constructor() {
     this.init();
+    this.listenForOtherTabs();
+  }
+
+  /** แท็บอื่นล็อกอิน/ออกจากระบบ: อัปเดตผู้ใช้ปัจจุบันในแท็บนี้ด้วย ไม่ให้แท็บเก่าเขียนสถานะเดิมทับกลับ */
+  private listenForOtherTabs() {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+    window.addEventListener('storage', (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEYS.CURRENT_USER) return;
+      const next = e.newValue || 'guest';
+      if (next === this.currentUserId) return;
+      if (next === 'guest') this.authEpoch++;
+      this.currentUserId = next;
+      this.dispatchDataUpdated();
+    });
+  }
+
+  private isExplicitlyLoggedOut(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('nsw_user_logged_out') === 'true' || sessionStorage.getItem('nsw_user_logged_out') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  getAuthEpoch(): number {
+    return this.authEpoch;
+  }
+
+  /**
+   * ออกจากระบบฝั่ง client: กลับเป็น guest และยกเลิกงานล็อกอินที่ยังค้างอยู่
+   * (ไม่แตะ admin session; ผู้เรียกจัดการเอง)
+   */
+  markLoggedOut(): void {
+    this.authEpoch++;
+    this.currentUserId = 'guest';
+    this.save();
+  }
+
+  /**
+   * ตรวจกับเซิร์ฟเวอร์ว่าเบราว์เซอร์นี้ยังล็อกอินอยู่จริงหรือไม่
+   * localStorage เป็นแค่แคช: ถ้าไม่มี session หรือ session เป็นของ LINE คนอื่น ให้กลับเป็น guest
+   * - เครือข่ายล่ม / เซิร์ฟเวอร์ตรวจไม่ได้ (5xx): ไม่เปลี่ยนอะไร
+   * - ไม่แตะบัญชีตัวแทนแอดมิน (passcode) และบัญชีเดโม
+   */
+  async reconcileSessionWithServer(): Promise<'kept' | 'logged_out' | 'skipped'> {
+    if (typeof window === 'undefined' || typeof fetch !== 'function') return 'skipped';
+    const uid = this.currentUserId;
+    if (!uid || uid === 'guest' || uid === ADMIN_PLACEHOLDER_MEMBER_ID) return 'skipped';
+    if (isDemoMode() && isDemoId('members', uid)) return 'skipped';
+
+    const epoch = this.authEpoch;
+    let res: Response;
+    try {
+      res = await fetch('/api/auth/session', { cache: 'no-store', credentials: 'same-origin' });
+    } catch {
+      return 'skipped';
+    }
+    // ระหว่างรอ มีการล็อกอิน/ออกจากระบบเกิดขึ้นแล้ว: ผลนี้ล้าสมัย
+    if (epoch !== this.authEpoch || uid !== this.currentUserId) return 'skipped';
+    if (res.status >= 500) return 'skipped';
+
+    let data: { authenticated?: boolean; lineUserId?: string } = { authenticated: false };
+    if (res.ok) {
+      data = await res.json().catch(() => ({ authenticated: false }));
+    }
+
+    const me = this.members.find((m) => m.id === uid);
+    const sameLineUser = !!data.lineUserId && !!me && (me.ownerUid === data.lineUserId || me.lineUserId === data.lineUserId);
+    if (data.authenticated && (sameLineUser || !me)) return 'kept';
+
+    this.markLoggedOut();
+    return 'logged_out';
   }
 
   private init() {
@@ -1263,40 +1338,15 @@ class DataService {
     pictureUrl?: string;
     statusMessage?: string;
   }): { member: MemberProfile | null; isRegistered: boolean } {
-    // 1. ค้นหาสมาชิกเดิมที่มี ownerUid หรือ lineUserId ตรงกัน
-    let member = this.members.find((m) => (m.ownerUid && m.ownerUid === profile.userId) || (m.lineUserId && m.lineUserId === profile.userId));
-
-    // 2. ถ้าไม่พบ ลองค้นหาด้วย lineId หรือชื่อ (Smart & Partial Matching)
-    if (!member && profile.displayName) {
-      const cleanName = profile.displayName.trim().toLowerCase();
-      const firstWord = cleanName.split(/[\s/\\_-]+/)[0].trim();
-
-      member = this.members.find((m) => {
-        const mLineId = (m.lineId || '').trim().toLowerCase();
-        const mFullName = (m.fullName || '').trim().toLowerCase();
-
-        // ตรงกันเป๊ะ
-        if (mLineId && (mLineId === cleanName || mLineId === profile.userId)) return true;
-        if (mFullName && mFullName === cleanName) return true;
-
-        // Smart Partial Matching:
-        // ตัวอย่าง: LINE ชื่อ "Narapat /E24YVI" แต่ในระบบกรอก lineId: "narapat"
-        if (firstWord && firstWord.length >= 3) {
-          if (mLineId && (mLineId === firstWord || cleanName.startsWith(mLineId))) return true;
-          if (mFullName && (mFullName === firstWord || cleanName.startsWith(mFullName))) return true;
-        }
-
-        return false;
-      });
+    // ผู้ใช้กดออกจากระบบแล้ว: ห้ามล็อกอินกลับเองจากงานที่ค้างอยู่
+    if (this.isExplicitlyLoggedOut()) {
+      return { member: null, isRegistered: false };
     }
 
-    // 3. หากยังไม่พบ แต่ในเครื่องนี้มีผู้ใช้ปัจจุบันที่สมัครไว้แล้ว (currentUserId) และยังไม่มี ownerUid หรือ lineUserId
-    if (!member && this.currentUserId && !DEMO_MEMBER_IDS.includes(this.currentUserId)) {
-      const activeMember = this.members.find((m) => m.id === this.currentUserId);
-      if (activeMember && !activeMember.ownerUid && !activeMember.lineUserId) {
-        member = activeMember;
-      }
-    }
+    // จับคู่สมาชิกด้วย LINE User ID ที่ยืนยันแล้วเท่านั้น (ownerUid / lineUserId)
+    // ห้ามจับคู่ด้วยชื่อที่แสดงใน LINE, lineId หรือชื่อ-นามสกุล: ใครก็ตั้งชื่อ LINE ให้ตรงกับคนอื่นได้
+    // แล้วจะได้ล็อกอินเป็นสมาชิกคนนั้นและยึดบัญชี (เขียน ownerUid ทับ)
+    const member = this.members.find((m) => (m.ownerUid && m.ownerUid === profile.userId) || (m.lineUserId && m.lineUserId === profile.userId));
 
     if (member) {
       let changed = false;
@@ -1368,8 +1418,14 @@ class DataService {
     pictureUrl?: string;
     statusMessage?: string;
   }): Promise<{ member: MemberProfile | null; isRegistered: boolean }> {
+    const epoch = this.authEpoch;
+    const notRegistered = { member: null, isRegistered: false };
+    const cancelled = () => epoch !== this.authEpoch || this.isExplicitlyLoggedOut();
+
     // 1. รอซิงค์ข้อมูลจาก Cloud Firestore ให้สมบูรณ์ก่อน
     await this.ensureFirestoreSync();
+    // ระหว่างรอ ผู้ใช้กดออกจากระบบ: ห้ามล็อกอินกลับ
+    if (cancelled()) return notRegistered;
 
     // 2. ตรวจสอบในหน่วยความจำ
     const res = this.loginWithLineProfile(profile);
@@ -1388,6 +1444,7 @@ class DataService {
           q = query(collection(db, 'members'), where('lineUserId', '==', profile.userId));
           snap = await getDocs(q);
         }
+        if (cancelled()) return notRegistered;
         if (!snap.empty) {
           const remoteMem = snap.docs[0].data() as MemberProfile;
           if (!remoteMem.ownerUid) {
@@ -1414,50 +1471,6 @@ class DataService {
             window.dispatchEvent(new Event('nsw_data_updated'));
           }
           return { member: remoteMem, isRegistered: true };
-        }
-
-        // 3.2 ค้นหาด้วย Smart lineId (เช่น narapat)
-        if (profile.displayName) {
-          const cleanName = profile.displayName.trim().toLowerCase();
-          const firstWord = cleanName.split(/[\s/\\_-]+/)[0].trim();
-          if (firstWord && firstWord.length >= 3) {
-            const qLineId = query(collection(db, 'members'), where('lineId', '==', firstWord));
-            const snapLineId = await getDocs(qLineId);
-            if (!snapLineId.empty) {
-              const remoteMem = snapLineId.docs[0].data() as MemberProfile;
-              remoteMem.ownerUid = profile.userId;
-              remoteMem.lineUserId = profile.userId;
-              if (this.isAdminSession() && !hasAdminRole(remoteMem)) {
-                remoteMem.roles = Array.from(new Set<UserRole>([...(remoteMem.roles || []), 'member', 'admin']));
-                remoteMem.role = 'admin';
-              }
-              if (!this.members.some((m) => m.id === remoteMem.id)) {
-                this.members.unshift(remoteMem);
-              } else {
-                const idx = this.members.findIndex((m) => m.id === remoteMem.id);
-                if (idx !== -1) {
-                  this.members[idx].ownerUid = profile.userId;
-                  this.members[idx].lineUserId = profile.userId;
-                  if (this.isAdminSession()) {
-                    this.members[idx].role = 'admin';
-                    this.members[idx].roles = remoteMem.roles;
-                  }
-                }
-              }
-              this.currentUserId = remoteMem.id;
-              this.save();
-              this.firestoreUpdate('members', remoteMem.id, { 
-                ownerUid: profile.userId,
-                lineUserId: profile.userId,
-                role: remoteMem.role,
-                roles: remoteMem.roles,
-              });
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new Event('nsw_data_updated'));
-              }
-              return { member: remoteMem, isRegistered: true };
-            }
-          }
         }
       } catch (err) {
         console.warn('Direct Firestore query notice:', err);

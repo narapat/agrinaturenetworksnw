@@ -14,7 +14,7 @@
     "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
-    "@line/liff": "^2.31.0",
+    "@line/liff": "^2.32.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "clsx": "^2.1.1",

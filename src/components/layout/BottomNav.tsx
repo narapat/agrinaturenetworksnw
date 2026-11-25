@@ -1,24 +1,46 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ShoppingBag, MapPin, Newspaper, User, Home } from 'lucide-react';
+import { dataService } from '@/services/dataService';
+import { ADMIN_PLACEHOLDER_MEMBER_ID } from '@/lib/demoMode';
+
+/** สมาชิกที่ล็อกอินอยู่ (ไม่รวมบัญชีตัวแทนแอดมินที่เข้าด้วยรหัสผ่าน เพราะไม่มีแปลง) */
+function readIsMemberLoggedIn(): boolean {
+  const user = dataService.getCurrentUser();
+  return !!user && user.id !== 'guest' && user.id !== ADMIN_PLACEHOLDER_MEMBER_ID;
+}
 
 export default function BottomNav() {
   const pathname = usePathname();
+  // เริ่มจาก false ให้ตรงกับ HTML จากเซิร์ฟเวอร์ แล้วค่อยอ่านสถานะจริงหลัง mount (กัน hydration mismatch)
+  const [isMemberLoggedIn, setIsMemberLoggedIn] = useState(false);
 
+  useEffect(() => {
+    const refresh = () => setIsMemberLoggedIn(readIsMemberLoggedIn());
+    refresh();
+    window.addEventListener('nsw_data_updated', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('nsw_data_updated', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  // "แปลงฉัน" แสดงเฉพาะเมื่อล็อกอิน และอยู่ลำดับแรก
   const navItems = [
+    ...(isMemberLoggedIn ? [{ href: '/member/dashboard', label: 'แปลงฉัน', icon: User }] : []),
     { href: '/', label: 'หน้าแรก', icon: Home },
     { href: '/catalog', label: 'ของดี', icon: ShoppingBag },
     { href: '/farms', label: 'แปลง', icon: MapPin },
     { href: '/news', label: 'ข่าวสาร', icon: Newspaper },
-    { href: '/member/dashboard', label: 'แปลงฉัน', icon: User },
   ];
 
   return (
     <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-stone-200/80 px-0.5 py-1.5 shadow-lg safe-area-bottom w-full max-w-full overflow-hidden">
-      <div className="grid grid-cols-5 w-full">
+      <div className={`grid ${navItems.length === 5 ? 'grid-cols-5' : 'grid-cols-4'} w-full`}>
         {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
           const Icon = item.icon;
