@@ -22,38 +22,42 @@ describe('LINE Profile Matching & Account Linking Tests', () => {
     expect(result.member?.id).toBe('mem-002');
   });
 
-  it('2. should match and link unlinked member by exact fullName', () => {
+  it('2. [Security] must NOT log in or link by matching the LINE display name to a full name', () => {
     const member = dataService.getMemberById('mem-003');
     expect(member).toBeDefined();
-    // Ensure no lineUserId yet
     member!.lineUserId = undefined;
+    member!.ownerUid = undefined;
 
     const result = dataService.loginWithLineProfile({
-      userId: 'U_NEW_LINE_ID_BOONCHOO',
+      userId: 'U_ATTACKER_SAME_NAME',
       displayName: member!.fullName,
     });
 
-    expect(result.isRegistered).toBe(true);
-    expect(result.member?.id).toBe('mem-003');
-    // Verify lineUserId was auto-linked!
-    expect(result.member?.lineUserId).toBe('U_NEW_LINE_ID_BOONCHOO');
+    expect(result.isRegistered).toBe(false);
+    expect(result.member).toBeNull();
+    expect(member!.lineUserId).toBeUndefined();
+    expect(member!.ownerUid).toBeUndefined();
+    expect(dataService.getCurrentUser()).toBeNull();
   });
 
-  it('3. should match via smart partial matching (e.g. "Name / CallSign")', () => {
+  it('3. [Security] must NOT take over an account whose lineId matches the first word of a LINE display name', () => {
     const member = dataService.getMemberById('mem-004');
     expect(member).toBeDefined();
-    member!.lineUserId = undefined;
     member!.lineId = 'chainarong';
+    member!.ownerUid = 'U_REAL_CHAINARONG';
+    member!.lineUserId = 'U_REAL_CHAINARONG';
 
-    // User's LINE name contains extra suffix or callsign
     const result = dataService.loginWithLineProfile({
-      userId: 'U_CHAINARONG_123',
+      userId: 'U_ATTACKER_123',
       displayName: 'chainarong / HS6XYZ',
     });
 
-    expect(result.isRegistered).toBe(true);
-    expect(result.member?.id).toBe('mem-004');
-    expect(result.member?.lineUserId).toBe('U_CHAINARONG_123');
+    expect(result.isRegistered).toBe(false);
+    expect(result.member).toBeNull();
+    // บัญชีจริงต้องไม่ถูกเขียนทับ
+    expect(member!.ownerUid).toBe('U_REAL_CHAINARONG');
+    expect(member!.lineUserId).toBe('U_REAL_CHAINARONG');
+    expect(dataService.getCurrentUser()).toBeNull();
   });
 
   it('4. should return isRegistered: false for unknown LINE account and set current user to guest', () => {
