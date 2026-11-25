@@ -88,6 +88,9 @@ ADMIN_PASSCODE=your_secret_passcode
 # Secret Key สุ่มยาวๆ สำหรับลงลายมือชื่อ HMAC Session Cookie
 ADMIN_SESSION_SECRET=your_super_secret_hmac_key_32chars
 
+# โหมดข้อมูลตัวอย่าง (แปลง/ผลผลิต/ข่าว/บัญชีทดสอบ) — เปิดเฉพาะเครื่องนักพัฒนาหรือ Preview ห้ามเปิดใน Production
+# NEXT_PUBLIC_DEMO_MODE=true
+
 # LINE User ID ของแอดมิน คั่นด้วยจุลภาค — แหล่งความจริงเดียวของสิทธิ์แอดมิน
 ADMIN_LINE_USER_IDS=U11111111111111111111111111111111
 ```

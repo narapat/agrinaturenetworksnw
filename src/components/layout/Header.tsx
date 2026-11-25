@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
+import { isDemoMode } from '@/lib/demoMode';
 import { liffService } from '@/services/liffService';
 import { MemberProfile, hasAdminRole, hasMemberRole } from '@/types';
 import { 
@@ -435,7 +436,8 @@ export default function Header() {
                       )}
                     </div>
 
-                    {/* Dedicated Demo Selector Link */}
+                    {/* Dedicated Demo Selector Link (เฉพาะ Demo Mode) */}
+                    {isDemoMode() && (
                     <div className="p-2 border-t border-stone-100">
                       <Link
                         href="/demo"
@@ -449,6 +451,7 @@ export default function Header() {
                         <ChevronRight className="w-3.5 h-3.5 text-stone-400" />
                       </Link>
                     </div>
+                    )}
                   </div>
                 </>
               )}
@@ -655,7 +658,8 @@ export default function Header() {
                   </button>
                 )}
 
-                {/* Dedicated Demo Page Link */}
+                {/* Dedicated Demo Page Link (เฉพาะ Demo Mode) */}
+                {isDemoMode() && (
                 <Link
                   href="/demo"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -667,6 +671,7 @@ export default function Header() {
                   </div>
                   <ChevronRight className="w-4 h-4 text-amber-600" />
                 </Link>
+                )}
 
                 {/* Logout Button if Logged In */}
                 {currentUser && (

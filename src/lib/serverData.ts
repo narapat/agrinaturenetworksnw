@@ -1,5 +1,6 @@
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { listTaxonomy } from '@/lib/taxonomyDefaults';
+import { isDemoId, isDemoMode } from '@/lib/demoMode';
 import { computePublicStats, type PublicStats } from '@/lib/publicStats';
 import { 
   Farm, 
@@ -90,23 +91,25 @@ export function sanitizeProductForPublic(prod: Product): Product {
  */
 async function getApprovedMemberIds(): Promise<Set<string>> {
   const db = getAdminDb();
+  const demoApproved = () =>
+    new Set(isDemoMode() ? INITIAL_MEMBERS.filter((m) => m.status === 'approved').map((m) => m.id) : []);
   if (!db) {
-    return new Set(INITIAL_MEMBERS.filter((m) => m.status === 'approved').map((m) => m.id));
+    return demoApproved();
   }
 
   try {
     const snap = await db.collection('members').where('status', '==', 'approved').get();
     const ids = new Set<string>();
-    snap.forEach((doc) => ids.add(doc.id));
-    
-    // หากฐานข้อมูล Cloud ยังไม่มีข้อมูล ให้เสริมด้วย Initial Members
-    if (ids.size === 0) {
-      INITIAL_MEMBERS.filter((m) => m.status === 'approved').forEach((m) => ids.add(m.id));
-    }
+    snap.forEach((doc) => {
+      // สมาชิกตัวอย่างที่เคยถูกเขียนลง Firestore ไม่นับ (เว้นแต่เปิด Demo Mode)
+      if (isDemoMode() || !isDemoId('members', doc.id)) ids.add(doc.id);
+    });
+    // ไม่เติมสมาชิกตัวอย่างเมื่อฐานข้อมูลว่าง (Production ต้องแสดงตามจริง)
+    if (ids.size === 0) return demoApproved();
     return ids;
   } catch (err) {
     console.warn('[ServerData] getApprovedMemberIds fallback:', err);
-    return new Set(INITIAL_MEMBERS.filter((m) => m.status === 'approved').map((m) => m.id));
+    return demoApproved();
   }
 }
 
@@ -144,7 +147,7 @@ export async function getPublicFarmsServer(district?: string): Promise<Farm[]> {
           const data = doc.data();
           // กรองเฉพาะแปลงที่เจ้าของเป็นสมาชิกที่ได้รับการอนุมัติ หรือมีสถานะ approved
           const isApproved = (data.memberId && approvedMemberIds.has(data.memberId)) || data.status === 'approved';
-          if (isApproved) {
+          if (isApproved && (isDemoMode() || !isDemoId('farms', doc.id))) {
             farms.push(sanitizeFarmForPublic({ ...data, id: doc.id } as Farm));
           }
         });
@@ -154,8 +157,8 @@ export async function getPublicFarmsServer(district?: string): Promise<Farm[]> {
     }
   }
 
-  // ถ้าใน Firestore ยังว่างหรือต่อไม่ได้ ให้ใช้ INITIAL_FARMS
-  if (farms.length === 0) {
+  // ข้อมูลตัวอย่างเฉพาะ Demo Mode เท่านั้น — Production แสดงตามจริง (ว่างก็คือว่าง)
+  if (farms.length === 0 && isDemoMode()) {
     farms = INITIAL_FARMS
       .filter((f) => f.memberId && approvedMemberIds.has(f.memberId))
       .map((f) => sanitizeFarmForPublic(f));
@@ -175,6 +178,7 @@ export async function getFarmByIdServer(id: string): Promise<Farm | null> {
   if (!id || typeof id !== 'string') return null;
   const decoded = decodeURIComponent(id).trim();
   const cleanId = decoded.replace(/"/g, '').trim();
+  if (!isDemoMode() && isDemoId('farms', cleanId)) return null;
 
   const db = getAdminDb();
   if (db) {
@@ -200,7 +204,7 @@ export async function getFarmByIdServer(id: string): Promise<Farm | null> {
     }
   }
 
-  const fallback = INITIAL_FARMS.find((f) => f.id === cleanId || f.id === id);
+  const fallback = isDemoMode() ? INITIAL_FARMS.find((f) => f.id === cleanId || f.id === id) : undefined;
   return fallback ? sanitizeFarmForPublic(fallback) : null;
 }
 
@@ -224,7 +228,10 @@ export async function getPublicProductsServer(filters?: {
       const approvedFarmIds = new Set<string>();
       farmsSnap.forEach((d) => {
         const data = d.data();
-        if ((data.memberId && approvedMemberIds.has(data.memberId)) || data.status === 'approved') {
+        if (
+          ((data.memberId && approvedMemberIds.has(data.memberId)) || data.status === 'approved') &&
+          (isDemoMode() || !isDemoId('farms', d.id))
+        ) {
           approvedFarmIds.add(d.id);
         }
       });
@@ -233,7 +240,8 @@ export async function getPublicProductsServer(filters?: {
       if (!snap.empty) {
         snap.forEach((doc) => {
           const data = doc.data() as Product;
-          if (data.status !== 'hidden' && (!data.farmId || approvedFarmIds.has(data.farmId))) {
+          const visible = data.status !== 'hidden' && (!data.farmId || approvedFarmIds.has(data.farmId));
+          if (visible && (isDemoMode() || !isDemoId('products', doc.id))) {
             products.push(sanitizeProductForPublic({ ...data, id: doc.id } as Product));
           }
         });
@@ -243,8 +251,8 @@ export async function getPublicProductsServer(filters?: {
     }
   }
 
-  // Fallback
-  if (products.length === 0) {
+  // ข้อมูลตัวอย่างเฉพาะ Demo Mode เท่านั้น
+  if (products.length === 0 && isDemoMode()) {
     const approvedFarmIds = new Set(
       INITIAL_FARMS.filter((f) => f.memberId && approvedMemberIds.has(f.memberId)).map((f) => f.id)
     );
@@ -273,6 +281,7 @@ export async function getPublicProductsServer(filters?: {
 export async function getProductByIdServer(id: string): Promise<Product | null> {
   if (!id || typeof id !== 'string') return null;
   const cleanId = id.trim().replace(/"/g, '');
+  if (!isDemoMode() && isDemoId('products', cleanId)) return null;
 
   const db = getAdminDb();
   if (db) {
@@ -289,7 +298,7 @@ export async function getProductByIdServer(id: string): Promise<Product | null> 
     }
   }
 
-  const fallback = INITIAL_PRODUCTS.find((p) => p.id === id || p.id === cleanId);
+  const fallback = isDemoMode() ? INITIAL_PRODUCTS.find((p) => p.id === id || p.id === cleanId) : undefined;
   return fallback ? sanitizeProductForPublic(fallback) : null;
 }
 
@@ -358,7 +367,7 @@ export async function getNewsServer(): Promise<NewsEvent[]> {
       if (!snap.empty) {
         snap.forEach((doc) => {
           const item = doc.data() as NewsEvent;
-          if (item.status !== 'hidden') {
+          if (item.status !== 'hidden' && (isDemoMode() || !isDemoId('news', doc.id))) {
             newsList.push(serializeData({ ...item, id: doc.id }));
           }
         });
@@ -368,7 +377,7 @@ export async function getNewsServer(): Promise<NewsEvent[]> {
     }
   }
 
-  if (newsList.length === 0) {
+  if (newsList.length === 0 && isDemoMode()) {
     newsList = INITIAL_NEWS
       .filter((n) => n.status !== 'hidden')
       .map((n) => serializeData(n));

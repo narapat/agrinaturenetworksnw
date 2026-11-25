@@ -76,7 +76,8 @@ class FakeQuery {
       if (!p.startsWith(prefix)) continue;
       if (p.slice(prefix.length).includes('/')) continue; // เฉพาะลูกตรง
       const ok = this.filters.every((f) => {
-        const v = data[f.field];
+        // รองรับ field แบบซ้อน เช่น 'metadata.productId' เหมือน Firestore จริง
+        const v = f.field.split('.').reduce((acc: any, k) => (acc == null ? undefined : acc[k]), data);
         if (f.op === '==') return v === f.value;
         if (f.op === 'array-contains') return Array.isArray(v) && v.includes(f.value);
         if (f.op === 'in') return Array.isArray(f.value) && f.value.includes(v);
