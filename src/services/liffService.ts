@@ -205,14 +205,25 @@ class LiffService {
     if (typeof window === 'undefined' || !this.liffInstance) return false;
     try {
       if (!this.liffInstance.isLoggedIn()) return false;
-      const idToken = this.liffInstance.getIDToken();
-      if (!idToken) return false;
+      // นอกแอป LINE ตัว SDK เก็บ ID Token เดิมไว้ ซึ่งหมดอายุเร็ว: ถ้าหมดแล้วอย่าส่งไป (เซิร์ฟเวอร์จะตอบ 401 แล้วขึ้นแบนเนอร์ผิดๆ)
+      // ให้เซิร์ฟเวอร์ใช้ session cookie ที่ออกให้หลัง LINE ยืนยันแล้วแทน
+      const idToken = this.getFreshIdToken();
+      const usingSession = !idToken;
 
       const res = await fetch('/api/auth/line', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
+        credentials: 'same-origin',
+        body: JSON.stringify(idToken ? { idToken } : { useSession: true }),
       });
+
+      // ไม่มีทั้ง token ที่ยังใช้ได้และ session: ไม่ใช่ฐานข้อมูลล่ม แค่ต้องล็อกอินใหม่
+      // (การตรวจ session ตอนเปิดหน้าจะพากลับเป็นผู้เยี่ยมชมเอง) — ไม่ขึ้นแบนเนอร์
+      if (usingSession && res.status === 401) {
+        this.authBridgeFailed = false;
+        this.authBridgeErrorMessage = '';
+        return false;
+      }
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -316,6 +327,17 @@ class LiffService {
 
   isLoggedIn(): boolean {
     return !!this.liffInstance && this.liffInstance.isLoggedIn();
+  }
+
+  /** ID Token ที่ยังไม่หมดอายุ (เผื่อเวลา 60 วินาที) หรือ null */
+  getFreshIdToken(): string | null {
+    const token = this.getIdToken();
+    if (!token) return null;
+    try {
+      const decoded = this.liffInstance?.getDecodedIDToken?.();
+      if (decoded?.exp && decoded.exp * 1000 < Date.now() + 60_000) return null;
+    } catch {}
+    return token;
   }
 
   getIdToken(): string | null {

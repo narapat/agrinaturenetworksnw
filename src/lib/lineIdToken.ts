@@ -26,7 +26,7 @@ export const getAdminLineUserIds = (): string[] => {
 };
 
 export type LineTokenResult =
-  | { ok: true; sub: string; name?: string }
+  | { ok: true; sub: string; name?: string; picture?: string }
   | { ok: false; status: 401 | 500; reason: string };
 
 /**
@@ -69,5 +69,37 @@ export async function verifyLineIdToken(idToken: string): Promise<LineTokenResul
     return { ok: false, status: 401, reason: 'ไม่พบ sub (LINE User ID) ใน Token' };
   }
 
-  return { ok: true, sub: sub.trim(), name: typeof payload?.name === 'string' ? payload.name : undefined };
+  return {
+    ok: true,
+    sub: sub.trim(),
+    name: typeof payload?.name === 'string' ? payload.name : undefined,
+    picture: typeof payload?.picture === 'string' ? payload.picture : undefined,
+  };
+}
+
+/**
+ * ตัวตนของผู้เรียก API ฝั่งสมาชิก:
+ * 1. Authorization: Bearer <LINE ID Token> ที่ LINE ยืนยันแล้ว
+ * 2. ถ้าไม่มี token หรือ token หมดอายุ (นอกแอป LINE ตัว SDK เก็บ token เดิมไว้ ซึ่งหมดอายุเร็ว)
+ *    ใช้ session cookie ของสมาชิกที่เซิร์ฟเวอร์ออกให้หลัง LINE ยืนยันแล้ว (ลงลายมือชื่อ มีวันหมดอายุ)
+ * ข้อความ error คงเดิมเพื่อไม่ให้หน้าเว็บ/เทสต์เดิมเปลี่ยนพฤติกรรม
+ */
+export async function resolveLineUser(req: { headers: Headers; cookies: { get(name: string): { value: string } | undefined } }): Promise<LineTokenResult & { via?: 'token' | 'session' }> {
+  const token = getBearerToken(req.headers);
+  let tokenResult: LineTokenResult | null = null;
+  if (token) {
+    tokenResult = await verifyLineIdToken(token);
+    if (tokenResult.ok) return { ...tokenResult, via: 'token' };
+    if (tokenResult.status === 500) return tokenResult;
+  }
+
+  try {
+    const { MEMBER_COOKIE_NAME, verifyMemberSessionToken } = await import('./memberSession');
+    const session = verifyMemberSessionToken(req.cookies.get(MEMBER_COOKIE_NAME)?.value);
+    if (session) return { ok: true, sub: session.sub, via: 'session' };
+  } catch {
+    // ยังไม่ได้ตั้ง ADMIN_SESSION_SECRET: ใช้ได้แค่ token
+  }
+
+  return tokenResult || { ok: false, status: 401, reason: 'Unauthorized: ต้องระบุ Authorization header แบบ Bearer <LINE_ID_TOKEN>' };
 }

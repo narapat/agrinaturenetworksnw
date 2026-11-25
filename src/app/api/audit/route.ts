@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { ADMIN_COOKIE_NAME, verifyAdminSessionToken } from '@/lib/adminSession';
-import { getAdminLineUserIds, getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
+import { getAdminLineUserIds, resolveLineUser } from '@/lib/lineIdToken';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +21,7 @@ type VerifiedActor = {
   actorRole: 'admin' | 'member';
   /** LINE User ID ที่ยืนยันแล้ว (null ถ้าแอดมินเข้าด้วย passcode อย่างเดียว) */
   actorUid: string | null;
-  authMethod: 'admin_session' | 'line_id_token';
+  authMethod: 'admin_session' | 'line_id_token' | 'member_session';
 };
 
 const MAX_ACTION = 64;
@@ -36,15 +36,17 @@ const MAX_METADATA_BYTES = 4000;
  * 2. Admin session cookie (HMAC) → role admin
  */
 async function resolveActor(req: NextRequest): Promise<VerifiedActor | { error: string; status: 401 | 500 }> {
-  const idToken = getBearerToken(req.headers);
-  if (idToken) {
-    const result = await verifyLineIdToken(idToken);
-    if (!result.ok) {
-      return { error: result.reason, status: result.status };
-    }
+  // LINE ID Token หรือ session cookie ของสมาชิก (ออกให้หลัง LINE ยืนยันแล้ว)
+  const result = await resolveLineUser(req);
+  if (result.ok) {
     const isAdmin = getAdminLineUserIds().includes(result.sub);
-    return { actorRole: isAdmin ? 'admin' : 'member', actorUid: result.sub, authMethod: 'line_id_token' };
+    return {
+      actorRole: isAdmin ? 'admin' : 'member',
+      actorUid: result.sub,
+      authMethod: result.via === 'session' ? 'member_session' : 'line_id_token',
+    };
   }
+  if (result.status === 500) return { error: result.reason, status: 500 };
 
   const session = verifyAdminSessionToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value);
   if (session) {

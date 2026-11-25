@@ -33,8 +33,9 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // สคริปต์ขนาดฟอนต์ใน <head> ตั้ง data-font-size/style บน <html> ก่อน React hydrate โดยตั้งใจ -> suppressHydrationWarning
   return (
-    <html lang="th" className="overflow-x-hidden max-w-full">
+    <html lang="th" className="overflow-x-hidden max-w-full" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
