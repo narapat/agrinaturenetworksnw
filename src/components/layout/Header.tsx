@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFontSize } from '@/context/FontSizeContext';
 import { dataService } from '@/services/dataService';
-import { isDemoMode } from '@/lib/demoMode';
+import { ADMIN_PLACEHOLDER_MEMBER_ID, isDemoMode } from '@/lib/demoMode';
 import { liffService } from '@/services/liffService';
 import { MemberProfile, hasAdminRole, hasMemberRole } from '@/types';
 import { 
@@ -136,12 +136,16 @@ export default function Header() {
     window.location.reload();
   };
 
+  // "แปลงของฉัน" แสดงเฉพาะสมาชิกที่ล็อกอินอยู่ (ไม่รวมบัญชีตัวแทนแอดมินที่เข้าด้วยรหัสผ่าน เพราะไม่มีแปลง)
+  // และอยู่ลำดับแรกของเมนู
+  const isMemberLoggedIn = !!currentUser && currentUser.id !== 'guest' && currentUser.id !== ADMIN_PLACEHOLDER_MEMBER_ID;
+
   // Navigation links for full desktop (clean without duplicate manual button)
   const desktopNavLinks = [
+    ...(isMemberLoggedIn ? [{ href: '/member/dashboard', label: 'แปลงของฉัน', icon: User }] : []),
     { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag },
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper },
-    { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User },
     ...(hasAdminRole(currentUser)
       ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, isBadge: true }] 
       : []),
@@ -149,13 +153,15 @@ export default function Header() {
 
   // Drawer links for hamburger menu (all links)
   const drawerLinks = [
+    ...(isMemberLoggedIn
+      ? [{ href: '/member/dashboard', label: 'แปลงของฉัน', icon: User, desc: 'จัดการผลผลิตและข้อมูลแปลง' }]
+      : []),
     { href: '/', label: 'หน้าแรก', icon: Home, desc: 'ตลาดและภาพรวมเครือข่าย' },
     { href: '/catalog', label: 'ของดีเครือข่าย', icon: ShoppingBag, desc: 'ผลผลิตอินทรีย์ 15 อำเภอ' },
     { href: '/farms', label: 'แปลงกสิกรรม', icon: MapPin, desc: 'ทำเนียบแปลงและศูนย์เรียนรู้' },
     { href: '/news', label: 'ข่าวสาร & เอามื้อ', icon: Newspaper, desc: 'กิจกรรมและตารางเอามื้อสามัคคี' },
     { href: '/stats', label: 'สถิติเครือข่าย', icon: BarChart3, desc: 'จำนวนสมาชิก แปลง และของดีรายอำเภอ' },
     { href: '/manual', label: 'คู่มือใช้งาน', icon: BookOpen, desc: 'วิธีใช้งานระบบและคู่มือออนไลน์' },
-    { href: '/member/dashboard', label: 'แปลงของฉัน', icon: User, desc: 'จัดการผลผลิตและข้อมูลแปลง' },
     ...(hasAdminRole(currentUser)
       ? [{ href: '/admin', label: 'ศูนย์แอดมิน', icon: ShieldCheck, desc: 'อนุมัติสมาชิกและตรวจสอบระบบ', isBadge: true }] 
       : []),

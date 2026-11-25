@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminAuth } from '@/lib/firebaseAdminAuth';
+import { createMemberSessionToken, memberCookieOptions } from '@/lib/memberSession';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,6 +80,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ตัวตนยืนยันกับ LINE แล้ว: ออก session cookie ของสมาชิก (เซิร์ฟเวอร์เป็นผู้ตัดสินว่าใครล็อกอินอยู่)
+    // ออกให้แม้ Firebase Admin จะใช้ไม่ได้ เพราะ session ไม่ได้ขึ้นกับ Firebase
+    const withSession = (res: NextResponse) => {
+      try {
+        const { token, payload } = createMemberSessionToken(lineUserId);
+        res.cookies.set(memberCookieOptions(token, Math.floor((payload.expiresAt - payload.issuedAt) / 1000)));
+      } catch (sessionErr) {
+        console.error('[LINE Auth] Could not issue member session cookie:', sessionErr);
+      }
+      return res;
+    };
+
     // 2. ตรวจสอบสิทธิ์ (Role / Custom Claims)
     const adminLineIds = getAdminLineUserIds();
     const isAdmin = adminLineIds.includes(lineUserId.trim());
@@ -94,20 +107,20 @@ export async function POST(req: NextRequest) {
     const adminAuth = getAdminAuth();
     if (!adminAuth) {
       console.error('[LINE Auth Bridge Error] Firebase Admin Auth is not configured or unavailable. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.');
-      return NextResponse.json(
+      return withSession(NextResponse.json(
         {
           success: false,
           error: 'Firebase Admin Auth is not configured or unavailable.',
           message: 'ระบบยืนยันตัวตนเซิร์ฟเวอร์ขัดข้อง กรุณาติดต่อผู้ดูแลระบบ',
         },
         { status: 500 }
-      );
+      ));
     }
 
     // 4. ออก Firebase Custom Token ด้วย Firebase Admin SDK
     const customToken = await adminAuth.createCustomToken(lineUserId, customClaims);
 
-    return NextResponse.json({
+    return withSession(NextResponse.json({
       success: true,
       customToken,
       configured: true,
@@ -115,7 +128,7 @@ export async function POST(req: NextRequest) {
       displayName: lineProfile.name,
       pictureUrl: lineProfile.picture,
       role,
-    });
+    }));
   } catch (err: any) {
     console.error('[LINE Auth Bridge Error]:', err);
     return NextResponse.json(

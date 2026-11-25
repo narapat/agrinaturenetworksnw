@@ -74,6 +74,12 @@ To ensure the safety of our farmers, protect user privacy, and prevent regressio
    - Production Build Check: `npm run build`
    - NEVER weaken rules or mock tests to bypass code issues; fix the underlying application code instead.
 
+10. **Member Login Is Decided by the Server**
+   - "Who is logged in" comes from the HTTP-only cookie `nsw_member_session` (signed, 7 days), issued by `POST /api/auth/line` only after LINE verifies the ID token. `GET /api/auth/session` answers it; `DELETE /api/auth/session` logs out.
+   - `nsw_current_user_v1` in localStorage is only a display cache. On load, `dataService.reconcileSessionWithServer()` resets it to guest when the server has no session (or one for another LINE account). A 5xx or network failure changes nothing.
+   - Match a LINE user to a member **only** by the verified LINE user id (`ownerUid` / `lineUserId`). Never by display name, `lineId` or full name: anyone can set their LINE name to match someone else.
+   - Logout must call `dataService.markLoggedOut()` first; it invalidates any login still in flight so it cannot log the user back in.
+
 ---
 
 ## ⚠️ Recognized Technical Debt (Documented for Future Phases)

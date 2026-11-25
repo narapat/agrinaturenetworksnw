@@ -39,6 +39,15 @@ class LiffService {
     this.initPromise = (async () => {
       try {
         this.isInitializing = true;
+
+        // 0. เซิร์ฟเวอร์เป็นผู้ตัดสินว่ายังล็อกอินอยู่หรือไม่ (session หมดอายุ / ออกจากระบบแล้ว -> กลับเป็น guest)
+        //    ทำก่อน LIFF เพราะ LIFF อาจโหลดไม่ขึ้น และต้องไม่ปล่อยให้แคชในเครื่องค้างสถานะล็อกอินไว้
+        try {
+          await dataService.reconcileSessionWithServer();
+        } catch (sessionErr) {
+          console.warn('Session check notice:', sessionErr);
+        }
+
         const liffModule = await import('@line/liff');
         const liff = liffModule.default;
 
@@ -247,59 +256,62 @@ class LiffService {
    */
   async logout(): Promise<void> {
     if (typeof window === 'undefined') return;
-    try {
-      this.authBridgeFailed = false;
-      this.authBridgeErrorMessage = '';
-      // 1. ตั้งสถานะ Explicit Logout
-      try {
-        localStorage.setItem('nsw_user_logged_out', 'true');
-        sessionStorage.setItem('nsw_user_logged_out', 'true');
-        sessionStorage.removeItem('nsw_line_profile');
-        sessionStorage.removeItem('nsw_auth_redirect');
-        // ล้างข้อมูลแคชที่อาจมีข้อมูลส่วนตัวในเครื่องสาธารณะ
-        localStorage.removeItem('nsw_members_v1');
-        localStorage.removeItem('nsw_admin_session');
-        localStorage.removeItem('nsw_current_user');
-      } catch {}
+    this.authBridgeFailed = false;
+    this.authBridgeErrorMessage = '';
+    this.currentProfile = null;
 
-      // 2. ออกจากระบบ Firebase Authentication
-      try {
-        const { signOut } = await import('firebase/auth');
-        const { auth } = await import('./firebase');
-        if (auth && auth.currentUser) {
+    // 1. ตั้งสถานะ Explicit Logout และกลับเป็น guest ทันที
+    //    (ยกเลิกงานล็อกอินที่ยังค้างอยู่ ไม่ให้มันตั้งผู้ใช้กลับมาหลังกดออก)
+    try {
+      localStorage.setItem('nsw_user_logged_out', 'true');
+      sessionStorage.setItem('nsw_user_logged_out', 'true');
+      sessionStorage.removeItem('nsw_line_profile');
+      sessionStorage.removeItem('nsw_auth_redirect');
+      localStorage.removeItem('nsw_members_v1');
+      localStorage.removeItem('nsw_admin_session');
+      localStorage.removeItem('nsw_current_user');
+    } catch {}
+    try {
+      dataService.markLoggedOut();
+      dataService.clearAdminSession();
+    } catch (e) {
+      console.warn('Local logout notice:', e);
+    }
+
+    // 2. ลบ session ฝั่งเซิร์ฟเวอร์ (สมาชิก + แอดมิน) รอให้เสร็จก่อนออกจากหน้า
+    await Promise.allSettled([
+      fetch('/api/auth/session', { method: 'DELETE', keepalive: true }),
+      fetch('/api/admin/auth', { method: 'DELETE', keepalive: true }),
+    ]);
+
+    // 3. ออกจากระบบ Firebase Authentication
+    //    รอให้ Firebase โหลดสถานะผู้ใช้เสร็จก่อน ไม่งั้น currentUser ยังเป็น null แล้วข้ามการ signOut ไป
+    try {
+      const { signOut } = await import('firebase/auth');
+      const { auth } = await import('./firebase');
+      if (auth) {
+        if (typeof auth.authStateReady === 'function') {
+          await auth.authStateReady();
+        }
+        if (auth.currentUser) {
           await signOut(auth);
         }
-      } catch (signOutErr) {
-        console.warn('Firebase Auth signOut notice:', signOutErr);
       }
-
-      // 3. ออกจากระบบ LINE LIFF SDK
-      if (this.liffInstance && this.liffInstance.isLoggedIn()) {
-        try {
-          this.liffInstance.logout();
-        } catch (liffErr) {
-          console.warn('LIFF logout notice:', liffErr);
-        }
-      }
-      this.currentProfile = null;
-
-      // 4. ส่งคำขอไปยังเซิร์ฟเวอร์เพื่อลบ HTTP-Only Cookie
-      try {
-        await fetch('/api/admin/auth', { method: 'DELETE', keepalive: true });
-      } catch {}
-
-      // 5. ล้างค่าใน local storage
-      dataService.clearAdminSession();
-      dataService.switchUser('guest');
-
-      // 6. นำทางกลับหน้าแรก
-      window.location.href = '/';
-    } catch (err) {
-      console.error('Error logging out:', err);
-      dataService.clearAdminSession();
-      dataService.switchUser('guest');
-      window.location.href = '/';
+    } catch (signOutErr) {
+      console.warn('Firebase Auth signOut notice:', signOutErr);
     }
+
+    // 4. ออกจากระบบ LINE LIFF SDK (ลบ token ของ LINE ที่เก็บในเบราว์เซอร์)
+    try {
+      if (this.liffInstance && this.liffInstance.isLoggedIn()) {
+        this.liffInstance.logout();
+      }
+    } catch (liffErr) {
+      console.warn('LIFF logout notice:', liffErr);
+    }
+
+    // 5. กลับหน้าแรก
+    window.location.replace('/');
   }
 
   isLoggedIn(): boolean {
