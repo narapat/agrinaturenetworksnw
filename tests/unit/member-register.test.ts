@@ -226,6 +226,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       const mockCollection = (colPath: string): any => ({
         path: colPath,
         doc: (docId: string) => mockDoc(`${colPath}/${docId}`),
+        where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
       });
 
       const mockDb = {
@@ -339,6 +340,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
           }
           if (colName === 'members') {
             return {
+              where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
               doc: vi.fn((id: string) => ({
                 get: vi.fn(async () => ({
                   exists: true,
@@ -439,6 +441,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       const mockCollection = (colPath: string): any => ({
         path: colPath,
         doc: (docId: string) => mockDoc(`${colPath}/${docId}`),
+        where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
       });
 
       const mockDb = {
@@ -566,6 +569,7 @@ describe('Server Registration API (POST /api/member/register) Tests', () => {
       const mockCollection = (colPath: string): any => ({
         path: colPath,
         doc: (docId: string) => mockDoc(`${colPath}/${docId}`),
+        where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
       });
 
       const mockDb = {

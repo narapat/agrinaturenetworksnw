@@ -11,6 +11,7 @@ import {
   safeId,
 } from '@/lib/adminRoute';
 import { buildAdminAuditDoc } from '@/lib/adminAudit';
+import { pickPrimaryMember } from '@/lib/primaryMember';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,19 +86,39 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     const member = await loadMember(db, memberId);
     const farms = await loadMemberFarms(db, member);
 
+    const ownerUids = new Set<string>(
+      [member.ownerUid, member.lineUserId, ...farms.map((f) => f.ownerUid)].filter(
+        (u): u is string => typeof u === 'string' && !!u
+      )
+    );
+
+    // สมาชิกคนอื่นที่ใช้ LINE เดียวกัน (ข้อมูลเก่าซ้ำ): เอกสาร registrations/{uid} ต้องย้ายไปชี้บัญชีหลักที่เหลือ ไม่ใช่ลบ
+    const othersByUid = new Map<string, Record<string, any>>();
+    for (const uid of Array.from(ownerUids)) {
+      const [a, b] = await Promise.all([
+        db.collection('members').where('ownerUid', '==', uid).get(),
+        db.collection('members').where('lineUserId', '==', uid).get(),
+      ]);
+      const others = [...a.docs, ...b.docs]
+        .filter((d) => d.id !== member.id)
+        .map((d): Record<string, any> & { id: string } => ({ ...(d.data() as Record<string, any>), id: d.id }));
+      const primary = pickPrimaryMember(others);
+      if (primary) othersByUid.set(uid, primary);
+    }
+
     // กันแอดมินลบบัญชีสมาชิกของตัวเองโดยไม่ตั้งใจ
-    if (actor.lineUserId && [member.ownerUid, ...farms.map((f) => f.ownerUid)].includes(actor.lineUserId)) {
-      throw new ValidationError('ไม่สามารถลบบัญชีสมาชิกของตัวเองได้');
+    // ยกเว้นใบสมัครที่ยังไม่อนุมัติซึ่งซ้ำกับบัญชีหลักของแอดมินเอง (เช่น ใบสมัครทดสอบ) — บัญชีหลักยังอยู่
+    if (actor.lineUserId && ownerUids.has(actor.lineUserId)) {
+      const isDuplicateApplication = member.status !== 'approved' && othersByUid.has(actor.lineUserId);
+      if (!isDuplicateApplication) {
+        throw new ValidationError('ไม่สามารถลบบัญชีสมาชิกของตัวเองได้');
+      }
     }
 
     const productSnaps = await Promise.all(
       farms.map((f) => db.collection('products').where('farmId', '==', f.id).get())
     );
     const productIds = productSnaps.flatMap((s) => s.docs.map((d) => d.id));
-
-    const ownerUids = new Set<string>(
-      [member.ownerUid, ...farms.map((f) => f.ownerUid)].filter((u): u is string => typeof u === 'string' && !!u)
-    );
 
     const memberRef = db.collection('members').doc(member.id);
     const refs = [
@@ -108,10 +129,12 @@ export async function DELETE(req: NextRequest, { params }: Params) {
         return [farmRef, farmRef.collection('private').doc('contact')];
       }),
       ...productIds.map((id) => db.collection('products').doc(id)),
-      ...Array.from(ownerUids).map((uid) => db.collection('registrations').doc(uid)),
+      ...Array.from(ownerUids)
+        .filter((uid) => !othersByUid.has(uid))
+        .map((uid) => db.collection('registrations').doc(uid)),
     ];
 
-    if (refs.length + 1 > MAX_BATCH_OPS) {
+    if (refs.length + othersByUid.size + 1 > MAX_BATCH_OPS) {
       throw new ValidationError(`ข้อมูลที่ต้องลบมีมากเกินไป (${refs.length} รายการ) กรุณาติดต่อผู้ดูแลระบบ`);
     }
 
@@ -127,12 +150,22 @@ export async function DELETE(req: NextRequest, { params }: Params) {
 
     const batch = db.batch();
     refs.forEach((r) => batch.delete(r));
+    const nowIso = new Date().toISOString();
+    othersByUid.forEach((other, uid) => {
+      batch.set(db.collection('registrations').doc(uid), {
+        ownerUid: uid,
+        memberId: other.id,
+        farmId: other.farmId || '',
+        status: other.status || 'approved',
+        updatedAt: nowIso,
+      }, { merge: true });
+    });
     batch.set(db.collection('auditLogs').doc(audit.id), audit);
     await batch.commit();
 
     return {
       memberId: member.id,
-      deleted: { farms: farms.map((f) => f.id), products: productIds, registrations: ownerUids.size },
+      deleted: { farms: farms.map((f) => f.id), products: productIds, registrations: ownerUids.size - othersByUid.size },
       auditLogId: audit.id,
     };
   });

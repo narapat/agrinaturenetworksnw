@@ -17,6 +17,7 @@ import {
 } from '@/types';
 import { INITIAL_CATEGORY_TAGS, INITIAL_PRACTICE_TAGS } from '@/data/mockData';
 import { ADMIN_PLACEHOLDER_MEMBER_ID, demoSeed, isDemoId, isDemoMode, withoutDemo } from '@/lib/demoMode';
+import { pickPrimaryMember } from '@/lib/primaryMember';
 import {
   CACHE_KEYS,
   enqueuePendingProduct,
@@ -1346,7 +1347,10 @@ class DataService {
     // จับคู่สมาชิกด้วย LINE User ID ที่ยืนยันแล้วเท่านั้น (ownerUid / lineUserId)
     // ห้ามจับคู่ด้วยชื่อที่แสดงใน LINE, lineId หรือชื่อ-นามสกุล: ใครก็ตั้งชื่อ LINE ให้ตรงกับคนอื่นได้
     // แล้วจะได้ล็อกอินเป็นสมาชิกคนนั้นและยึดบัญชี (เขียน ownerUid ทับ)
-    const member = this.members.find((m) => (m.ownerUid && m.ownerUid === profile.userId) || (m.lineUserId && m.lineUserId === profile.userId));
+    // ถ้า LINE นี้ผูกกับสมาชิกหลายคน (ข้อมูลเก่าซ้ำ) ให้เลือกบัญชีหลัก (อนุมัติแล้วก่อน) แบบคงที่
+    const member = pickPrimaryMember(
+      this.members.filter((m) => (m.ownerUid && m.ownerUid === profile.userId) || (m.lineUserId && m.lineUserId === profile.userId))
+    );
 
     if (member) {
       let changed = false;
@@ -1446,7 +1450,9 @@ class DataService {
         }
         if (cancelled()) return notRegistered;
         if (!snap.empty) {
-          const remoteMem = snap.docs[0].data() as MemberProfile;
+          const remoteMem = pickPrimaryMember(
+            snap.docs.map((d) => ({ ...(d.data() as MemberProfile), id: d.id }))
+          ) as MemberProfile;
           if (!remoteMem.ownerUid) {
             remoteMem.ownerUid = profile.userId;
           }

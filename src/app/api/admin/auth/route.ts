@@ -11,6 +11,7 @@ import {
 import { getAdminLineUserIds, getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { MEMBER_COOKIE_NAME, verifyMemberSessionToken } from '@/lib/memberSession';
+import { pickPrimaryMember } from '@/lib/primaryMember';
 import {
   checkPasscodeLock,
   clearPasscodeFailures,
@@ -67,7 +68,7 @@ async function verifyAdminMemberSession(req: NextRequest): Promise<{ sub: string
     const db = getAdminDb();
     if (db) {
       const snap = await db.collection('members').where('ownerUid', '==', session.sub).get();
-      name = snap.docs[0]?.data()?.fullName;
+      name = pickPrimaryMember(snap.docs.map((d): Record<string, any> & { id: string } => ({ ...(d.data() as Record<string, any>), id: d.id })))?.fullName;
     }
   } catch {}
   return { sub: session.sub, name };

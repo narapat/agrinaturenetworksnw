@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pickPrimaryMember } from '@/lib/primaryMember';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
 export const dynamic = 'force-dynamic';
@@ -184,6 +185,34 @@ export async function POST(req: NextRequest) {
           message: 'ใบสมัครนี้ได้รับการบันทึกเรียบร้อยแล้ว',
         });
       }
+    }
+
+    // 5.9 บัญชี LINE นี้เป็นสมาชิกอยู่แล้ว (รวมบัญชีเก่าที่สร้างก่อนมีเอกสาร registrations) -> ห้ามสมัครซ้ำ
+    const [existingByOwner, existingByLine] = await Promise.all([
+      db.collection('members').where('ownerUid', '==', ownerUid).get(),
+      db.collection('members').where('lineUserId', '==', ownerUid).get(),
+    ]);
+    const existingMember = pickPrimaryMember(
+      [...existingByOwner.docs, ...existingByLine.docs].map((d): Record<string, any> & { id: string } => ({ ...(d.data() as Record<string, any>), id: d.id }))
+    );
+    if (existingMember) {
+      const st = existingMember.status || 'pending';
+      return NextResponse.json(
+        {
+          success: false,
+          code: 'DUPLICATE_REGISTRATION',
+          memberId: existingMember.id,
+          farmId: existingMember.farmId,
+          status: st,
+          message:
+            st === 'approved'
+              ? 'บัญชี LINE นี้เป็นสมาชิกเครือข่ายอยู่แล้ว ท่านสามารถเข้าสู่ระบบเพื่อจัดการข้อมูลแปลงได้ทันทีครับ'
+              : st === 'rejected'
+                ? 'ใบสมัครของท่านไม่ผ่านการอนุมัติ กรุณาติดต่อผู้ประสานงานเครือข่ายเพื่อตรวจสอบข้อมูลเพิ่มเติมครับ'
+                : 'ท่านได้ลงทะเบียนเข้าร่วมเครือข่ายไว้เรียบร้อยแล้ว ขณะนี้ใบสมัครของท่านอยู่ระหว่างรอการตรวจสอบและอนุมัติจากแอดมินเครือข่ายครับ',
+        },
+        { status: 409 }
+      );
     }
 
     // 6. ตรวจสอบ Guard Document registrations/{ownerUid} เพื่อป้องกันการสมัครซ้ำ (Task A)
