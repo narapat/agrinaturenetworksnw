@@ -59,8 +59,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     try {
+      // รอ LIFF โหลดเสร็จก่อน ไม่งั้นยังไม่มี ID Token แล้วแอดมินที่ล็อกอิน LINE อยู่จะเห็นหน้าใส่รหัสผ่าน
+      await liffService.init().catch(() => false);
       const currentUser = dataService.getCurrentUser();
       // ส่ง LINE ID Token ให้ Server ยืนยันกับ LINE เอง (ห้ามส่ง lineUserId ดิบ เพราะไม่ใช่ความลับ)
+      // ถ้าไม่มี token เซิร์ฟเวอร์ยังใช้ session cookie ของสมาชิก (ออกให้หลัง LINE ยืนยันแล้ว) ได้
       const lineIdToken = liffService.getIdToken();
 
       const res = await fetch('/api/admin/auth', {

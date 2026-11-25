@@ -10,6 +10,7 @@ import {
 } from '@/lib/adminSession';
 import { getAdminLineUserIds, getBearerToken, verifyLineIdToken } from '@/lib/lineIdToken';
 import { getAdminDb } from '@/lib/firebaseAdmin';
+import { MEMBER_COOKIE_NAME, verifyMemberSessionToken } from '@/lib/memberSession';
 import {
   checkPasscodeLock,
   clearPasscodeFailures,
@@ -51,6 +52,27 @@ async function verifyAdminLineToken(req: NextRequest): Promise<{ sub: string; na
   return adminLineIds.includes(result.sub) ? { sub: result.sub, name: result.name } : null;
 }
 
+/**
+ * ทางที่ 2: session cookie ของสมาชิก (เซิร์ฟเวอร์ออกให้หลัง LINE ยืนยัน ID Token แล้ว, ลงลายมือชื่อ, มีวันหมดอายุ)
+ * ใช้เมื่อหน้าเว็บยังไม่มี LIFF ID Token (LIFF ยังโหลดไม่เสร็จ หรือ token หมดอายุ) แต่แอดมินล็อกอิน LINE ไว้แล้ว
+ */
+async function verifyAdminMemberSession(req: NextRequest): Promise<{ sub: string; name?: string } | null> {
+  const adminLineIds = getAdminLineUserIds();
+  if (adminLineIds.length === 0) return null;
+  const session = verifyMemberSessionToken(req.cookies.get(MEMBER_COOKIE_NAME)?.value);
+  if (!session || !adminLineIds.includes(session.sub)) return null;
+
+  let name: string | undefined;
+  try {
+    const db = getAdminDb();
+    if (db) {
+      const snap = await db.collection('members').where('ownerUid', '==', session.sub).get();
+      name = snap.docs[0]?.data()?.fullName;
+    }
+  } catch {}
+  return { sub: session.sub, name };
+}
+
 function issueSession(
   response: NextResponse,
   method: AdminAuthMethod,
@@ -84,8 +106,8 @@ export async function POST(req: NextRequest) {
     // ตรวจ config ให้ครบก่อน (Fail loudly ถ้า env ไม่ครบ)
     const validPasscode = getAdminPasscode();
 
-    // 1. LINE ID Token (ยืนยันกับ LINE Server)
-    const lineAdmin = await verifyAdminLineToken(req);
+    // 1. LINE ID Token (ยืนยันกับ LINE Server) หรือ session cookie ของสมาชิกที่เป็นแอดมิน
+    const lineAdmin = (await verifyAdminLineToken(req)) || (await verifyAdminMemberSession(req));
     if (lineAdmin) {
       return issueSession(
         NextResponse.json({ success: true, message: 'ยืนยันสิทธิ์แอดมินสำเร็จ', role: 'admin', method: 'line' }),
@@ -185,8 +207,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 2. LINE ID Token ที่ยืนยันกับ LINE Server แล้ว (ไม่รับ lineUserId จาก query string)
-    const lineAdmin = await verifyAdminLineToken(req);
+    // 2. LINE ID Token ที่ยืนยันกับ LINE Server แล้ว หรือ session cookie ของสมาชิกที่เป็นแอดมิน
+    //    (ไม่รับ lineUserId จาก query string)
+    const lineAdmin = (await verifyAdminLineToken(req)) || (await verifyAdminMemberSession(req));
     if (lineAdmin) {
       return issueSession(
         NextResponse.json({
