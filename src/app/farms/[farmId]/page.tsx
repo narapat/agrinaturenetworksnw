@@ -474,173 +474,94 @@ export default function FarmDetailPage() {
           </div>
         </div>
 
-        {/* Farm Story & Details */}
+
+        {/* Products first (wide column); farmer profile + farm philosophy in the sidebar */}
         <div className="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Story & Philosophy */}
-          <div className="lg:col-span-8 space-y-6">
-            
-            {farm.tagline && (
-              <blockquote className="p-4 rounded-2xl bg-brand-50/60 border-l-4 border-brand-600 text-brand-900 font-bold text-base sm:text-lg italic">
-                "{farm.tagline}"
-              </blockquote>
-            )}
 
-            <div>
-              <h2 className="text-lg font-bold text-stone-900 mb-2">
-                เรื่องเล่า & วิถีกสิกรรมธรรมชาติของแปลง:
+          {/* Farm's Products */}
+          <div id="farm-products-section" className="lg:col-span-8 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg sm:text-xl font-bold text-stone-900">
+                ผลผลิต & ของดีประจำแปลง ({products.length} รายการ)
               </h2>
-              <p className={`${getTextClass('body')} text-stone-700 leading-relaxed text-base sm:text-lg whitespace-pre-line`}>
-                {farm.story}
-              </p>
             </div>
 
-            {/* Practices */}
-            <div id="farm-practices-section" className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-stone-50 border border-stone-200/80 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm sm:text-base font-bold text-stone-900">
-                    องค์ความรู้ & ศาสตร์ที่นำมาปรับใช้ในแปลง:
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    วิถีและศาสตร์กสิกรรมธรรมชาติที่ปฏิบัติจริงในแปลง
-                  </p>
-                </div>
-                {isOwner && (
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingPractices(!isEditingPractices)}
-                    className="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
+            {products.length === 0 ? (
+              <div className="p-8 text-center bg-stone-50 rounded-3xl border border-stone-200 text-stone-500">
+                แปลงนี้ยังไม่ได้ลงรายการผลผลิตเพิ่มเติม
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {products.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/catalog/${item.id}`}
+                    className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-brand-300 transition-all flex flex-col group"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{isEditingPractices ? 'ปิดการแก้ไข' : '✏️ แก้ไขศาสตร์ในแปลง'}</span>
-                  </button>
-                )}
-              </div>
-
-              {isOwner && isEditingPractices ? (
-                <div className="space-y-4 pt-3 border-t border-stone-200/70 animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-xs sm:text-sm font-bold text-stone-900">
-                      5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
-                    </label>
-                    <span className="text-[11px] text-stone-500">
-                      เลือกแล้ว {selectedPractices.length} ข้อ
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5">
-                    {practiceOptions.map((opt) => {
-                      const isSelected = selectedPractices.includes(opt);
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => handleTogglePractice(opt)}
-                          className={`p-3 rounded-2xl border text-left text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-98 ${
-                            isSelected
-                              ? 'border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900 shadow-xs'
-                              : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300'
-                          }`}
-                        >
-                          <span className={`text-base leading-none shrink-0 ${isSelected ? 'text-emerald-600 font-black' : 'text-stone-400'}`}>
-                            {isSelected ? '✓' : '+'}
+                    <div className="aspect-4/3 relative overflow-hidden bg-stone-100">
+                      <img
+                        src={item.images[0]}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-3 left-3">
+                        {item.status === 'share' ? (
+                          <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold shadow-md">
+                            💙 มีแบ่งปันฟรี
                           </span>
-                          <span className="leading-snug">{opt}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                        ) : item.status === 'preorder' ? (
+                          <span className="px-3 py-1 rounded-full bg-amber-600 text-white text-xs font-bold shadow-md">
+                            🟡 สั่งจองล่วงหน้า
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-full bg-brand-600 text-white text-xs font-bold shadow-md">
+                            🟢 พร้อมจำหน่าย
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleSavePractices}
-                      disabled={isSavingPractices}
-                      className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                    >
-                      {isSavingPractices ? (
-                        <span>กำลังบันทึก...</span>
-                      ) : (
-                        <>
-                          <Check className="w-4 h-4" />
-                          <span>💾 บันทึกศาสตร์แปลง</span>
-                        </>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedPractices(farm.practices || []);
-                        setIsEditingPractices(false);
-                      }}
-                      className="px-3 py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-100 text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      ยกเลิก
-                    </button>
-                    {savePracticesSuccess && (
-                      <span className="text-xs text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        บันทึกข้อมูลเรียบร้อยแล้ว
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {farm.practices && farm.practices.length > 0 ? (
-                    farm.practices.map((p, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs sm:text-sm font-semibold border border-stone-200/90 flex items-center gap-1.5 shadow-xs"
-                      >
-                        <span className="text-emerald-600">🌿</span>
-                        <span>{p}</span>
-                      </span>
-                    ))
-                  ) : (
-                    <p className="text-xs text-stone-400 italic">ยังไม่ได้ระบุวิถีและศาสตร์ในแปลง</p>
-                  )}
-                </div>
-              )}
-            </div>
+                    <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+                      <div>
+                        <span className="text-[11px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
+                          {item.skuTagName}
+                        </span>
+                        <h4 className="font-bold text-stone-900 text-base mt-1.5 group-hover:text-brand-700 line-clamp-1">
+                          {item.title}
+                        </h4>
+                        <p className="text-xs text-stone-500 line-clamp-2 mt-1">
+                          {item.description}
+                        </p>
+                      </div>
 
-            {/* Zone Map Safe Visualizer */}
-            <div className="p-5 rounded-3xl bg-stone-50 border border-stone-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5 text-brand-600" />
-                  <h3 className="font-bold text-stone-900 text-base">
-                    ตำแหน่งที่ตั้งแปลง (แสดงระดับโซนปลอดภัย)
-                  </h3>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
-                  รัศมี ~{farm.publicZone.radiusKm} กม.
-                </span>
+                      <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
+                        {item.status === 'share' ? (
+                          <span className="text-xs font-bold text-blue-700">
+                            แบ่งปันฟรี
+                          </span>
+                        ) : (
+                          <span className="text-base font-black text-brand-700">
+                            ฿{item.price}{' '}
+                            <span className="text-xs font-normal text-stone-400">
+                              /{item.unit.split(' ')[0]}
+                            </span>
+                          </span>
+                        )}
+
+                        <span className="text-xs font-bold text-brand-700 flex items-center gap-0.5">
+                          ดูรายละเอียด <ChevronRight className="w-3 h-3" />
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
               </div>
-
-              {/* Graphic Zone Map Container */}
-              <div className="h-44 rounded-2xl bg-gradient-to-br from-emerald-100/70 via-brand-50 to-stone-100 border border-brand-200 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
-                <div className="w-24 h-24 rounded-full bg-brand-500/10 border-2 border-dashed border-brand-500 flex items-center justify-center animate-pulse">
-                  <div className="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-md">
-                    <MapPin className="w-5 h-5" />
-                  </div>
-                </div>
-                <p className="font-bold text-stone-800 text-sm mt-3">
-                  📍 {farm.publicZone.name}
-                </p>
-                <p className="text-xs text-stone-500 mt-1 max-w-md">
-                  *เพื่อความปลอดภัยของเกษตรกร ระบบแสดงเฉพาะโซนรัศมี หากประสงค์เข้าศึกษาดูงาน กรุณาติดต่อเพื่อนัดหมายและรับพิกัดเดินทางจริงครับ
-                </p>
-              </div>
-
-            </div>
-
+            )}
           </div>
 
-          {/* Right Sidebar: Farmer Profile & Contact Actions */}
+          {/* Sidebar: Farmer Profile, Contact & Philosophy */}
           <div className="lg:col-span-4 space-y-5">
-            
+
             {/* Owner Profile Card */}
             <div className="p-6 rounded-3xl bg-stone-50 border border-stone-200 text-center space-y-3">
               <div className="relative w-24 h-24 mx-auto">
@@ -707,91 +628,172 @@ export default function FarmDetailPage() {
 
             </div>
 
-          </div>
+            {/* Story & Philosophy */}
+            <div className="space-y-5">
+              {farm.tagline && (
+                <blockquote className="p-4 rounded-2xl bg-brand-50/60 border-l-4 border-brand-600 text-brand-900 font-bold text-base italic">
+                  "{farm.tagline}"
+                </blockquote>
+              )}
 
-        </div>
+              <div>
+                <h2 className="text-base font-bold text-stone-900 mb-2">
+                  เรื่องเล่า & วิถีกสิกรรมธรรมชาติของแปลง:
+                </h2>
+                <p className={`${getTextClass('body')} text-stone-700 leading-relaxed text-sm sm:text-base whitespace-pre-line`}>
+                  {farm.story}
+                </p>
+              </div>
 
-      </div>
-
-      {/* Farm's Products Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-bold text-stone-900">
-            ผลผลิต & ของดีประจำแปลง ({products.length} รายการ)
-          </h2>
-        </div>
-
-        {products.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-3xl border border-stone-200 text-stone-500">
-            แปลงนี้ยังไม่ได้ลงรายการผลผลิตเพิ่มเติม
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {products.map((item) => (
-              <Link
-                key={item.id}
-                href={`/catalog/${item.id}`}
-                className="bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md hover:border-brand-300 transition-all flex flex-col group"
-              >
-                <div className="aspect-4/3 relative overflow-hidden bg-stone-100">
-                  <img
-                    src={item.images[0]}
-                    alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-3 left-3">
-                    {item.status === 'share' ? (
-                      <span className="px-3 py-1 rounded-full bg-blue-600 text-white text-xs font-bold shadow-md">
-                        💙 มีแบ่งปันฟรี
-                      </span>
-                    ) : item.status === 'preorder' ? (
-                      <span className="px-3 py-1 rounded-full bg-amber-600 text-white text-xs font-bold shadow-md">
-                        🟡 สั่งจองล่วงหน้า
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-full bg-brand-600 text-white text-xs font-bold shadow-md">
-                        🟢 พร้อมจำหน่าย
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-3">
+              {/* Practices */}
+              <div id="farm-practices-section" className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-stone-50 border border-stone-200/80 space-y-3">
+                <div className="flex items-center justify-between gap-2">
                   <div>
-                    <span className="text-[11px] font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
-                      {item.skuTagName}
-                    </span>
-                    <h4 className="font-bold text-stone-900 text-base mt-1.5 group-hover:text-brand-700 line-clamp-1">
-                      {item.title}
-                    </h4>
-                    <p className="text-xs text-stone-500 line-clamp-2 mt-1">
-                      {item.description}
+                    <h3 className="text-sm sm:text-base font-bold text-stone-900">
+                      องค์ความรู้ & ศาสตร์ที่นำมาปรับใช้ในแปลง:
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      วิถีและศาสตร์กสิกรรมธรรมชาติที่ปฏิบัติจริงในแปลง
                     </p>
                   </div>
-
-                  <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                    {item.status === 'share' ? (
-                      <span className="text-xs font-bold text-blue-700">
-                        แบ่งปันฟรี
-                      </span>
-                    ) : (
-                      <span className="text-base font-black text-brand-700">
-                        ฿{item.price}{' '}
-                        <span className="text-xs font-normal text-stone-400">
-                          /{item.unit.split(' ')[0]}
-                        </span>
-                      </span>
-                    )}
-
-                    <span className="text-xs font-bold text-brand-700 flex items-center gap-0.5">
-                      ดูรายละเอียด <ChevronRight className="w-3 h-3" />
-                    </span>
-                  </div>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingPractices(!isEditingPractices)}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{isEditingPractices ? 'ปิดการแก้ไข' : '✏️ แก้ไขศาสตร์ในแปลง'}</span>
+                    </button>
+                  )}
                 </div>
-              </Link>
-            ))}
+
+                {isOwner && isEditingPractices ? (
+                  <div className="space-y-4 pt-3 border-t border-stone-200/70 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs sm:text-sm font-bold text-stone-900">
+                        5. วิถีและศาสตร์ที่ท่านทำในแปลง (เลือกได้หลายข้อ)
+                      </label>
+                      <span className="text-[11px] text-stone-500">
+                        เลือกแล้ว {selectedPractices.length} ข้อ
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-2 sm:gap-2.5">
+                      {practiceOptions.map((opt) => {
+                        const isSelected = selectedPractices.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => handleTogglePractice(opt)}
+                            className={`p-3 rounded-2xl border text-left text-xs sm:text-sm font-bold transition-all flex items-center gap-2 cursor-pointer active:scale-98 ${
+                              isSelected
+                                ? 'border-2 border-emerald-600 bg-emerald-50/80 text-emerald-900 shadow-xs'
+                                : 'border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                            }`}
+                          >
+                            <span className={`text-base leading-none shrink-0 ${isSelected ? 'text-emerald-600 font-black' : 'text-stone-400'}`}>
+                              {isSelected ? '✓' : '+'}
+                            </span>
+                            <span className="leading-snug">{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleSavePractices}
+                        disabled={isSavingPractices}
+                        className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {isSavingPractices ? (
+                          <span>กำลังบันทึก...</span>
+                        ) : (
+                          <>
+                            <Check className="w-4 h-4" />
+                            <span>💾 บันทึกศาสตร์แปลง</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedPractices(farm.practices || []);
+                          setIsEditingPractices(false);
+                        }}
+                        className="px-3 py-2 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-100 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        ยกเลิก
+                      </button>
+                      {savePracticesSuccess && (
+                        <span className="text-xs text-emerald-700 font-bold flex items-center gap-1 animate-in fade-in">
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          บันทึกข้อมูลเรียบร้อยแล้ว
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {farm.practices && farm.practices.length > 0 ? (
+                      farm.practices.map((p, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1.5 rounded-xl bg-white text-stone-800 text-xs sm:text-sm font-semibold border border-stone-200/90 flex items-center gap-1.5 shadow-xs"
+                        >
+                          <span className="text-emerald-600">🌿</span>
+                          <span>{p}</span>
+                        </span>
+                      ))
+                    ) : (
+                      <p className="text-xs text-stone-400 italic">ยังไม่ได้ระบุวิถีและศาสตร์ในแปลง</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Zone Map Safe Visualizer */}
+              <div className="p-5 rounded-3xl bg-stone-50 border border-stone-200 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-5 h-5 text-brand-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-bold text-stone-900 text-base">
+                        ตำแหน่งที่ตั้งแปลง
+                      </h3>
+                      <p className="text-xs text-stone-500">แสดงระดับโซนปลอดภัย</p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold shrink-0">
+                    รัศมี ~{farm.publicZone.radiusKm} กม.
+                  </span>
+                </div>
+
+                {/* Graphic Zone Map Container */}
+                <div className="h-44 rounded-2xl bg-gradient-to-br from-emerald-100/70 via-brand-50 to-stone-100 border border-brand-200 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+                  <div className="w-24 h-24 rounded-full bg-brand-500/10 border-2 border-dashed border-brand-500 flex items-center justify-center animate-pulse">
+                    <div className="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-md">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                  </div>
+                  <p className="font-bold text-stone-800 text-sm mt-3">
+                    📍 {farm.publicZone.name}
+                  </p>
+                  <p className="text-xs text-stone-500 mt-1 max-w-md">
+                    *เพื่อความปลอดภัยของเกษตรกร ระบบแสดงเฉพาะโซนรัศมี หากประสงค์เข้าศึกษาดูงาน กรุณาติดต่อเพื่อนัดหมายและรับพิกัดเดินทางจริงครับ
+                  </p>
+                </div>
+
+              </div>
+            </div>
+
           </div>
-        )}
+
+        </div>
+
       </div>
 
     </div>
